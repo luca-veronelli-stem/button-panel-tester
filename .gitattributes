@@ -1,0 +1,52 @@
+# Default — auto-detect text and normalize to LF
+* text=auto eol=lf
+
+# Source code
+*.cs    text diff=csharp
+*.fs    text
+*.fsx   text
+*.fsi   text
+
+# Project / build files
+*.csproj  text
+*.fsproj  text
+*.props   text
+*.targets text
+*.slnx    text
+*.config  text
+
+# Data / config
+*.json text
+*.yml  text
+*.yaml text
+*.xml  text
+*.md   text
+
+# Lean
+*.lean   text
+*.toml   text
+
+# Windows scripts (must be CRLF for cmd.exe / PowerShell ISE)
+*.ps1  text eol=crlf
+*.psd1 text eol=crlf
+*.psm1 text eol=crlf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# POSIX scripts (must be LF for /bin/sh shebangs)
+*.sh   text eol=lf
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.dll binary
+*.exe binary
+*.pdb binary
+*.zip binary
+*.7z binary
+*.tar binary
+*.gz binary

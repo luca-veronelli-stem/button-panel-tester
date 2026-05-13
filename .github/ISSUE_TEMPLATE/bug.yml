@@ -1,0 +1,54 @@
+name: Bug
+description: Something does not work as expected
+title: "fix: <short summary>"
+labels: ["fix"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please fill in what you can — the more concrete, the faster the fix.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A short description of the actual behaviour.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Run ...
+        2. Click ...
+        3. Observe ...
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: |
+        - OS: Windows 11 / Linux / macOS
+        - .NET SDK: 10.0.x
+        - Repo SHA: abc1234
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack trace
+      render: shell
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context

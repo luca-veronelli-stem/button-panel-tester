@@ -1,0 +1,26 @@
+# Banned APIs — pure layers (Core / Services / Abstractions / Protocol).
+# Drop this file next to a .fsproj / .csproj to opt the project in.
+# Microsoft.CodeAnalysis.BannedApiAnalyzers picks it up via Directory.Build.props.
+
+# 2D drawing — use SkiaSharp instead.
+T:System.Drawing.Bitmap; use SkiaSharp's SKBitmap instead
+T:System.Drawing.Color; use SkiaSharp's SKColor instead
+T:System.Drawing.Font; use SkiaSharp's SKTypeface instead
+T:System.Drawing.Graphics; use SkiaSharp's SKCanvas instead
+T:System.Drawing.Image; use SkiaSharp's SKImage instead
+T:System.Drawing.Pen; use SkiaSharp's SKPaint instead
+T:System.Drawing.Brush; use SkiaSharp's SKPaint instead
+
+# Configuration store — use appsettings.json + IOptions<T>.
+N:Microsoft.Win32; use appsettings.json + IOptions<T> instead
+T:Microsoft.Win32.Registry; use appsettings.json + IOptions<T> instead
+T:Microsoft.Win32.RegistryKey; use appsettings.json + IOptions<T> instead
+
+# Hardware enumeration / WMI — use Stem.Communication.Drivers.Windows.* if needed.
+N:System.Management; use Stem.Communication.Drivers.Windows.* instead
+
+# Serial ports — use the Stem.Communication.Abstractions port + a driver.
+T:System.IO.Ports.SerialPort; use the Stem.Communication.Abstractions port and a driver implementation
+
+# Excel interop — use ClosedXML.
+N:Microsoft.Office.Interop.Excel; use ClosedXML instead

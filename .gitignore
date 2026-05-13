@@ -1,0 +1,60 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+*.pdb
+*.dll
+*.exe
+*.binlog
+
+# .NET tooling
+.dotnet/
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+nuget.config.local
+
+# Test results
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+coverage/
+
+# Husky.NET
+.husky/_/
+
+# Lean 4
+.lake/
+build/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local env
+.env
+.env.local
+*.local.json
+
+# Editor backup
+*~
+*.swp
+*.swo

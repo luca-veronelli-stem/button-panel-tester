@@ -1,0 +1,18 @@
+# Build-only stub. CI of record runs on GitHub Actions; this file exists so
+# the team's Bitbucket view shows a green build for the mirrored main.
+# Sync the .NET SDK image whenever global.json changes.
+
+image: mcr.microsoft.com/dotnet/sdk:10.0
+
+pipelines:
+  default:
+    - step:
+        name: Build
+        caches:
+          - dotnetcore
+        script:
+          - dotnet build --configuration Release
+
+definitions:
+  caches:
+    dotnetcore: ~/.nuget/packages

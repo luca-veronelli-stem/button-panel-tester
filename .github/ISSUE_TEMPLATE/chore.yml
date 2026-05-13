@@ -1,0 +1,31 @@
+name: Chore
+description: Maintenance, refactoring, infra, dependency bumps
+title: "chore: <short summary>"
+labels: ["chore"]
+
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Tech debt repaid, friction removed, clarity gained.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / files affected
+      description: A rough estimate is fine.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
