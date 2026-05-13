@@ -8,6 +8,14 @@
 
 **Input**: User description: "Fetch the button-panel dictionary at app launch and on manual refresh, show its source state to the technician at all times, and ship a pre-seeded copy so the tool is usable before the first network call returns. A first-launch registration step links the tool to the dictionary service so future fetches are authenticated."
 
+## Clarifications
+
+### Session 2026-05-13
+
+- Q: What is the lifecycle of the installation credential once issued? → A: Permanent until manually revoked by STEM admin; the tool never expires or rotates it proactively. The tool surfaces re-registration only when the dictionary service rejects the credential with an authentication failure (per FR-018).
+- Q: What is the language policy for user-facing strings in this slice? → A: English-only for v1. No internationalization framework is scaffolded; strings live inline. Adding additional languages is a future feature with focused scope.
+- Q: How should the embedded seed surface in the dictionary status row? → A: The seed is a flavour of "Cached"; the status row shows "Cached · last synced \<seed build date\>". The detail affordance distinguishes "from embedded seed" (never live-fetched on this machine) from "from local copy" (previously fetched live). Two-state state machine (Live, Cached) is preserved; no third "Seeded" variant.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Inspecting dictionary state at start of shift (Priority: P1)
@@ -68,7 +76,7 @@ On success the status row flips to *Live · synced now*. On failure the status r
 
 ### Edge Cases
 
-- **No credential, no network**: the tool starts, shows the seeded dictionary as *Cached · seeded YYYY-MM-DD*, and the registration dialog appears. The technician can dismiss the dialog and still use the seeded data; the status row reflects that no Live state is currently achievable.
+- **No credential, no network**: the tool starts, shows the seeded dictionary as *Cached · last synced \<seed build date\>* (with "from embedded seed" visible in the detail affordance), and the registration dialog appears. The technician can dismiss the dialog and still use the seeded data; the status row reflects that no Live state is currently achievable.
 - **Corrupt local copy**: the tool detects a content-integrity mismatch on its on-disk copy, refuses to use it, falls back to the embedded seed, and surfaces the integrity failure in the status row's detail view.
 - **Seed staleness**: if the embedded seed is older than a documented soft threshold (e.g. 90 days), the status row shows an additional advisory cue (subtle warning glyph) without blocking use. A hard threshold is not enforced — the technician's judgement and the timestamp are the gate.
 - **Authentication failure on refresh**: the status row shows *refresh failed (authentication)* and the detail view offers a "re-register" action that re-opens the registration dialog. The previously-stored credential is preserved unless the technician explicitly proceeds to overwrite it.
@@ -118,6 +126,8 @@ On success the status row flips to *Live · synced now*. On failure the status r
 - **FR-019**: System MUST verify the integrity of the on-disk local copy before using it. If verification fails, system MUST fall back to the embedded seed and surface the failure in the status display.
 - **FR-020**: System MUST NOT transmit any field that could identify the supplier's machine, user, or hardware (machine name, OS user, machine identifier, MAC address, or equivalent) to STEM systems.
 - **FR-021**: System MUST operate against exactly one configured button-panel dictionary identifier per installation; the identifier is set at install time and not selected at runtime.
+- **FR-022**: System MUST treat an issued installation credential as valid indefinitely from its own perspective; it MUST NOT proactively expire, refresh, or rotate the credential. The dictionary service's authentication failure response is the only signal that triggers re-registration (per FR-018).
+- **FR-023**: When the loaded dictionary originates from the embedded seed (no live fetch has succeeded on this machine yet, or the on-disk local copy was deemed unusable), system MUST report the seed's build timestamp as the "last confirmed live" timestamp and MUST disclose the seed origin ("from embedded seed") through the status display's detail affordance.
 
 ### Key Entities
 
@@ -148,6 +158,7 @@ On success the status row flips to *Live · synced now*. On failure the status r
 - The seeded dictionary embedded with each release is sufficiently current for the technician to begin work in the rare event the service is unreachable on a brand-new install; the engineering team refreshes the seed during each release cycle.
 - Exactly one button-panel dictionary is meaningful to a given installation. Future support for multiple panel families is out of scope.
 - Each supplier machine is administered by a single user account for the purposes of running this tool; the local credential is scoped to that account.
+- All user-facing strings in this slice are English. No internationalization framework is included; adding additional languages is a future feature with its own spec.
 
 ## Dependencies
 
