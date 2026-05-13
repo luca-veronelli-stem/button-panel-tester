@@ -1,0 +1,24 @@
+name: Mirror to Bitbucket
+
+# Caller stub. The job body lives upstream as a reusable workflow in
+# luca-veronelli-stem/standards. See shared/standards/CI.md and the
+# dual-remote rule for context.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: mirror-bitbucket-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    uses: luca-veronelli-stem/standards/.github/workflows/mirror-bitbucket.yml@v1.5.0
+    with:
+      bitbucket-repo: stem-fw/button-panel-tester
+    secrets:
+      BITBUCKET_SSH_KEY: ${{ secrets.BITBUCKET_SSH_KEY }}

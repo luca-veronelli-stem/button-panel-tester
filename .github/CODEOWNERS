@@ -1,0 +1,4 @@
+# CODEOWNERS — single owner for now. Expand per-folder when collaborators
+# join (e.g. `src/<App>.GUI/  @alice  @luca-veronelli-stem`).
+
+* @luca-veronelli-stem

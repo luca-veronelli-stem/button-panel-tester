@@ -1,0 +1,25 @@
+name: Release
+
+# Caller stub for archetype A (desktop GUI). Job body lives upstream.
+# See shared/standards/CI.md -> "Release workflow -- archetype A".
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: luca-veronelli-stem/standards/.github/workflows/release-archetype-a.yml@v1.5.0
+    with:
+      app: ButtonPanelTester
+      repo: button-panel-tester
+      tag: ${{ inputs.tag }}

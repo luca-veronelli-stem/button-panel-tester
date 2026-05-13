@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "ms-dotnettools.csharp",
+    "ms-dotnettools.csdevkit",
+    "ms-dotnettools.vscode-dotnet-runtime",
+    "ionide.ionide-fsharp",
+    "EditorConfig.EditorConfig",
+    "leanprover.lean4",
+    "redhat.vscode-yaml",
+    "github.vscode-github-actions",
+    "ms-vscode.powershell",
+    "mhutchie.git-graph",
+    "eamodio.gitlens"
+  ]
+}

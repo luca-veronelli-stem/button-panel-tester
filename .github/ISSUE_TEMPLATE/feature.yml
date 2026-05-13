@@ -1,0 +1,41 @@
+name: Feature
+description: A new capability or enhancement
+title: "feat: <short summary>"
+labels: ["feat"]
+
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: One sentence — what does this enable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Concrete user / workflow that benefits.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] User can ...
+        - [ ] Tests cover ...
+        - [ ] Docs updated.
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What is explicitly NOT part of this issue.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context

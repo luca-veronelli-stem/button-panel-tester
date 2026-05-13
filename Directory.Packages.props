@@ -1,0 +1,50 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <!--
+    Baseline package versions for the standard. Bump via Dependabot or
+    `dotnet outdated`. Versions below are starting points; adjust per
+    repo if a specific consumer needs to pin.
+  -->
+
+  <ItemGroup>
+    <!-- Source generators / analyzers -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="3.3.4" />
+
+    <!-- Cross-platform replacements (PORTABILITY standard) -->
+    <PackageVersion Include="ClosedXML" Version="0.105.0" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.0" />
+
+    <!-- Avalonia + FuncUI (archetype A — desktop GUI) -->
+    <PackageVersion Include="Avalonia" Version="11.3.7" />
+    <PackageVersion Include="Avalonia.Desktop" Version="11.3.7" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.7" />
+    <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.7" />
+    <PackageVersion Include="Avalonia.FuncUI" Version="1.5.1" />
+
+    <!-- Configuration / DI -->
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.7" />
+
+    <!-- Persistence (archetype A typical) -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
+
+    <!-- Testing -->
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageVersion Include="FsCheck.Xunit" Version="3.3.3" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="11.3.7" />
+
+    <!-- Driver-only (Windows TFM, see PORTABILITY Pattern A) -->
+    <PackageVersion Include="System.IO.Ports" Version="10.0.7" />
+    <PackageVersion Include="InTheHand.Net.Bluetooth" Version="4.2.21" />
+  </ItemGroup>
+
+</Project>

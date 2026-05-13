@@ -1,0 +1,29 @@
+name: CI
+
+# Caller stub. The job body lives upstream as a reusable workflow in
+# luca-veronelli-stem/standards. Bumps to the called workflow propagate on
+# the next CI run; bumps to triggers/permissions/concurrency edit this
+# stub. See shared/standards/CI.md and shared/standards/MIGRATION.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Weekly Monday 06:00 UTC -- catches dependency drift on idle repos.
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  ci:
+    uses: luca-veronelli-stem/standards/.github/workflows/dotnet-ci.yml@v1.5.0
