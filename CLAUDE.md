@@ -41,3 +41,8 @@ Examples to copy and adapt:
 - [ ] Phase 3: F# migration of `<App>.Services` — issue #M.
 - [ ] Phase 4: Avalonia migration of `<App>.GUI.Windows` → `<App>.GUI` — issue #M.
 -->
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
