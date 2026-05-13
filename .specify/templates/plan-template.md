@@ -40,7 +40,16 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Each gate references the corresponding principle in `.specify/memory/constitution.md`.
+
+- **I. Formal Verification of Invariants** *(NON-NEGOTIABLE)* — Which Lean modules under `lean/Stem/ButtonPanelTester/Phase<N>/` does this feature extend or add? Which preservation theorems will be proved? List them; if none apply (e.g., pure UI scaffolding), explain why under "Complexity Tracking".
+- **II. Property-Driven Correctness** — What FsCheck properties cover the new behaviour? Properties first; example-only `[<Fact>]` coverage requires a one-line rationale per case.
+- **III. Ports and Adapters for Every External Boundary** — Which new external boundaries does this feature introduce (CAN, HTTP, OS, time)? Each MUST be expressed as an F# port in `<App>.Core` with at least one virtual / loopback adapter for integration tests. List the port name and the adapter pair.
+- **IV. CI Greens the Whole Stack; Hardware Tests Are Explicit** — Confirm: (a) unit + integration + Avalonia.Headless layers extended; (b) no new `Category=Hardware` tag without a linked tracking issue; (c) no `[<Fact(Skip = ...)>]` without an issue.
+- **V. Supplier-Deployed Identity Is Hashed at Capture** *(NON-NEGOTIABLE)* — Does this feature handle OS user / machine / SID / MAC / similar identity-bearing fields? If yes, the plan MUST identify the `<App>.Infrastructure` boundary where the hash is applied and the deterministic-hash routine used. If no, state "no identity-bearing data on this feature's path".
+- **VI. Stopgap Discipline** — Does this plan introduce any stopgap (knowingly deferring the correct path)? If yes, list each one independently with: tracking issue, `docs/STOPGAP_<name>.md` waiver, violated principle, removal path. One issue per bypass — no aggregation.
+
+**Result:** PASS if every principle is addressed without unresolved violation, otherwise list the open items under "Complexity Tracking" below. Unjustified violations block `/speckit-tasks`.
 
 ## Project Structure
 
