@@ -1,0 +1,5 @@
+name = "stem-button-panel-tester"
+defaultTargets = ["Stem.ButtonPanelTester.Phase1"]
+
+[[lean_lib]]
+name = "Stem.ButtonPanelTester.Phase1"
