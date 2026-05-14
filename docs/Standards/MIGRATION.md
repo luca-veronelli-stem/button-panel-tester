@@ -38,11 +38,36 @@ Per-repo adoption PR (`chore: bump standards to v1.2.0`):
    - domain semantics not present in code (state machines, business rules referenced as `BR-*` or similar);
    - external system references (third-party APIs, hardware addresses, magic numbers).
 
-   Move that content to a better home: XML doc on the relevant types, a top-level `docs/Domain.md` or `docs/Deploy.md`, or `specs/` for invariants that warrant Lean formalization. *Then* delete; the snapshot branch is the rollback. Adding a fresh `README.md` from `shared/templates/docs/README_TEMPLATE.md` is opt-in per component — only do it where the component actually earns its keep (a stub README with no non-derivable content is worse than no README).
+   Move that content to a better home: XML doc on the relevant types, a top-level `docs/Domain.md` or `docs/Deploy.md`, or `lean/` for invariants that warrant Lean formalization. *Then* delete; the snapshot branch is the rollback. Adding a fresh `README.md` from `shared/templates/docs/README_TEMPLATE.md` is opt-in per component — only do it where the component actually earns its keep (a stub README with no non-derivable content is worse than no README).
 3. Re-run `eng/apply-repo-standard.ps1 -StandardVersion v1.2.0`. The script regenerates `docs/Standards/` with the new content standards alongside the v1.0 ones and removes the on-disk `ISSUES.md` / `ISSUES_TRACKER.md` files (their content is now in the GitHub tracker). Per-component `README.md` files are not touched — keep, delete, or regenerate by hand per the previous step.
 4. Bump the per-repo `CLAUDE.md` `**Standard version:**` line to `v1.2.0`.
 5. Update `state/repos.md` to reflect the bump.
 6. Single-commit PR.
+
+## Rollout phase for v1.5.1 — F# runtime restoration, greenfield scaffold, `lean/`-vs-`specs/` clarification
+
+`v1.5.1` ships three first-adopter gap fixes uncovered while bootstrapping `button-panel-tester` against `v1.5.0`:
+
+1. Restores the `FSharp.Core` `PackageVersion` line in `shared/templates/Directory.Packages.props` (dropped in `v1.5.0`). Without it, an F# `<PackageReference Include="FSharp.Core" />` is rejected by Central Package Management and `FSharp.Core.dll` doesn't flow into the bin of a project-referencing test consumer — xunit's reflection discoverer then fails with `Could not load file or assembly 'FSharp.Core'`.
+2. Emits a minimal archetype-A greenfield scaffold on bootstrap: `Stem.<App>.slnx` + `src/<App>.Core/{<App>.Core.fsproj,Placeholder.fs}` + `tests/<App>.Tests/{<App>.Tests.fsproj,PlaceholderTests.fs}`. Before this, the bootstrap PR had no compilable source for `dotnet-ci.yml` to target and CI failed at `MSBUILD : error MSB1003: Specify a project or solution file`. After this, the first PR is CI-green without any hand-rolled follow-up.
+3. Clarifies that the Lean 4 workspace lives at `lean/` and `specs/` is the spec-kit feature root. Earlier wording in `REPO_STRUCTURE.md` (v1.5.0 and prior) said `specs/` was the Lean workspace, which collided with spec-kit's `specs/NNN-feature-name/` directories the moment a repo did SDD and Lean together. Doc-only — no rollout-script behaviour changes. Adopters that already keep Lean code under `specs/` are not forced to move it on this bump (the script does not touch either folder); the next time the Lean tree is rearranged for any reason, move it to `lean/`. `button-panel-tester` PR #5 records the deviation paragraph that this clarification removes — once v1.5.1 lands, that paragraph can come out and the constitution bumps to v1.0.1 (PATCH — wording only).
+
+The scaffold files are bootstrap-only: once seeded, the rollout never recreates or clobbers them. An adopter who writes real code over `Placeholder.fs` (or deletes it) keeps their content through future bumps.
+
+**For a brand-new repo (greenfield bootstrap):**
+
+1. Run `eng/apply-repo-standard.ps1 -StandardVersion v1.5.1 -Archetype A -App <YourApp> ...`. The rollout writes the toolchain files, the standards inline copies, the Poppins fonts overlay, **and** the `Core` + `Tests` + `.slnx` scaffold.
+2. `dotnet restore && dotnet build && dotnet test` works out of the box on the bootstrap branch — no hand-rolled `.fsproj` required.
+3. Open the bootstrap PR. CI is green on the first push.
+
+**For an existing v1.5.0 adopter bumping to v1.5.1:**
+
+1. Re-run `eng/apply-repo-standard.ps1 -StandardVersion v1.5.1`. The diff is one new `<PackageVersion Include="FSharp.Core" ... />` line in `Directory.Packages.props`. The scaffold files are skipped under the bootstrap-only rule (they're meant for greenfields; existing repos have already grown their own structure). If `Directory.Packages.props` was hand-customised since the previous bump, the local-edit guard fires — apply the recipe in "Pitfalls" if so.
+2. Bump the per-repo `CLAUDE.md` `**Standard version:**` line to `v1.5.1`.
+3. Update `state/repos.md` to reflect the bump.
+4. Single-commit PR.
+
+Adopters with no F# code can skip the bump until they have other reasons to move (e.g. v1.6.x). The runtime fix is only load-bearing for repos that consume `FSharp.Core` via `<PackageReference>`, and the scaffold only fires on greenfield bootstraps.
 
 ## Rollout phase for v1.4.0 — reusable workflows
 

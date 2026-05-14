@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#license)
 
 > **Bench tool to test STEM button-panel hardware over CAN.**
-> **Standard:** v1.5.0 — see [`docs/Standards/`](./docs/Standards/).
+> **Standard:** v1.5.3 — see [`docs/Standards/`](./docs/Standards/).
 
 ---
 
@@ -32,14 +32,15 @@ src/
 └── ButtonPanelTester.GUI/                 Avalonia + FuncUI
 tests/
 └── ButtonPanelTester.Tests/               xUnit + FsCheck + Avalonia.Headless
-specs/                           Lean 4 formal specs
+specs/                           Spec-Driven Development (spec-kit) feature folders (optional)
+lean/                            Lean 4 workspace (optional — lakefile.lean + lean-toolchain)
 docs/                            documentation (Standards/ tracked here)
 eng/                             build / release scripts
 ```
 
 ## Documentation
 
-- Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.5.0`.
+- Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.5.3`.
 - Changelog: [`CHANGELOG.md`](./CHANGELOG.md).
 - Repo-specific notes: [`CLAUDE.md`](./CLAUDE.md).
 

@@ -36,6 +36,8 @@ coverage/
 # Lean 4
 .lake/
 build/
+# lake-manifest.json — no-requires project; will start tracking when an external require lands (T024+).
+lean/lake-manifest.json
 
 # IDE
 .vscode/*

@@ -14,7 +14,7 @@ From `v1.4.0`, the workflows the rollout writes into an adopted repo are **calle
 | **Release** (archetype A) | `.github/workflows/release.yml` | `.github/workflows/release-archetype-a.yml` | tag `v*.*.*` |
 | **Release** (archetype B) | `.github/workflows/release.yml` | `.github/workflows/release-archetype-b.yml` | tag `v*.*.*` |
 
-The stubs live under `shared/templates/.github/workflows/` (common: `ci.yml`, `mirror-bitbucket.yml`) and `shared/templates/archetypes/{A,B}/.github/workflows/release.yml` (archetype overlays) and are copied into each repo by the rollout script (see REPO_STRUCTURE). The rollout substitutes `v1.5.0` into the `uses:` pin at bump time, so each adopted repo references the exact tag it is pinned to. Migrating an existing repo across this shape change is covered in MIGRATION.md → "Rollout phase for v1.4.0".
+The stubs live under `shared/templates/.github/workflows/` (common: `ci.yml`, `mirror-bitbucket.yml`) and `shared/templates/archetypes/{A,B}/.github/workflows/release.yml` (archetype overlays) and are copied into each repo by the rollout script (see REPO_STRUCTURE). The rollout substitutes `v1.5.3` into the `uses:` pin at bump time, so each adopted repo references the exact tag it is pinned to. Migrating an existing repo across this shape change is covered in MIGRATION.md → "Rollout phase for v1.4.0".
 
 ## ci.yml — invariants
 
@@ -23,8 +23,8 @@ Triggers, concurrency, and permissions live in the per-repo stub (`.github/workf
 - **Triggers (stub):** `push` to `main`, `pull_request` against `main`, `workflow_dispatch`, weekly `schedule` cron (catches dependency drift on idle repos).
 - **Concurrency (stub):** `concurrency.group = ci-${{ github.ref }}`, `cancel-in-progress: true` — newer pushes cancel older runs on the same branch.
 - **Matrix (reusable):** `os: [ubuntu-latest, windows-latest]`. The Linux leg enforces portability; the Windows leg validates Windows-only drivers and any legacy `GUI.Windows` projects.
-- **Caching (reusable):** `~/.nuget/packages/` keyed on `Directory.Packages.props`; Lean `~/.elan/` keyed on `lean-toolchain` (only when `specs/` exists).
-- **Steps (reusable):** checkout → setup-dotnet (from `global.json`) → restore → format check → build (Release) → test (Release).
+- **Caching (reusable):** `~/.nuget/packages/` keyed on `Directory.Packages.props`; Lean `~/.elan/` keyed on `**/lean-toolchain` (Linux leg only — the toolchain is identical across OSes, so there is no value in doubling the cache + build on Windows). The recursive `**/` pattern handles both supported layouts: workspace-root (`./lean-toolchain`) and the sub-directory layout STEM apps use (`lean/lean-toolchain`).
+- **Steps (reusable):** checkout → setup-dotnet (from `global.json`) → restore → format check → build (Release) → test (Release). The Linux leg additionally runs `lake build` (working directory `./` or `./lean`, whichever holds `lean-toolchain`) when a Lean track is present — that gate enforces constitution Principle I (no `sorry`, no custom axioms) on every adopter PR.
 
 ## Format check is a hard gate (whitespace-only in CI)
 
@@ -57,10 +57,24 @@ The Linux leg builds only `net10.0`. The Windows leg builds both `net10.0` and `
 
 ## Test reporting
 
-`dorny/test-reporter@v3` consumes the TRX output from `dotnet test --logger trx` and surfaces failed tests in the PR check. Step:
+`dorny/test-reporter@v3` consumes the TRX output from `dotnet test --logger trx` and surfaces failed tests in the PR check. The Windows leg runs the solution in one go; the Linux leg enumerates test projects and skips Windows-only / Linux-only ones by name (`*.Tests.Windows.*`, `*.Tests.Linux.*`) — see TESTING for the convention:
 
 ```yaml
-- name: Test
+- name: Test (cross-platform leg)
+  if: runner.os == 'Linux'
+  shell: bash
+  run: |
+    set -euo pipefail
+    shopt -s globstar nullglob
+    for proj in tests/**/*.Tests.fsproj tests/**/*.Tests.csproj; do
+      case "$proj" in
+        *.Tests.Windows.*|*.Tests.Linux.*) continue ;;
+      esac
+      dotnet test "$proj" --framework net10.0 --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+    done
+
+- name: Test (full leg)
+  if: runner.os == 'Windows'
   run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
 
 - name: Test report
@@ -72,6 +86,8 @@ The Linux leg builds only `net10.0`. The Windows leg builds both `net10.0` and `
     reporter: dotnet-trx
     use-actions-summary: 'false'
 ```
+
+Why the Linux leg loops: vstest cannot filter Windows-only-TFM assemblies via `--framework net10.0` at solution scope — given a `<App>.Tests.Windows` project that only targets `net10.0-windows`, the runner tries to load a `net10.0` output that does not exist and exits non-zero. The naming convention (TESTING) lets the workflow exclude those projects at the project layer instead.
 
 `if: always()` so failed tests still produce a report. `use-actions-summary: 'false'` opts back into the legacy Check Run sink — v3's default writes to `$GITHUB_STEP_SUMMARY` instead, which silently drops the per-OS Tests gate at PR level.
 

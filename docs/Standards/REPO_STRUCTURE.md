@@ -9,7 +9,8 @@
 <repo>/
 ├── src/                       Project sources. PascalCase folders inside.
 ├── tests/                     Test projects. PascalCase folders inside.
-├── specs/                     Lean 4 workspace (lakefile.toml + namespace folders).
+├── specs/                     Spec-Driven Development (spec-kit) feature folders: NNN-feature-name/.
+├── lean/                      Lean 4 workspace (lakefile.lean + lean-toolchain + namespace folders).
 ├── docs/                      Markdown documentation.
 ├── eng/                       Build/release scripts (PowerShell + Bash).
 ├── .github/                   Workflows, issue templates, CODEOWNERS.
@@ -24,9 +25,11 @@
 └── bitbucket-pipelines.yml    Build-only stub; CI of record is GitHub Actions.
 ```
 
+`specs/` and `lean/` are independent siblings — neither implies the other. Repos without a Lean formalization track may omit `lean/` entirely; repos without SDD may omit `specs/`.
+
 ## Naming rules
 
-- Folders at the repo root are **lowercase** (`src/`, `tests/`, `specs/`, …).
+- Folders at the repo root are **lowercase** (`src/`, `tests/`, `specs/`, `lean/`, …).
 - Project folders inside `src/` and `tests/` are **PascalCase** and match the project name (`Stem.Communication.Abstractions/`, `<App>.GUI/`).
 - Each project has its own folder; the `.fsproj` / `.csproj` filename matches the folder name.
 - Project namespace prefix is `Stem.<App>.<Layer>` (archetype A) or `Stem.<Lib>.<Layer>` (archetype B).
@@ -43,6 +46,10 @@ src/
 └── <App>.GUI/                 net10.0  F#  Avalonia + FuncUI (depends on Services)
 tests/
 └── <App>.Tests/               net10.0  F#  xUnit + FsCheck + Avalonia.Headless
+lean/                          Optional — present when the repo formalizes invariants in Lean 4.
+├── lakefile.lean
+├── lean-toolchain
+└── Stem/<App>/Phase<N>/       Lean module folders mirror the F# namespace (Stem.<App>...).
 ```
 
 Split `<App>.Tests` into per-project test assemblies only when the C# surface is substantial enough to need its own xUnit fixtures (see TESTING).
@@ -65,7 +72,7 @@ tests/
 
 ### Archetype C — Meta/Config
 
-Repos like `standards` (this one) and `llm-settings`. No `src/`, `tests/`, `specs/`. Layout depends on the meta-config's purpose — see each repo's README. `standards` has `shared/standards/` + `shared/templates/` + `eng/` + `state/`; `llm-settings` has `claude/` + `shared/skills/` + `shared/mcp/`.
+Repos like `standards` (this one) and `llm-settings`. No `src/`, `tests/`, `specs/`, `lean/`. Layout depends on the meta-config's purpose — see each repo's README. `standards` has `shared/standards/` + `shared/templates/` + `eng/` + `state/`; `llm-settings` has `claude/` + `shared/skills/` + `shared/mcp/`.
 
 ### Archetype D — New (placeholder)
 
@@ -105,7 +112,8 @@ The install-time symlinks are local-only, never committed, and serve a single us
 | Avalonia view / view-model | `<App>.GUI/` |
 | MEDI registration extensions | `<App>.GUI/Composition/` (A) or `<Lib>.DependencyInjection/` (B, optional) |
 | xUnit test | `tests/<App>.Tests/` |
-| Lean 4 spec | `specs/<Namespace>/Phase<N>/` |
+| Spec-Driven Development (spec-kit) feature folder | `specs/NNN-feature-name/` |
+| Lean 4 spec | `lean/Stem/<App>/Phase<N>/` (archetype A) or `lean/Stem/<Lib>/Phase<N>/` (archetype B) |
 | Build/release script | `eng/` |
 | Standard or convention doc | upstream in this repo's `shared/standards/`; cite from `docs/Standards.md` |
 
