@@ -122,13 +122,20 @@ src/
         └── dictionary.seed.json       embedded resource (refreshed by eng/refresh-seed.ps1)
 
 tests/
-└── ButtonPanelTester.Tests/           net10.0  F#  xUnit + FsCheck + Avalonia.Headless
-    ├── Unit/
-    ├── Property/
-    ├── Integration/
-    ├── Gui/
-    ├── Fakes/                         InMemory adapters per Port
-    └── Fixtures/                      sample DictionaryResolvedDto JSON snapshots
+├── ButtonPanelTester.Tests/           net10.0  F#  xUnit + FsCheck.Xunit over Core+Services
+│                                      (pure-domain tests, runs on every CI OS leg)
+│   ├── Unit/
+│   ├── Property/
+│   ├── Integration/
+│   ├── Gui/                           Avalonia.Headless harness lives in Tests.Windows;
+│   │                                  this folder retained for Core/Services GUI-adjacent
+│   │                                  shape tests if any (kept empty in Phase 1).
+│   ├── Fakes/                         InMemory adapters per Port
+│   └── Fixtures/                      sample DictionaryResolvedDto JSON snapshots
+└── ButtonPanelTester.Tests.Windows/   net10.0-windows  F#  xUnit + Avalonia.Headless.XUnit
+                                       over Infrastructure+GUI (Windows-only tests, runs
+                                       only on windows-latest CI leg; structural fix for
+                                       NU1201 cross-TFM ProjectReference, see #76).
 
 lean/                                  Lean 4 workspace (deviates from REPO_STRUCTURE
 ├── lakefile.toml                      because spec-kit owns specs/; recorded in
