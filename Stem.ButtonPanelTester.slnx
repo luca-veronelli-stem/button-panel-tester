@@ -14,5 +14,8 @@
         <File Path="README.md" />
     </Folder>
     <Project Path="src/ButtonPanelTester.Core/ButtonPanelTester.Core.fsproj" />
+    <Project Path="src/ButtonPanelTester.Services/ButtonPanelTester.Services.fsproj" />
+    <Project Path="src/ButtonPanelTester.Infrastructure/ButtonPanelTester.Infrastructure.fsproj" />
+    <Project Path="src/ButtonPanelTester.GUI/ButtonPanelTester.GUI.fsproj" />
     <Project Path="tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj" />
 </Solution>
