@@ -37,7 +37,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
 
     <!-- F# runtime (must be explicit under CPM so consumers can flow it transitively) -->
-    <PackageVersion Include="FSharp.Core" Version="10.1.201" />
+    <PackageVersion Include="FSharp.Core" Version="10.1.300" />
 
     <!-- Testing -->
     <PackageVersion Include="xunit" Version="2.9.3" />
