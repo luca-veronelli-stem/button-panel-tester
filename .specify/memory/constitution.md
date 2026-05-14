@@ -1,6 +1,39 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.0.0 → 1.0.1
+Bump rationale: PATCH — clarification preserving semantics. The Lean
+workspace lives at lean/ as before; this amendment recognises Lake's
+TOML manifest format (lakefile.toml) as the configuration carrier
+instead of the F#-syntax lakefile.lean. The principle (Lean spec ahead
+of F# implementation, theorems compile with no `sorry`) is unchanged.
+
+Discovered during /speckit.analyze of feat/001-fetch-dictionary: the
+spec-kit plan and tasks artifacts both pointed at `lakefile.toml`,
+which conflicted with the constitution's `lakefile.lean` wording. The
+team prefers the TOML variant (current Lake-recommended manifest for
+new projects); the constitution is brought in line.
+
+Updated wording:
+  - Principle I (Formal Verification of Invariants): `lean/lakefile.lean`
+    → `lean/lakefile.toml`.
+  - Architecture Constraints §"Lean workspace": `lean/lakefile.lean`
+    → `lean/lakefile.toml`.
+
+Templates requiring updates:
+  ✅ .specify/templates/plan-template.md         — no mention of the
+                                                    lakefile filename.
+  ✅ .specify/templates/spec-template.md         — no mention.
+  ✅ .specify/templates/tasks-template.md        — no mention.
+
+Propagation review (other artifacts):
+  - specs/001-fetch-dictionary/plan.md           — already says
+                                                   `lakefile.toml`; now aligned.
+  - specs/001-fetch-dictionary/tasks.md (T007)   — already says
+                                                   `lakefile.toml`; now aligned.
+
+Sync Impact Report
+==================
 Version change: (template) → 1.0.0
 Bump rationale: First ratified governance for the button-panel-tester rebuild.
 Establishes six core principles drawn from the four-round scope interview
@@ -44,7 +77,7 @@ Follow-up TODOs:
 
 Every domain type and every state-changing action MUST be formalized in
 Lean 4 before a corresponding F# implementation lands. Lean modules live
-under `lean/Stem/ButtonPanelTester/Phase<N>/`, with `lean/lakefile.lean`
+under `lean/Stem/ButtonPanelTester/Phase<N>/`, with `lean/lakefile.toml`
 and `lean/lean-toolchain` at the workspace root. The order is fixed:
 **Lean spec → xUnit test → F# implementation.** Theorems MUST compile
 with no `sorry`. Plans that change protocol framing, the test-session
@@ -158,7 +191,7 @@ review surface to scale with the actual debt.
   the onion direction: `Core ← Services ← Infrastructure ← GUI`. No
   skip-layer references; no upward references. `GUI` is the composition
   root and the only project that wires concrete adapters.
-- **Lean workspace.** `lean/lakefile.lean` + `lean/lean-toolchain` at
+- **Lean workspace.** `lean/lakefile.toml` + `lean/lean-toolchain` at
   the Lean workspace root; namespace folders under
   `lean/Stem/ButtonPanelTester/Phase<N>/`. **This deviates from
   STEM `REPO_STRUCTURE.md`'s "`specs/` is the Lean workspace" line**
@@ -247,4 +280,4 @@ review surface to scale with the actual debt.
   carries the cross-repo standards. This constitution carries only the
   principles that govern *how this project plans and ships work*.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-13 | **Last Amended**: 2026-05-13
+**Version**: 1.0.1 | **Ratified**: 2026-05-13 | **Last Amended**: 2026-05-14
