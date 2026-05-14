@@ -59,3 +59,6 @@ desktop.ini
 *.swp
 *.swo
 WIP.md
+
+# resolve-ticket-supervised: local supervisor state (subagents never read it)
+llm/supervisor.md
