@@ -11,21 +11,23 @@ This single project tests every layer of the repo via project references — F# 
 
 ## When to split into multiple tests projects
 
-Split only when **all** of the following hold:
+Two recognised split shapes, both producing `<App>.Tests` + `<App>.Tests.Windows` (and optionally `<App>.Tests.Linux`):
 
-1. The codebase has a substantial C# layer (e.g. a legacy `<App>.GUI.Windows` not yet migrated, or a vendor-mandated C# wrapper).
-2. The C# tests need their own xUnit fixture conventions or analyzers that conflict with the F# project.
-3. Cross-language refs from a single F# project are producing real friction (slow build, awkward syntax for C# generics).
+**TFM split** — when part of the test surface targets `net10.0-windows` and another part stays on `net10.0`. The Windows-only TFM is forced by Avalonia.Headless GUI tests, DPAPI / Registry / WMI integration tests, or any test that depends on a `<App>.Infrastructure` project that itself targets `net10.0-windows`. NuGet rejects a `net10.0` `ProjectReference` to a `net10.0-windows` project (NU1201) — a single F# tests project can't span both worlds. Split is mandatory in this case, not optional.
 
-Split shape:
+**Language split** — when a substantial C# layer (legacy `<App>.GUI.Windows` not yet migrated, vendor-mandated C# wrapper) needs its own xUnit fixture conventions or analyzers that conflict with the F# project, AND cross-language refs from a single F# project produce real friction.
+
+Split shape (either case):
 
 ```
 tests/
-├── <App>.Tests/              net10.0  F#  covers Core, Services, Infrastructure
-└── <App>.Windows.Tests/      net10.0-windows  C#  covers GUI.Windows
+├── <App>.Tests/                  net10.0          F#  covers Core, Services, cross-platform Infrastructure
+└── <App>.Tests.Windows/          net10.0-windows  F# or C#  covers GUI, Avalonia.Headless, Windows-only Infrastructure
 ```
 
-Don't split prophylactically. The single F# tests project handles 95% of cases.
+The `<App>.Tests.<Platform>` shape (Tests-prefix, then platform suffix) is **load-bearing for CI**: the reusable `dotnet-ci.yml` Linux test leg enumerates `tests/**/*.Tests.{fsproj,csproj}` and skips files matching `*.Tests.Windows.*` or `*.Tests.Linux.*` (see CI standard). Naming a Windows-only test project `<App>.Windows.Tests` instead would break the Linux CI leg (vstest tries to load a `net10.0` output that does not exist on a `net10.0-windows`-only project).
+
+Don't split prophylactically. The single F# tests project handles repos with no Windows-only test surface.
 
 ## Naming
 
