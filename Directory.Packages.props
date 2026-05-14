@@ -47,6 +47,7 @@
 
     <!-- Driver-only (Windows TFM, see PORTABILITY Pattern A) -->
     <PackageVersion Include="System.IO.Ports" Version="10.0.7" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.7" />
     <PackageVersion Include="InTheHand.Net.Bluetooth" Version="4.2.21" />
   </ItemGroup>
 
