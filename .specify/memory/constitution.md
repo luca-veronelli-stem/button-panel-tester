@@ -1,6 +1,40 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.0.1 → 1.0.2
+Bump rationale: PATCH — clarification preserving semantics. Drops the
+now-obsolete deviation paragraph from Architecture Constraints §"Lean
+workspace". Standards v1.5.1 (upstream luca-veronelli-stem/standards#79)
+clarified REPO_STRUCTURE.md so `lean/` is the Lean 4 workspace and
+`specs/` is the spec-kit feature root — what this repo did at bootstrap
+is no longer a deviation. The principle (Lean spec ahead of F#
+implementation, theorems compile with no `sorry`) is unchanged; only
+the prose describing the workspace location is.
+
+Discovered during /speckit follow-up after PR #77 bumped this repo
+from standards v1.5.0 to v1.5.3 (which supersets v1.5.1's #79 fix).
+Closes issue #6's last remaining acceptance item ("Constitution PATCH:
+deviation paragraph removed, Sync Impact Report appended").
+
+Updated wording:
+  - Architecture Constraints §"Lean workspace": removed the four-line
+    "This deviates from STEM REPO_STRUCTURE.md..." paragraph; replaced
+    with a one-line note that `lean/` is the standards-blessed Lean
+    workspace location as of standards v1.5.1.
+
+Templates requiring updates:
+  ✅ .specify/templates/plan-template.md         — no mention of the
+                                                    deviation.
+  ✅ .specify/templates/spec-template.md         — no mention.
+  ✅ .specify/templates/tasks-template.md        — no mention.
+
+Propagation review (other artifacts):
+  - specs/001-fetch-dictionary/plan.md           — no mention of the
+                                                   deviation.
+  - specs/001-fetch-dictionary/tasks.md          — no mention.
+
+Sync Impact Report
+==================
 Version change: 1.0.0 → 1.0.1
 Bump rationale: PATCH — clarification preserving semantics. The Lean
 workspace lives at lean/ as before; this amendment recognises Lake's
@@ -193,11 +227,10 @@ review surface to scale with the actual debt.
   root and the only project that wires concrete adapters.
 - **Lean workspace.** `lean/lakefile.toml` + `lean/lean-toolchain` at
   the Lean workspace root; namespace folders under
-  `lean/Stem/ButtonPanelTester/Phase<N>/`. **This deviates from
-  STEM `REPO_STRUCTURE.md`'s "`specs/` is the Lean workspace" line**
-  because spec-kit already uses `specs/NNN-feature-name/` for feature
-  folders. The deviation is recorded here and tracked upstream for a
-  standard clarification.
+  `lean/Stem/ButtonPanelTester/Phase<N>/`. This is the standards-blessed
+  location for Lean (REPO_STRUCTURE.md acknowledges `lean/` for the
+  Lean 4 workspace as of standards v1.5.1; `specs/` is the spec-kit
+  feature root).
 - **Diagrams.** All diagrams in `spec.md`, `plan.md`, `data-model.md`,
   `research.md` MUST use Mermaid fenced code blocks (` ```mermaid `).
   No ASCII art. Diagrams render natively on GitHub and Bitbucket;
