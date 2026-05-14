@@ -21,6 +21,13 @@
     </ItemGroup>
 
     <ItemGroup>
+        <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest">
+            <DependentUpon>appsettings.json</DependentUpon>
+        </Content>
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\ButtonPanelTester.Core\ButtonPanelTester.Core.fsproj" />
         <ProjectReference Include="..\ButtonPanelTester.Services\ButtonPanelTester.Services.fsproj" />
         <ProjectReference Include="..\ButtonPanelTester.Infrastructure\ButtonPanelTester.Infrastructure.fsproj" />
