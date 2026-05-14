@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <!--
@@ -49,6 +50,9 @@
     <PackageVersion Include="System.IO.Ports" Version="10.0.7" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.7" />
     <PackageVersion Include="InTheHand.Net.Bluetooth" Version="4.2.21" />
+
+    <!-- Transitive pins (security advisories — track in GitHub issues) -->
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.21.3" />
   </ItemGroup>
 
 </Project>
