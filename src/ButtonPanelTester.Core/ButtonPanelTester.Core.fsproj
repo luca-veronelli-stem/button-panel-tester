@@ -12,7 +12,12 @@
         <Compile Include="Dictionary/DictionaryFetchResult.fs" />
         <Compile Include="Dictionary/RegistrationTypes.fs" />
         <Compile Include="Dictionary/Ports.fs" />
+        <Compile Include="Dictionary/DictionaryJson.fs" />
         <Compile Include="Placeholder.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="FSharp.SystemTextJson" />
     </ItemGroup>
 
 </Project>
