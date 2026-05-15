@@ -11,6 +11,7 @@
     <ItemGroup>
         <Compile Include="Fakes/Wiring.fs" />
         <Compile Include="PlaceholderTests.fs" />
+        <Compile Include="Property/DictionarySerializationTests.fs" />
     </ItemGroup>
 
     <ItemGroup>

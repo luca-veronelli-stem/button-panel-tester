@@ -38,6 +38,7 @@
 
     <!-- F# runtime (must be explicit under CPM so consumers can flow it transitively) -->
     <PackageVersion Include="FSharp.Core" Version="10.1.300" />
+    <PackageVersion Include="FSharp.SystemTextJson" Version="1.4.36" />
 
     <!-- Testing -->
     <PackageVersion Include="xunit" Version="2.9.3" />
