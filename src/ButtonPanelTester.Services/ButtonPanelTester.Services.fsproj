@@ -5,6 +5,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Dictionary/IDictionaryService.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\ButtonPanelTester.Core\ButtonPanelTester.Core.fsproj" />
     </ItemGroup>
 
