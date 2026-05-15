@@ -4,8 +4,6 @@
         <TargetFramework>net10.0-windows</TargetFramework>
         <OutputType>WinExe</OutputType>
         <RootNamespace>Stem.ButtonPanelTester.GUI</RootNamespace>
-        <!-- FS0988: empty main module — expected pre-T035 before Program.fs lands. -->
-        <NoWarn>$(NoWarn);FS0988</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
@@ -23,6 +21,8 @@
     <ItemGroup>
         <Compile Include="Composition/CompositionRoot.fs" />
         <Compile Include="Dictionary/DictionaryStatusRow.fs" />
+        <Compile Include="App.fs" />
+        <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>
