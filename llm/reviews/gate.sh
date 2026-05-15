@@ -13,4 +13,7 @@ dotnet test -c Release --no-build
 echo '== gate: dotnet format --verify-no-changes =='
 dotnet format --verify-no-changes
 
+echo '== gate: lake build (Lean Phase-1 elaboration) =='
+(cd lean && lake build)
+
 echo '== gate: PASS =='
