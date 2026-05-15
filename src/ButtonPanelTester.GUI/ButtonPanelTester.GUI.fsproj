@@ -21,6 +21,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <Compile Include="Composition/CompositionRoot.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
         <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
         <Content Include="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest">
             <DependentUpon>appsettings.json</DependentUpon>
