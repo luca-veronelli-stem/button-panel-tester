@@ -25,6 +25,7 @@
         <Content Include="appsettings.Development.json" CopyToOutputDirectory="PreserveNewest">
             <DependentUpon>appsettings.json</DependentUpon>
         </Content>
+        <EmbeddedResource Include="Assets/dictionary.seed.json" />
     </ItemGroup>
 
     <ItemGroup>
