@@ -9,6 +9,7 @@
         <Compile Include="Dictionary/ContentHash.fs" />
         <Compile Include="Dictionary/FetchFailureReason.fs" />
         <Compile Include="Dictionary/DictionarySource.fs" />
+        <Compile Include="Dictionary/DictionaryFetchResult.fs" />
         <Compile Include="Placeholder.fs" />
     </ItemGroup>
 
