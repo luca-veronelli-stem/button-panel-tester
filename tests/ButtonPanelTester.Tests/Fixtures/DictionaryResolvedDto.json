@@ -1,0 +1,42 @@
+{
+  "id": 2,
+  "name": "Pulsantiere",
+  "description": "Button panels - production",
+  "variables": [
+    {
+      "name": "BTN_RIGHT_TOP",
+      "addressHigh": 1,
+      "addressLow": 17,
+      "dataType": "uint8",
+      "access": "read",
+      "description": "Top-right button",
+      "min": 0,
+      "max": 1,
+      "unit": null,
+      "isStandard": false
+    },
+    {
+      "name": "BTN_RIGHT_BOTTOM",
+      "addressHigh": 1,
+      "addressLow": 18,
+      "dataType": "uint8",
+      "access": "read",
+      "min": 0,
+      "max": 1,
+      "unit": null,
+      "isStandard": false
+    },
+    {
+      "name": "BATT_VOLTAGE",
+      "addressHigh": 2,
+      "addressLow": 5,
+      "dataType": "float32",
+      "access": "read",
+      "description": "Battery voltage reading",
+      "min": null,
+      "max": null,
+      "unit": "V",
+      "isStandard": true
+    }
+  ]
+}
