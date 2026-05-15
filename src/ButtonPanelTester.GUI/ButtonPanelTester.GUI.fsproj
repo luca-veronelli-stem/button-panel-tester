@@ -22,6 +22,7 @@
 
     <ItemGroup>
         <Compile Include="Composition/CompositionRoot.fs" />
+        <Compile Include="Dictionary/DictionaryStatusRow.fs" />
     </ItemGroup>
 
     <ItemGroup>
