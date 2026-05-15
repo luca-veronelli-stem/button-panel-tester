@@ -10,7 +10,6 @@
 
     <ItemGroup>
         <Compile Include="Fakes/Wiring.fs" />
-        <Compile Include="PlaceholderTests.fs" />
         <Compile Include="Property/DictionarySerializationTests.fs" />
         <Compile Include="Property/ContentHashTests.fs" />
         <Compile Include="Property/FetchFailureReasonClosureTests.fs" />
