@@ -6,6 +6,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Clock.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\ButtonPanelTester.Core\ButtonPanelTester.Core.fsproj" />
         <ProjectReference Include="..\ButtonPanelTester.Services\ButtonPanelTester.Services.fsproj" />
     </ItemGroup>
