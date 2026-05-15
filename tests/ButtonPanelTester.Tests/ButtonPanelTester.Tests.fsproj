@@ -9,6 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Fakes/Wiring.fs" />
         <Compile Include="PlaceholderTests.fs" />
     </ItemGroup>
 
