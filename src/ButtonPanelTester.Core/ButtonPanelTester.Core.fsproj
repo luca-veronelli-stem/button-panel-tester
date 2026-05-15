@@ -7,6 +7,7 @@
     <ItemGroup>
         <Compile Include="Dictionary/ButtonPanelDictionary.fs" />
         <Compile Include="Dictionary/ContentHash.fs" />
+        <Compile Include="Dictionary/FetchFailureReason.fs" />
         <Compile Include="Placeholder.fs" />
     </ItemGroup>
 
