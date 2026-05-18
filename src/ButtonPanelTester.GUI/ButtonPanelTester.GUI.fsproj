@@ -16,11 +16,13 @@
         <PackageReference Include="Microsoft.Extensions.Configuration" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
         <PackageReference Include="Microsoft.Extensions.Options" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     </ItemGroup>
 
     <ItemGroup>
         <Compile Include="Composition/CompositionRoot.fs" />
         <Compile Include="Dictionary/DictionaryStatusRow.fs" />
+        <Compile Include="Dictionary/RegistrationDialog.fs" />
         <Compile Include="App.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>

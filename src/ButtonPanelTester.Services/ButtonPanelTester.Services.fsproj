@@ -8,6 +8,7 @@
         <Compile Include="Dictionary/DictionaryOptions.fs" />
         <Compile Include="Dictionary/IDictionaryService.fs" />
         <Compile Include="Dictionary/DictionaryService.fs" />
+        <Compile Include="Registration/RegistrationOutcome.fs" />
     </ItemGroup>
 
     <ItemGroup>
