@@ -2,13 +2,18 @@ namespace Stem.ButtonPanelTester.GUI.Composition
 
 open System
 open System.IO
+open System.Net.Http
 open System.Reflection
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
 open Stem.ButtonPanelTester.Core.Dictionary
 open Stem.ButtonPanelTester.Infrastructure
+open Stem.ButtonPanelTester.Infrastructure.Auth
+open Stem.ButtonPanelTester.Infrastructure.Http
 open Stem.ButtonPanelTester.Infrastructure.Persistence
 open Stem.ButtonPanelTester.Services.Dictionary
 
@@ -22,16 +27,6 @@ type internal OfflineDictionaryProvider() =
     interface IDictionaryProvider with
         member _.FetchAsync(_: CancellationToken) =
             Task.FromResult(Failed(NetworkUnreachable, None))
-
-/// Offline-launch placeholder for `IRegistrationClient`. Always
-/// returns `Error(RegistrationNetwork NetworkUnreachable)` so US1's
-/// composition graph constructs without DPAPI or HTTP dependencies.
-/// Replaced by `Infrastructure.Http.HttpRegistrationClient` in T044
-/// (US2 / Phase 4) when the registration ceremony ships.
-type internal OfflineRegistrationClient() =
-    interface IRegistrationClient with
-        member _.RegisterAsync(_: BootstrapToken, _: CancellationToken) =
-            Task.FromResult(Error(RegistrationNetwork NetworkUnreachable))
 
 /// `Microsoft.Extensions.DependencyInjection` wiring for the
 /// `ButtonPanelTester.GUI` host, per
@@ -89,10 +84,32 @@ module CompositionRoot =
     let private guiAssembly () : Assembly =
         Assembly.GetExecutingAssembly()
 
-    /// Register the Phase 3 service graph against `services`. Call
-    /// site is `Program.main` (T035); test bootstraps register
-    /// in-memory fakes directly without invoking this function.
-    let configure (services: IServiceCollection) (_config: IConfiguration) : IServiceCollection =
+    /// Register the Phase 3 + Phase 4 service graph against
+    /// `services`. Call site is `Program.main` (T035); test
+    /// bootstraps register in-memory fakes directly without invoking
+    /// this function.
+    ///
+    /// Phase 4 (US2) additions over Phase 3's bindings:
+    ///   - `services.AddLogging()` so `ILogger<T>` resolutions
+    ///     succeed for `DpapiCredentialStore`, `HttpRegistrationClient`,
+    ///     and `RegistrationDialogWindow`. Without further provider
+    ///     calls (e.g. `AddConsole`) MEL provides a no-op
+    ///     `NullLoggerFactory`; a real sink is a follow-up.
+    ///   - `services.AddHttpClient()` so `HttpRegistrationClient`
+    ///     can resolve an `HttpClient` per request from
+    ///     `IHttpClientFactory`.
+    ///   - `services.Configure<DictionaryOptions>(config.GetSection
+    ///     "Dictionary")` so `IOptions<DictionaryOptions>` binds to
+    ///     `appsettings.json`'s `Dictionary:` section.
+    ///   - `ICredentialStore → DpapiCredentialStore` (real adapter
+    ///     wired to `%LOCALAPPDATA%\Stem.ButtonPanelTester\`).
+    ///   - `IRegistrationClient → HttpRegistrationClient`, replacing
+    ///     the US1 `OfflineRegistrationClient` placeholder.
+    let configure (services: IServiceCollection) (config: IConfiguration) : IServiceCollection =
+        services.AddLogging() |> ignore
+        services.AddHttpClient() |> ignore
+        services.Configure<DictionaryOptions>(config.GetSection("Dictionary")) |> ignore
+
         services
             .AddSingleton<IClock, SystemClock>()
             .AddSingleton<IDictionaryCache>(fun _sp ->
@@ -100,5 +117,22 @@ module CompositionRoot =
                 let seedReader = EmbeddedSeedExtractor.readSeedBytes (guiAssembly ())
                 JsonFileDictionaryCache(cacheDir, seedReader) :> IDictionaryCache)
             .AddSingleton<IDictionaryProvider, OfflineDictionaryProvider>()
-            .AddSingleton<IRegistrationClient, OfflineRegistrationClient>()
+            .AddSingleton<ICredentialStore>(fun sp ->
+                let dir = defaultCacheDirectory ()
+                let logger = sp.GetRequiredService<ILogger<DpapiCredentialStore>>()
+                DpapiCredentialStore(dir, logger) :> ICredentialStore)
+            // InstallationDescriptor is built once at first resolve via
+            // InstallationDescriptorBuilder (Windows SID + machine GUID
+            // hashed; install.guid sidecar read or created). Registered
+            // as a singleton so every IRegistrationClient call carries
+            // the same descriptor across this process's lifetime.
+            .AddSingleton<InstallationDescriptor>(fun _ ->
+                InstallationDescriptorBuilder.build (defaultCacheDirectory ()) (guiAssembly ()))
+            .AddSingleton<IRegistrationClient>(fun sp ->
+                let factory = sp.GetRequiredService<IHttpClientFactory>()
+                let client = factory.CreateClient()
+                let options = sp.GetRequiredService<IOptions<DictionaryOptions>>()
+                let descriptor = sp.GetRequiredService<InstallationDescriptor>()
+                let logger = sp.GetRequiredService<ILogger<HttpRegistrationClient>>()
+                HttpRegistrationClient(client, options, descriptor, logger) :> IRegistrationClient)
             .AddSingleton<IDictionaryService, DictionaryService>()
