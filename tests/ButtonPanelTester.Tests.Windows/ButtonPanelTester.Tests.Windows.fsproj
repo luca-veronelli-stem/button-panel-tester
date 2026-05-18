@@ -15,6 +15,7 @@
         <Compile Include="Unit/DpapiCredentialStoreTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTests.fs" />
         <Compile Include="Gui/DictionaryStatusRowTests.fs" />
+        <Compile Include="Gui/RegistrationDialogTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
