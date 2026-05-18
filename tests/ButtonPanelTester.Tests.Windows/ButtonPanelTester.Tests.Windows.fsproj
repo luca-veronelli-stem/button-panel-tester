@@ -12,7 +12,10 @@
     <ItemGroup>
         <Compile Include="TestApp.fs" />
         <Compile Include="Unit/JsonFileDictionaryCacheTests.fs" />
+        <Compile Include="Unit/DpapiCredentialStoreTests.fs" />
+        <Compile Include="Integration/HttpRegistrationClientTests.fs" />
         <Compile Include="Gui/DictionaryStatusRowTests.fs" />
+        <Compile Include="Gui/RegistrationDialogTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
@@ -29,6 +32,7 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Avalonia.Headless.XUnit" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     </ItemGroup>
 
 </Project>
