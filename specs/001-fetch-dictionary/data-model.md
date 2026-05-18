@@ -116,11 +116,30 @@ type InstallationCredential =
         InstallationCredential raw
     member this.Value = let (InstallationCredential s) = this in s
 
+/// Per `stem-dictionaries-manager` v0.7.0
+/// `001-bootstrap-registration/contracts/register.md` §"Failure responses".
+/// One-to-one with the server's status codes; the deliberately-conflated
+/// 401 cases (token unknown / scope mismatch / policy-lookup miss) all
+/// fold into `TokenInvalid` because the dialog cannot tell them apart
+/// (and shouldn't, per the server's threat model).
 type RegistrationError =
-    | TokenInvalid          // server rejected the BootstrapToken (4xx)
-    | RegistrationServerError of httpStatus: int
-    | RegistrationNetwork   of FetchFailureReason   // shares the network failure taxonomy
+    | TokenInvalid                              // 401 (conflated)
+    | TokenAlreadyUsed                          // 409
+    | TokenExpired                              // 410
+    | TokenRevoked                              // 423
+    | DescriptorRejected      of detail: string // 400 (TokenMissing / DescriptorMalformed / DescriptorMissingField / InstallGuidInvalid — client bug)
+    | RegistrationServerError of httpStatus: int  // 500 (AuditFailure) + any other 5xx
+    | RegistrationNetwork     of FetchFailureReason  // network / client-side timeout
 ```
+
+The `DescriptorRejected` variant collapses the four distinct
+server-side 400 outcomes (`TokenMissing`, `DescriptorMalformed`,
+`DescriptorMissingField`, `InstallGuidInvalid`) into a single client
+case — the dialog cannot expose a meaningful retry to the technician
+for any of them (they're all client bugs, fix-in-code), so the
+distinction matters server-side for ops audit but not in the UX. The
+`detail` field carries the server's `error` body verbatim for log
+diagnostics.
 
 **Notes**:
 - `BootstrapToken` and `InstallationCredential` are single-case DUs with private constructors so callers cannot fabricate them from arbitrary strings. The dialog goes through `BootstrapToken.TryCreate`; the registration adapter goes through `InstallationCredential.Create`.
