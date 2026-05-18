@@ -10,7 +10,9 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="TestApp.fs" />
         <Compile Include="Unit/JsonFileDictionaryCacheTests.fs" />
+        <Compile Include="Gui/DictionaryStatusRowTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
