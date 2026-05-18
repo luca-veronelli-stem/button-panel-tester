@@ -3,6 +3,7 @@ namespace Stem.ButtonPanelTester.GUI
 open System
 open System.IO
 open System.Threading
+open System.Threading.Tasks
 open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.ApplicationLifetimes
@@ -12,8 +13,10 @@ open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Hosts
 open Avalonia.FuncUI.VirtualDom
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Logging
 open Stem.ButtonPanelTester.Core.Dictionary
 open Stem.ButtonPanelTester.Services.Dictionary
+open Stem.ButtonPanelTester.Services.Registration
 open Stem.ButtonPanelTester.GUI.Dictionary
 
 /// Main window for the US1 offline-launch surface. Hosts the
@@ -33,6 +36,10 @@ type MainWindow(services: IServiceProvider) as this =
     inherit HostWindow()
 
     let service = services.GetRequiredService<IDictionaryService>()
+    let credentialStore = services.GetRequiredService<ICredentialStore>()
+    let registrationClient = services.GetRequiredService<IRegistrationClient>()
+    let dialogLogger =
+        services.GetRequiredService<ILogger<RegistrationDialogWindow>>()
     let cacheFilePath =
         let local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         Path.Combine(local, "Stem.ButtonPanelTester", "dictionary.json")
@@ -47,6 +54,26 @@ type MainWindow(services: IServiceProvider) as this =
         this.Content <- VirtualDom.create (
             DictionaryStatusRow.view cacheFilePath source)
 
+    /// Production `runDialog` callback for the registration
+    /// orchestration: constructs a `RegistrationDialogWindow` with the
+    /// DI-resolved ports + logger, `ShowDialog`-s it modally against
+    /// this `MainWindow`, and forwards the dialog's `OutcomeTask`
+    /// (`Completed credential` on success, `Dismissed` on close
+    /// without success). Dispatched on the UI thread because
+    /// `Window.ShowDialog` requires the dispatcher.
+    let runDialog () : Task<RegistrationOutcome> =
+        task {
+            let dialog =
+                RegistrationDialogWindow(
+                    registrationClient,
+                    credentialStore,
+                    dialogLogger
+                )
+
+            do! dialog.ShowDialog(this)
+            return! dialog.OutcomeTask
+        }
+
     do
         this.Title <- "Button Panel Tester"
         this.Width <- 600.0
@@ -59,13 +86,26 @@ type MainWindow(services: IServiceProvider) as this =
         service.SourceChanged.Add(fun s ->
             Dispatcher.UIThread.Post(fun () -> renderStatusRow s))
 
-        // Kick off InitializeAsync once the window has opened so the
-        // status row paints populated within 1 s of the first frame
-        // (SC-001 / SC-002 / FR-004). The Task is fire-and-forget —
-        // the SourceChanged handler above is the success path.
+        // On first open:
+        //   1. Kick off InitializeAsync so the status row paints
+        //      populated within 1 s of the first frame (SC-001 /
+        //      SC-002 / FR-004). The Task is fire-and-forget — the
+        //      SourceChanged handler above is the success path.
+        //   2. Run the registration ceremony if needed. Per FR-014
+        //      the dialog blocks the main window until completion or
+        //      dismissal; per FR-017 it never reopens once a
+        //      credential is on disk. The orchestration helper
+        //      lives in Services so T048 can exercise it through
+        //      the in-memory test adapters.
         this.Opened.Add(fun _ ->
             (task {
-                let! _ = service.InitializeAsync(CancellationToken.None)
+                let initTask = service.InitializeAsync(CancellationToken.None)
+                let! _ =
+                    App.tryRegister
+                        credentialStore
+                        runDialog
+                        CancellationToken.None
+                let! _ = initTask
                 ()
             }) |> ignore)
 
