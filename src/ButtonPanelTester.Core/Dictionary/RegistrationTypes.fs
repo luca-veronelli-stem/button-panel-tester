@@ -48,19 +48,48 @@ type InstallationCredential =
     member this.Value =
         let (InstallationCredential s) = this in s
 
-/// Closed taxonomy of registration-flow failure modes, per
-/// `specs/001-fetch-dictionary/data-model.md` §1.4:
-///   - `TokenInvalid`           — the server rejected the
-///     `BootstrapToken` with a 4xx specific to bad credentials.
-///   - `RegistrationServerError` — any other non-success HTTP
-///     status from the registration endpoint (carries the status
-///     code for diagnostics).
-///   - `RegistrationNetwork`     — the registration flow shares
-///     the dictionary-fetch network-failure taxonomy and reuses
-///     `FetchFailureReason` (T013); this avoids a parallel
+/// Closed taxonomy of registration-flow failure modes, aligned with
+/// `stem-dictionaries-manager` v0.7.0
+/// (`specs/001-bootstrap-registration/contracts/register.md`
+/// §"Failure responses") via the consumer-side `registration-api.md`
+/// in this repo:
+///
+///   - `TokenInvalid`               — server returned 401. The
+///     server deliberately conflates three causes into this status:
+///     token unknown, token-scope mismatch, and `clientApp` policy-
+///     lookup miss. The client cannot tell them apart, and shouldn't
+///     try (see the threat-model note in `register.md`).
+///   - `TokenAlreadyUsed`           — server returned 409. The
+///     bootstrap token was consumed by a prior successful
+///     registration (this installation, or another). Re-registration
+///     requires admin-side revocation + a fresh token.
+///   - `TokenExpired`               — server returned 410. TTL on the
+///     bootstrap token elapsed.
+///   - `TokenRevoked`               — server returned 423. Admin
+///     administratively revoked the token.
+///   - `DescriptorRejected detail`  — server returned 400. The
+///     descriptor portion of the request was malformed, missing a
+///     policy-required field, carried a zero `installGuid`, or the
+///     bootstrap token was missing/empty. All four server outcomes
+///     collapse into this one client case because the dialog UX is
+///     identical (client bug — technician cannot fix). `detail`
+///     carries the server's `error` body verbatim for log
+///     diagnostics.
+///   - `RegistrationServerError httpStatus` — any 5xx the server
+///     ever produces (today only 500 / `AuditFailure`, but the
+///     client tolerates the broader range to avoid lock-step
+///     coupling).
+///   - `RegistrationNetwork reason` — off-the-wire failure
+///     (`NetworkUnreachable` for `HttpRequestException`, `Timeout`
+///     for the client-side 10 s timeout). Reuses
+///     `FetchFailureReason` (T013) to avoid a parallel
 ///     `RegistrationNetworkUnreachable | RegistrationTimeout | ...`
-///     enumeration that would duplicate the eight cases.
+///     enumeration.
 type RegistrationError =
     | TokenInvalid
+    | TokenAlreadyUsed
+    | TokenExpired
+    | TokenRevoked
+    | DescriptorRejected of detail: string
     | RegistrationServerError of httpStatus: int
     | RegistrationNetwork of FetchFailureReason
