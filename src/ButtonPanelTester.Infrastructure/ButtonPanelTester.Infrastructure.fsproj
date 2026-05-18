@@ -10,6 +10,7 @@
         <Compile Include="Persistence/JsonFileDictionaryCache.fs" />
         <Compile Include="Persistence/EmbeddedSeedExtractor.fs" />
         <Compile Include="Persistence/DpapiCredentialStore.fs" />
+        <Compile Include="Http/HttpRegistrationClient.fs" />
     </ItemGroup>
 
     <ItemGroup>
@@ -20,6 +21,7 @@
     <ItemGroup>
         <PackageReference Include="System.Security.Cryptography.ProtectedData" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+        <PackageReference Include="Microsoft.Extensions.Options" />
     </ItemGroup>
 
 </Project>
