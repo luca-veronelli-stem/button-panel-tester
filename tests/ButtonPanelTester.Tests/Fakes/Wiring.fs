@@ -52,23 +52,43 @@ type InMemoryDictionaryProvider(scripted: DictionaryFetchResult seq) =
         member _.FetchAsync(_: CancellationToken) = task { return queue.Dequeue() }
 
 
+/// On-disk cache state for the in-memory test adapter. Models the
+/// three observable shapes the production
+/// `JsonFileDictionaryCache` adapter exposes through `ReadAsync`:
+///   - `Empty`     — both target files absent (cold start).
+///   - `Present`   — JSON + sidecar pair reads cleanly.
+///   - `Corrupt`   — pair exists but the sidecar hash does not
+///                   match the JSON (FR-019 case (c)).
+type private CacheState =
+    | Empty
+    | Present of ButtonPanelDictionary * DateTimeOffset
+    | Corrupt of detail: string option
+
 /// In-memory test adapter for `IDictionaryCache`, per
 /// `specs/001-fetch-dictionary/contracts/ports.md`
-/// §IDictionaryCache lines 99-116. State is a single mutable
-/// `(ButtonPanelDictionary * DateTimeOffset) option` cell that
-/// stands in for the JSON-plus-sidecar pair on disk. The
-/// `SeedWith` scripting hook lets tests preload the cache with a
-/// dictionary + fetched-at timestamp (equivalent to having an
-/// extracted embedded-seed file on disk at startup).
+/// §IDictionaryCache lines 99-116. Models the JSON-plus-sidecar
+/// pair as a `CacheState` cell plus an independent seed-payload
+/// slot consulted by `ExtractSeedIfMissingAsync`.
 ///
-/// `ReadAsync` returns `Failed(CacheAbsent, None)` when the
-/// cell is empty — the T013 `CacheAbsent` failure-reason case
-/// with no human-readable detail. `WriteAsync` overwrites the
-/// cell unconditionally; the hash-skip optimisation in the
-/// production adapter is irrelevant for the test fake.
-/// `ExtractSeedIfMissingAsync` is intentionally a no-op: the
-/// scripting hook is `SeedWith`, so the test author preloads
-/// the state explicitly when an embedded seed is desired.
+/// Scripting hooks (each is independent of the others):
+///   - `SeedWith`    — register the seed payload that
+///                     `ExtractSeedIfMissingAsync` will write when
+///                     the cache is `Empty` or `Corrupt`. Does NOT
+///                     pre-populate the disk state.
+///   - `PrePopulate` — set the disk state to `Present(...)` (simulates a
+///                     prior-session cache that survives the cold start).
+///   - `SetCorrupt`  — set the disk state to `Corrupt(detail)` so the
+///                     next `ReadAsync` returns
+///                     `Failed(CacheUnreadable, detail)` — fixture
+///                     for FR-019 case (c).
+///
+/// `WriteAsync` overwrites the cell unconditionally; the hash-skip
+/// optimisation in the production adapter is irrelevant for the
+/// test fake. `ExtractSeedIfMissingAsync` mirrors the loosened
+/// production contract (T029): it overwrites the disk state with
+/// the registered seed whenever a `ReadAsync` against the current
+/// state would fail (`Empty` or `Corrupt`), staying a no-op only
+/// when the disk state is already `Present`.
 ///
 /// Tests register this directly via the test-side wiring in
 /// `tests/ButtonPanelTester.Tests/Fakes/Wiring.fs` rather than
@@ -77,30 +97,55 @@ type InMemoryDictionaryProvider(scripted: DictionaryFetchResult seq) =
 /// `Infrastructure.Persistence.JsonFileDictionaryCache` (T053),
 /// which implements `cache-format.md`.
 type InMemoryDictionaryCache() =
-    let mutable state: (ButtonPanelDictionary * DateTimeOffset) option = None
-    let mutable hasSeed = false
+    let mutable state: CacheState = Empty
+    let mutable seedPayload: (ButtonPanelDictionary * DateTimeOffset) option = None
 
+    /// Register the seed payload `ExtractSeedIfMissingAsync` will
+    /// write through to the cache when the disk state is not
+    /// `Present`. Independent of `PrePopulate` and `SetCorrupt`.
     member _.SeedWith(dict: ButtonPanelDictionary, fetchedAt: DateTimeOffset) =
-        hasSeed <- true
-        state <- Some(dict, fetchedAt)
+        seedPayload <- Some(dict, fetchedAt)
+
+    /// Pre-populate the disk state with a readable cache pair
+    /// (simulates a successful prior-session refresh).
+    member _.PrePopulate(dict: ButtonPanelDictionary, fetchedAt: DateTimeOffset) =
+        state <- Present(dict, fetchedAt)
+
+    /// Put the cache in the integrity-failure state so the next
+    /// `ReadAsync` returns `Failed(CacheUnreadable, detail)`.
+    member _.SetCorrupt(detail: string option) = state <- Corrupt detail
 
     interface IDictionaryCache with
-        member _.ExistsAsync(_: CancellationToken) = task { return state.IsSome }
+        member _.ExistsAsync(_: CancellationToken) =
+            task {
+                return
+                    match state with
+                    | Empty -> false
+                    | Present _
+                    | Corrupt _ -> true
+            }
 
         member _.ReadAsync(_: CancellationToken) =
             task {
-                match state with
-                | Some(d, t) -> return Success(d, t)
-                | None -> return Failed(CacheAbsent, None)
+                return
+                    match state with
+                    | Empty -> Failed(CacheAbsent, None)
+                    | Corrupt detail -> Failed(CacheUnreadable, detail)
+                    | Present(d, t) -> Success(d, t)
             }
 
         member _.WriteAsync(d: ButtonPanelDictionary, t: DateTimeOffset, _: CancellationToken) =
-            task { state <- Some(d, t) }
+            task { state <- Present(d, t) }
 
         member _.ExtractSeedIfMissingAsync(_: CancellationToken) =
             task {
-                if state.IsNone && hasSeed then
-                    ()
+                match state with
+                | Present _ -> ()
+                | Empty
+                | Corrupt _ ->
+                    match seedPayload with
+                    | Some(d, t) -> state <- Present(d, t)
+                    | None -> ()
             }
 
 
