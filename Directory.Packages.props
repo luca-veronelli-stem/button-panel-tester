@@ -26,11 +26,12 @@
     <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.7" />
     <PackageVersion Include="Avalonia.FuncUI" Version="1.5.1" />
 
-    <!-- Configuration / DI -->
+    <!-- Configuration / DI / Logging -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.7" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
 
     <!-- Persistence (archetype A typical) -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
