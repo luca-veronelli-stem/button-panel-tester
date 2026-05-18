@@ -9,6 +9,7 @@
         <Compile Include="Clock.fs" />
         <Compile Include="Persistence/JsonFileDictionaryCache.fs" />
         <Compile Include="Persistence/EmbeddedSeedExtractor.fs" />
+        <Compile Include="Persistence/DpapiCredentialStore.fs" />
     </ItemGroup>
 
     <ItemGroup>
@@ -18,6 +19,7 @@
 
     <ItemGroup>
         <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     </ItemGroup>
 
 </Project>
