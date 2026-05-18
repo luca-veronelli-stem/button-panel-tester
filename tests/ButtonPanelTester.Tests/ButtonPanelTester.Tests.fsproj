@@ -15,6 +15,7 @@
         <Compile Include="Property/FetchFailureReasonClosureTests.fs" />
         <Compile Include="Property/DictionaryServiceTransitionsTests.fs" />
         <Compile Include="Integration/DictionaryServiceInitializeTests.fs" />
+        <Compile Include="Integration/RegistrationFlowTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
