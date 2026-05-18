@@ -13,6 +13,7 @@
         <Compile Include="Property/DictionarySerializationTests.fs" />
         <Compile Include="Property/ContentHashTests.fs" />
         <Compile Include="Property/FetchFailureReasonClosureTests.fs" />
+        <Compile Include="Property/DictionaryServiceTransitionsTests.fs" />
         <Compile Include="Integration/DictionaryServiceInitializeTests.fs" />
     </ItemGroup>
 
