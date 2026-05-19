@@ -14,8 +14,16 @@
         <Compile Include="Unit/JsonFileDictionaryCacheTests.fs" />
         <Compile Include="Unit/DpapiCredentialStoreTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTests.fs" />
+        <Compile Include="Integration/HttpDictionaryProviderTests.fs" />
         <Compile Include="Gui/DictionaryStatusRowTests.fs" />
         <Compile Include="Gui/RegistrationDialogTests.fs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="..\ButtonPanelTester.Tests\Fixtures\DictionaryResolvedDto.json">
+            <Link>Fixtures\DictionaryResolvedDto.json</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
     </ItemGroup>
 
     <ItemGroup>
