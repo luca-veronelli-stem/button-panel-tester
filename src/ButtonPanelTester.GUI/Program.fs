@@ -20,12 +20,40 @@ open Stem.ButtonPanelTester.GUI.Composition
 /// finds it.
 module Program =
 
+    /// Environment selector for the optional `appsettings.<env>.json`
+    /// overlay. Reads `DOTNET_ENVIRONMENT`, falling back to
+    /// `ASPNETCORE_ENVIRONMENT` for compatibility with hosts that
+    /// set the ASP.NET name, then defaults to `Production`. Empty
+    /// strings are treated as unset.
+    let private environmentName () : string =
+        let pick (name: string) =
+            match Environment.GetEnvironmentVariable(name) with
+            | null -> None
+            | value ->
+                let trimmed = value.Trim()
+                if String.IsNullOrEmpty(trimmed) then None else Some trimmed
+
+        pick "DOTNET_ENVIRONMENT"
+        |> Option.orElseWith (fun () -> pick "ASPNETCORE_ENVIRONMENT")
+        |> Option.defaultValue "Production"
+
+    /// Builds the configuration root from `appsettings.json` plus an
+    /// optional `appsettings.<env>.json` overlay (loaded only when the
+    /// host sets `DOTNET_ENVIRONMENT` / `ASPNETCORE_ENVIRONMENT`).
+    /// Without this gate, a supplier-shipped build that carries a
+    /// stray `appsettings.Development.json` from the developer's
+    /// machine would silently override the production
+    /// `Dictionary:BaseUrl`.
     let private buildConfiguration () : IConfiguration =
+        let env = environmentName ()
+        let envFile = sprintf "appsettings.%s.json" env
+
         ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional = false, reloadOnChange = false)
-            .AddJsonFile("appsettings.Development.json", optional = true, reloadOnChange = false)
-            .Build() :> IConfiguration
+            .AddJsonFile(envFile, optional = true, reloadOnChange = false)
+            .Build()
+        :> IConfiguration
 
     let private buildServices (config: IConfiguration) : IServiceProvider =
         let services = ServiceCollection()
