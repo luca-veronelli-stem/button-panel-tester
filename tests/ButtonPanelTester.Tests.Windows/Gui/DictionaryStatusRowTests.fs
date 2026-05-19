@@ -63,7 +63,11 @@ let private textBlockChild (panel: StackPanel) : TextBlock =
 
 [<AvaloniaFact>]
 let View_CachedFromEmbeddedSeed_OrangePillAndCachedHeadline () =
-    let seedFetchedAt = DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.Zero)
+    // Mid-day UTC so the local-date projection lands on 2026-05-15
+    // regardless of the host's timezone offset (CI runs UTC, dev
+    // runs CEST/CET; both fall comfortably inside the same calendar
+    // day at noon UTC).
+    let seedFetchedAt = DateTimeOffset(2026, 5, 15, 12, 0, 0, TimeSpan.Zero)
     let source = Cached(seedFetchedAt, FromEmbeddedSeed, None)
 
     let panel = renderToStackPanel source
@@ -101,8 +105,16 @@ let View_Live_GreenPillAndLiveHeadline () =
     let pill = ellipseChild panel
     let headline = textBlockChild panel
 
+    // The headline displays the local-time projection of `fetchedAt`
+    // — UTC 14:30 on a UTC CI agent reads as 14:30; on Luca's CEST
+    // machine it reads 16:30 (CET) or 17:30 (CEST). Derive the
+    // expected value from the same conversion the production code
+    // uses so the assertion holds on any machine.
+    let local = fetchedAt.LocalDateTime
+    let expected = sprintf "Live · synced %02d:%02d" local.Hour local.Minute
+
     Assert.Same(Brushes.Green, pill.Fill)
-    Assert.Equal("Live · synced 14:30", headline.Text)
+    Assert.Equal(expected, headline.Text)
 
 [<AvaloniaFact>]
 let View_CachedWithFailureReason_DetailSurfacesReasonAndLocalCopy () =

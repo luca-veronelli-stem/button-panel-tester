@@ -55,17 +55,22 @@ module DictionaryStatusRow =
 
     /// Headline text. `Live · synced HH:MM` for live sources;
     /// `Cached · last synced YYYY-MM-DD` for cached sources. Date
-    /// formatting uses the ISO-style invariant form so the headline
-    /// reads consistently regardless of the host's locale (the GUI
-    /// strings are English-only per Luca's repo convention).
+    /// formatting uses the ISO-style invariant form (so the headline
+    /// reads consistently regardless of the host's locale per Luca's
+    /// English-only-strings convention), but the wall-clock fields
+    /// project through `.LocalDateTime` so the technician sees their
+    /// own clock — `DateTimeOffset.UtcNow` from `SystemClock` is a
+    /// UTC timestamp, and rendering it raw would show 15:50 in Italy
+    /// at 17:50 CEST.
     let headlineBase (source: DictionarySource) : string =
         match source with
         | Live fetchedAt ->
-            sprintf "Live · synced %02d:%02d"
-                fetchedAt.Hour fetchedAt.Minute
+            let local = fetchedAt.LocalDateTime
+            sprintf "Live · synced %02d:%02d" local.Hour local.Minute
         | Cached(fetchedAt, _, _) ->
+            let local = fetchedAt.LocalDateTime
             sprintf "Cached · last synced %04d-%02d-%02d"
-                fetchedAt.Year fetchedAt.Month fetchedAt.Day
+                local.Year local.Month local.Day
 
     let headline (source: DictionarySource) (refreshState: RefreshState) : string =
         let baseText = headlineBase source
@@ -121,11 +126,13 @@ module DictionaryStatusRow =
 
     /// Tooltip text on the stale-glyph element, per `research.md`
     /// R9. The `YYYY-MM-DD` formatting is the same locale-invariant
-    /// shape the headline uses.
+    /// shape the headline uses, projected through `.LocalDateTime`
+    /// so the displayed date matches the technician's wall-clock.
     let staleTooltipText (seededAt: DateTimeOffset) : string =
+        let local = seededAt.LocalDateTime
         sprintf
             "Last refreshed by STEM %04d-%02d-%02d; update via Refresh when network is available."
-            seededAt.Year seededAt.Month seededAt.Day
+            local.Year local.Month local.Day
 
     /// Indicator-pill opacity. Reduced while refreshing so the
     /// technician sees a visual change without the indicator
