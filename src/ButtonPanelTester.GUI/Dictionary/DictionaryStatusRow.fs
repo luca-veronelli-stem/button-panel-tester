@@ -101,6 +101,32 @@ module DictionaryStatusRow =
         | Cached(_, _, Some Unauthorized) -> true
         | _ -> false
 
+    /// `research.md` R9: 90-day soft threshold on seed staleness. The
+    /// muted-yellow advisory glyph appears next to the headline
+    /// when the in-memory dictionary still originates from the
+    /// embedded seed and no live refresh has succeeded for over
+    /// 90 days. No hard block — the technician can still operate.
+    let private seedStalenessDays = 90.0
+
+    /// `true` iff the row should render the seed-staleness advisory
+    /// glyph. False for any `Live` source, for `Cached(_,
+    /// FromLocalFile, _)` (a live fetch has happened at some
+    /// point), and for `Cached(_, FromEmbeddedSeed, _)` where the
+    /// seed's `seededAt` is within the threshold.
+    let shouldOfferStaleGlyph (source: DictionarySource) (now: DateTimeOffset) : bool =
+        match source with
+        | Cached(seededAt, FromEmbeddedSeed, _) ->
+            (now - seededAt).TotalDays > seedStalenessDays
+        | _ -> false
+
+    /// Tooltip text on the stale-glyph element, per `research.md`
+    /// R9. The `YYYY-MM-DD` formatting is the same locale-invariant
+    /// shape the headline uses.
+    let staleTooltipText (seededAt: DateTimeOffset) : string =
+        sprintf
+            "Last refreshed by STEM %04d-%02d-%02d; update via Refresh when network is available."
+            seededAt.Year seededAt.Month seededAt.Day
+
     /// Indicator-pill opacity. Reduced while refreshing so the
     /// technician sees a visual change without the indicator
     /// flipping colour (which would imply a state transition that
@@ -119,11 +145,13 @@ module DictionaryStatusRow =
         | Idle -> "Refresh"
         | Refreshing -> "⟳"
 
-    /// Pure rendering function. Refresh-state tracking and the
-    /// callbacks themselves live on the App.fs host.
+    /// Pure rendering function. Refresh-state tracking, callbacks,
+    /// and the wall-clock `now` (used by the seed-staleness check)
+    /// live on the App.fs host.
     let view
         (cachePath: string)
         (source: DictionarySource)
+        (now: DateTimeOffset)
         (refreshState: RefreshState)
         (onRefresh: unit -> unit)
         (onReregister: unit -> unit)
@@ -141,7 +169,25 @@ module DictionaryStatusRow =
             else
                 None
 
-        let coreChildren : IView list = [
+        let staleGlyphChild : IView option =
+            if shouldOfferStaleGlyph source now then
+                let seededAt =
+                    match source with
+                    | Cached(t, _, _) -> t
+                    | Live t -> t
+                TextBlock.create [
+                    TextBlock.name "StaleSeedGlyph"
+                    TextBlock.text "⚠"  // U+26A0 WARNING SIGN
+                    TextBlock.foreground (Brushes.Goldenrod :> IBrush)
+                    TextBlock.verticalAlignment VerticalAlignment.Center
+                    ToolTip.tip (staleTooltipText seededAt)
+                ]
+                :> IView
+                |> Some
+            else
+                None
+
+        let baseChildren : IView list = [
             // 1. Indicator pill — colour-coded; opacity drop while
             //    refreshing.
             Ellipse.create [
@@ -163,19 +209,30 @@ module DictionaryStatusRow =
                 TextBlock.verticalAlignment VerticalAlignment.Center
                 ToolTip.tip (detailText cachePath source)
             ]
-            // 4. Refresh button (FR-006).
-            Button.create [
-                Button.name "RefreshButton"
-                Button.content (refreshButtonCaption refreshState)
-                Button.isEnabled (match refreshState with Idle -> true | Refreshing -> false)
-                Button.onClick (fun _ -> onRefresh ())
-            ]
         ]
+
+        // Stale glyph (T053) renders RIGHT NEXT TO the headline per
+        // R9, before the action buttons. Re-register button renders
+        // last per FR-018 layout.
+        let withStale =
+            match staleGlyphChild with
+            | Some g -> baseChildren @ [ g ]
+            | None -> baseChildren
+
+        let withRefresh =
+            withStale @ [
+                Button.create [
+                    Button.name "RefreshButton"
+                    Button.content (refreshButtonCaption refreshState)
+                    Button.isEnabled (match refreshState with Idle -> true | Refreshing -> false)
+                    Button.onClick (fun _ -> onRefresh ())
+                ]
+            ]
 
         let allChildren =
             match reregisterChild with
-            | Some r -> coreChildren @ [ r ]
-            | None -> coreChildren
+            | Some r -> withRefresh @ [ r ]
+            | None -> withRefresh
 
         StackPanel.create [
             StackPanel.orientation Orientation.Horizontal

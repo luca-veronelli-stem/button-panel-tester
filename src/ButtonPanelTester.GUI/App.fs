@@ -38,6 +38,7 @@ type MainWindow(services: IServiceProvider) as this =
     let service = services.GetRequiredService<IDictionaryService>()
     let credentialStore = services.GetRequiredService<ICredentialStore>()
     let registrationClient = services.GetRequiredService<IRegistrationClient>()
+    let clock = services.GetRequiredService<IClock>()
     let dialogLogger =
         services.GetRequiredService<ILogger<RegistrationDialogWindow>>()
     let cacheFilePath =
@@ -126,6 +127,7 @@ type MainWindow(services: IServiceProvider) as this =
                 DictionaryStatusRow.view
                     cacheFilePath
                     source
+                    (clock.UtcNow())
                     refreshState
                     kickoffRefresh
                     kickoffReregister)

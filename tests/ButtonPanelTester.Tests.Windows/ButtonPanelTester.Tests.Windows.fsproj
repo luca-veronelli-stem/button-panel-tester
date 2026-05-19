@@ -16,6 +16,7 @@
         <Compile Include="Integration/HttpRegistrationClientTests.fs" />
         <Compile Include="Integration/HttpDictionaryProviderTests.fs" />
         <Compile Include="Gui/DictionaryStatusRowTests.fs" />
+        <Compile Include="Gui/DictionaryStatusRowRefreshTests.fs" />
         <Compile Include="Gui/RegistrationDialogTests.fs" />
     </ItemGroup>
 
