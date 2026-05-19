@@ -16,6 +16,7 @@
         <Compile Include="Property/DictionaryServiceTransitionsTests.fs" />
         <Compile Include="Integration/DictionaryServiceInitializeTests.fs" />
         <Compile Include="Integration/RegistrationFlowTests.fs" />
+        <Compile Include="Integration/DictionaryServiceRefreshTests.fs" />
     </ItemGroup>
 
     <ItemGroup>

@@ -99,6 +99,7 @@ type private CacheState =
 type InMemoryDictionaryCache() =
     let mutable state: CacheState = Empty
     let mutable seedPayload: (ButtonPanelDictionary * DateTimeOffset) option = None
+    let mutable writeCount = 0
 
     /// Register the seed payload `ExtractSeedIfMissingAsync` will
     /// write through to the cache when the disk state is not
@@ -114,6 +115,14 @@ type InMemoryDictionaryCache() =
     /// Put the cache in the integrity-failure state so the next
     /// `ReadAsync` returns `Failed(CacheUnreadable, detail)`.
     member _.SetCorrupt(detail: string option) = state <- Corrupt detail
+
+    /// Count of `WriteAsync` invocations observed since construction.
+    /// `DictionaryServiceRefreshTests` (T055) uses this to assert the
+    /// `cache-format.md` "Skip-write optimisation": an identical-
+    /// content refresh emits `Live(now)` without an extra cache write
+    /// (T050 in-memory hash check). Test-only surface — the
+    /// production adapter has no equivalent counter.
+    member _.WriteCount = writeCount
 
     interface IDictionaryCache with
         member _.ExistsAsync(_: CancellationToken) =
@@ -135,7 +144,10 @@ type InMemoryDictionaryCache() =
             }
 
         member _.WriteAsync(d: ButtonPanelDictionary, t: DateTimeOffset, _: CancellationToken) =
-            task { state <- Present(d, t) }
+            task {
+                writeCount <- writeCount + 1
+                state <- Present(d, t)
+            }
 
         member _.ExtractSeedIfMissingAsync(_: CancellationToken) =
             task {
