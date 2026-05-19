@@ -24,12 +24,16 @@ let private cacheFilePath =
 
 let private noop () = ()
 
+let private fixedNow =
+    DateTimeOffset(2026, 5, 19, 12, 0, 0, TimeSpan.Zero)
+
 let private renderToStackPanel (source: DictionarySource) : StackPanel =
     let materialized =
         VirtualDom.create (
             DictionaryStatusRow.view
                 cacheFilePath
                 source
+                fixedNow
                 DictionaryStatusRow.Idle
                 noop
                 noop)
@@ -45,10 +49,13 @@ let private ellipseChild (panel: StackPanel) : Ellipse =
     |> Seq.exactlyOne
 
 let private textBlockChild (panel: StackPanel) : TextBlock =
+    // The status row may now host multiple TextBlocks (headline +
+    // optional stale-glyph). The legacy T038 tests expect "the
+    // headline", which is the TextBlock named "Headline".
     panel.Children
     |> Seq.choose (fun c ->
         match box c with
-        | :? TextBlock as t -> Some t
+        | :? TextBlock as t when t.Name = "Headline" -> Some t
         | _ -> None)
     |> Seq.exactlyOne
 
