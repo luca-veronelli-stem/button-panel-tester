@@ -12,6 +12,8 @@
         <Compile Include="Persistence/DpapiCredentialStore.fs" />
         <Compile Include="Auth/InstallationDescriptorBuilder.fs" />
         <Compile Include="Http/HttpRegistrationClient.fs" />
+        <Compile Include="Http/ApiKeyAuthHandler.fs" />
+        <Compile Include="Http/HttpDictionaryProvider.fs" />
     </ItemGroup>
 
     <ItemGroup>
