@@ -17,16 +17,12 @@ open Stem.ButtonPanelTester.Infrastructure.Http
 open Stem.ButtonPanelTester.Infrastructure.Persistence
 open Stem.ButtonPanelTester.Services.Dictionary
 
-/// Offline-launch placeholder for `IDictionaryProvider`. Always
-/// returns `Failed(NetworkUnreachable, None)` so US1's offline
-/// launch path (extract seed → read cache → emit Cached) succeeds
-/// without a live HTTP dependency. Replaced by
-/// `Infrastructure.Http.HttpDictionaryProvider` in T053 (US3 /
-/// Phase 5) when the wire adapter ships.
-type internal OfflineDictionaryProvider() =
-    interface IDictionaryProvider with
-        member _.FetchAsync(_: CancellationToken) =
-            Task.FromResult(Failed(NetworkUnreachable, None))
+// `OfflineDictionaryProvider` (the Phase 3 / US1 no-op placeholder)
+// was removed in Phase 5 / T051: the real
+// `Infrastructure.Http.HttpDictionaryProvider` is now wired below
+// against the named `"Dictionary"` HttpClient, and US1's offline
+// launch path no longer goes through `IDictionaryProvider` (it
+// reads the cache directly).
 
 /// `Microsoft.Extensions.DependencyInjection` wiring for the
 /// `ButtonPanelTester.GUI` host, per
@@ -107,8 +103,37 @@ module CompositionRoot =
     ///     the US1 `OfflineRegistrationClient` placeholder.
     let configure (services: IServiceCollection) (config: IConfiguration) : IServiceCollection =
         services.AddLogging() |> ignore
-        services.AddHttpClient() |> ignore
         services.Configure<DictionaryOptions>(config.GetSection("Dictionary")) |> ignore
+
+        // ApiKeyAuthHandler reads ICredentialStore.LoadAsync per
+        // outgoing request and injects the X-Api-Key header per
+        // contracts/dictionary-api.md. Registered as transient
+        // because IHttpMessageHandlerFactory disposes handlers when
+        // the named client's lifetime expires (default 2 min);
+        // capturing a singleton handler here would leak past that
+        // point.
+        services.AddTransient<ApiKeyAuthHandler>() |> ignore
+
+        // Unnamed IHttpClientFactory client for HttpRegistrationClient
+        // (no DelegatingHandler — /register is anonymous).
+        services.AddHttpClient() |> ignore
+
+        // Named "Dictionary" client with BaseAddress + the
+        // ApiKeyAuthHandler in its pipeline, per phase-5.md T051 /
+        // research.md R5 wiring. HttpDictionaryProvider consumes this
+        // exact client below.
+        services
+            .AddHttpClient(
+                "Dictionary",
+                System.Action<IServiceProvider, HttpClient>(fun sp client ->
+                    let options = sp.GetRequiredService<IOptions<DictionaryOptions>>()
+                    let baseUrl =
+                        let raw = options.Value.BaseUrl
+                        if raw.EndsWith('/') then raw else raw + "/"
+                    client.BaseAddress <- Uri(baseUrl))
+            )
+            .AddHttpMessageHandler<ApiKeyAuthHandler>()
+        |> ignore
 
         services
             .AddSingleton<IClock, SystemClock>()
@@ -116,11 +141,20 @@ module CompositionRoot =
                 let cacheDir = defaultCacheDirectory ()
                 let seedReader = EmbeddedSeedExtractor.readSeedBytes (guiAssembly ())
                 JsonFileDictionaryCache(cacheDir, seedReader) :> IDictionaryCache)
-            .AddSingleton<IDictionaryProvider, OfflineDictionaryProvider>()
             .AddSingleton<ICredentialStore>(fun sp ->
                 let dir = defaultCacheDirectory ()
                 let logger = sp.GetRequiredService<ILogger<DpapiCredentialStore>>()
                 DpapiCredentialStore(dir, logger) :> ICredentialStore)
+            // IDictionaryProvider → HttpDictionaryProvider against the
+            // named "Dictionary" client. Phase 5 / T051: replaces the
+            // Phase 3 OfflineDictionaryProvider placeholder.
+            .AddSingleton<IDictionaryProvider>(fun sp ->
+                let factory = sp.GetRequiredService<IHttpClientFactory>()
+                let httpClient = factory.CreateClient("Dictionary")
+                let options = sp.GetRequiredService<IOptions<DictionaryOptions>>()
+                let clock = sp.GetRequiredService<IClock>()
+                let logger = sp.GetRequiredService<ILogger<HttpDictionaryProvider>>()
+                HttpDictionaryProvider(httpClient, options, clock, logger) :> IDictionaryProvider)
             // InstallationDescriptor is built once at first resolve via
             // InstallationDescriptorBuilder (Windows SID + machine GUID
             // hashed; install.guid sidecar read or created). Registered
