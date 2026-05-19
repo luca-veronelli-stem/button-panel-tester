@@ -44,15 +44,19 @@ type MainWindow(services: IServiceProvider) as this =
         let local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         Path.Combine(local, "Stem.ButtonPanelTester", "dictionary.json")
 
+    // Local mutable refresh state. T052 / FR-006: a click on the
+    // Refresh button kicks off `IDictionaryService.RefreshAsync` and
+    // flips `refreshState` to `Refreshing` so the status row's
+    // in-flight UX (pulsing pill opacity, spinner glyph, ellipsis
+    // headline) renders until the task resolves.
+    let mutable refreshState = DictionaryStatusRow.Idle
+    let mutable lastSource: DictionarySource option = None
+
     let renderInitializing () =
         this.Content <- VirtualDom.create (
             TextBlock.create [
                 TextBlock.text "Initializing dictionary…"
             ])
-
-    let renderStatusRow (source: DictionarySource) =
-        this.Content <- VirtualDom.create (
-            DictionaryStatusRow.view cacheFilePath source)
 
     /// Production `runDialog` callback for the registration
     /// orchestration: constructs a `RegistrationDialogWindow` with the
@@ -73,6 +77,58 @@ type MainWindow(services: IServiceProvider) as this =
             do! dialog.ShowDialog(this)
             return! dialog.OutcomeTask
         }
+
+    // Forward-declared mutable holder so the Refresh callback can
+    // call back into `renderStatusRow` after toggling state. F# 10
+    // lacks `letrec`-for-callbacks of this shape; the mutable cell
+    // is the idiomatic workaround.
+    let mutable renderStatusRow : DictionarySource -> unit =
+        fun _ -> ()
+
+    let kickoffRefresh () =
+        if refreshState = DictionaryStatusRow.Idle then
+            refreshState <- DictionaryStatusRow.Refreshing
+            match lastSource with
+            | Some s -> renderStatusRow s
+            | None -> ()
+
+            let _ : Task = task {
+                try
+                    let! _ = service.RefreshAsync(CancellationToken.None)
+                    ()
+                with _ -> ()
+                Dispatcher.UIThread.Post(fun () ->
+                    refreshState <- DictionaryStatusRow.Idle
+                    match lastSource with
+                    | Some s -> renderStatusRow s
+                    | None -> ())
+            }
+            ()
+
+    // Re-register: re-open the registration dialog without touching
+    // the existing credential. `stem-dictionaries-manager` v0.8.0
+    // (#74) handles the server-side atomic rotation: a fresh
+    // bootstrap token registered against an existing installation
+    // overwrites the prior credential on success, leaving the prior
+    // value intact on failure.
+    let kickoffReregister () =
+        Dispatcher.UIThread.Post(fun () ->
+            let _ : Task = task {
+                let! _ = runDialog ()
+                ()
+            }
+            ())
+
+    do
+        renderStatusRow <- fun (source: DictionarySource) ->
+            lastSource <- Some source
+            this.Content <- VirtualDom.create (
+                DictionaryStatusRow.view
+                    cacheFilePath
+                    source
+                    refreshState
+                    kickoffRefresh
+                    kickoffReregister)
 
     do
         this.Title <- "Button Panel Tester"
