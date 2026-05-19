@@ -1,20 +1,21 @@
 namespace Stem.ButtonPanelTester.Services.Dictionary
 
+open System
 open System.Threading
 open System.Threading.Tasks
 open Stem.ButtonPanelTester.Core.Dictionary
 
 /// Production adapter for `IDictionaryService`, per
-/// `specs/001-fetch-dictionary/data-model.md` §3. This Phase 3 slice
-/// (US1, MVP) implements only the offline path: `InitializeAsync`
-/// drives the cache adapter through extract-if-missing → read and
-/// labels the result as `Cached(_, FromEmbeddedSeed | FromLocalFile, None)`.
-///
-/// `RefreshAsync` is a deliberate `notSupported` stub here — the
-/// live-fetch coalescing logic per `research.md` R5 (in-flight
-/// `TaskCompletionSource` guard, identical-content skip-write
-/// optimisation, FR-007 multi-click safety) lands in T050 (US3 /
-/// Phase 5) when `HttpDictionaryProvider` (T049) is ready.
+/// `specs/001-fetch-dictionary/data-model.md` §3.
+/// `InitializeAsync` (US1) drives the cache adapter through
+/// extract-if-missing → read and labels the result as `Cached(_,
+/// FromEmbeddedSeed | FromLocalFile, None)`. `RefreshAsync` (US3,
+/// T050) drives the live fetch through `IDictionaryProvider`,
+/// coalesces concurrent callers per FR-007 via a lock-guarded
+/// `TaskCompletionSource<DictionaryStateUpdate> voption`, and
+/// re-labels the in-memory dictionary as `Cached(_, FromLocalFile,
+/// Some reason)` on transient failure per FR-011 + FR-012 without
+/// touching the cache file.
 ///
 /// FR-019 cache-integrity recovery: `InitializeAsync` reads the
 /// cache before calling `ExtractSeedIfMissingAsync`, so a corrupt
@@ -27,22 +28,31 @@ open Stem.ButtonPanelTester.Core.Dictionary
 /// pre-existing readable cache, and integrity failure.
 ///
 /// Constructor parameters:
-///   - `clock`   — `IClock` port; held for the future US3 refresh
-///     path (live `FetchedAt` stamping). Unused on the offline-only
-///     path but injected here so the composition root binding is
-///     stable across the three user stories.
-///   - `cache`   — `IDictionaryCache` port; the on-disk JSON+sidecar
-///     orchestrated by `JsonFileDictionaryCache` in production
-///     (T029) and by `InMemoryDictionaryCache` in tests (T019).
-///   - `provider` — `IDictionaryProvider` port; unused on the
-///     offline path but accepted so the singleton DI registration
-///     in `CompositionRoot` (T033) doesn't need to know which
-///     phase is wired. The US1 composition binds it to a no-op
-///     fake; US3 (T053) replaces it with `HttpDictionaryProvider`.
-type DictionaryService(_clock: IClock, cache: IDictionaryCache, _provider: IDictionaryProvider) =
+///   - `clock`    — `IClock` port; `UtcNow()` stamps
+///     `SourceChanged Live(now)` on identical-content live
+///     refreshes (where the provider's `fetchedAt` is the same
+///     as before) and reads through for the canonical refresh
+///     timestamp.
+///   - `cache`    — `IDictionaryCache` port; the on-disk
+///     JSON+sidecar orchestrated by `JsonFileDictionaryCache` in
+///     production (T029) and by `InMemoryDictionaryCache` in
+///     tests (T019).
+///   - `provider` — `IDictionaryProvider` port. `OfflineDictionaryProvider`
+///     in the US1 composition; replaced by
+///     `Infrastructure.Http.HttpDictionaryProvider` at T051 (US3).
+type DictionaryService(clock: IClock, cache: IDictionaryCache, provider: IDictionaryProvider) =
 
     let sourceChanged = Event<DictionarySource>()
     let mutable snapshot : (ButtonPanelDictionary * DictionarySource) voption = ValueNone
+
+    // Coalescing guard per `research.md` R5: the second concurrent
+    // caller of `RefreshAsync` observes the in-flight TCS and
+    // awaits the same Task the first caller created — no second
+    // HTTP call, no second cache write, FR-007 satisfied. The
+    // `inFlightLock` makes the read-or-create-and-store check
+    // atomic.
+    let inFlightLock = obj()
+    let mutable inFlight : TaskCompletionSource<DictionaryStateUpdate> voption = ValueNone
 
     interface IDictionaryService with
 
@@ -99,11 +109,86 @@ type DictionaryService(_clock: IClock, cache: IDictionaryCache, _provider: IDict
                 return NoDictionaryAvailable reason
         }
 
-        member _.RefreshAsync(_: CancellationToken) =
-            // US3 / T050 stub. The full implementation coalesces
-            // concurrent callers per FR-007 via a lock-guarded
-            // `TaskCompletionSource<DictionaryStateUpdate> voption`
-            // (research.md R5) and re-labels `Live → Cached` on
-            // transient failure per FR-011, FR-012.
-            raise (System.NotSupportedException(
-                "DictionaryService.RefreshAsync is not supported in the Phase 3 slice. Live-fetch refresh lands in T050 (US3)."))
+        member this.RefreshAsync(ct: CancellationToken) =
+            // FR-007 in-flight coalescing per research.md R5:
+            // hand the second caller the same Task the first
+            // caller is awaiting, so a multi-click on Refresh
+            // does not multiply HTTP load. The TCS is cleared
+            // before the worker signals it, mirroring the legacy
+            // ordering that ensures a third caller arriving
+            // exactly at the signal boundary either observes a
+            // fresh `inFlight = ValueNone` (and starts a new
+            // fetch) or the already-resolved TCS (and skips the
+            // fetch entirely).
+            let tcs, isLeader =
+                lock inFlightLock (fun () ->
+                    match inFlight with
+                    | ValueSome existing -> existing, false
+                    | ValueNone ->
+                        let fresh = TaskCompletionSource<DictionaryStateUpdate>()
+                        inFlight <- ValueSome fresh
+                        fresh, true)
+
+            if isLeader then
+                let _ : Task = task {
+                    try
+                        try
+                            let! fetchResult = provider.FetchAsync(ct)
+
+                            let! update =
+                                task {
+                                    match fetchResult with
+                                    | Success(dict, fetchedAt) ->
+                                        // Identical-content optimisation per
+                                        // cache-format.md §"Skip-write optimisation":
+                                        // skip the IO when the new content matches
+                                        // the in-memory hash, but still emit Live so
+                                        // the status row advances its synced
+                                        // timestamp.
+                                        let needsWrite =
+                                            match snapshot with
+                                            | ValueSome(current, _) ->
+                                                current.ContentHash <> dict.ContentHash
+                                            | ValueNone -> true
+                                        if needsWrite then
+                                            do! cache.WriteAsync(dict, fetchedAt, ct)
+                                        let newSource = Live(fetchedAt)
+                                        snapshot <- ValueSome(dict, newSource)
+                                        sourceChanged.Trigger(newSource)
+                                        return Updated(dict, newSource)
+                                    | Failed(reason, _) ->
+                                        match snapshot with
+                                        | ValueSome(current, currentSource) ->
+                                            // FR-011 + FR-012: keep the in-memory
+                                            // dictionary byte-for-byte, re-label as
+                                            // Cached with the failure reason chip.
+                                            // The cache file is untouched.
+                                            // `previousFetchedAt` is the prior
+                                            // source's FetchedAt regardless of
+                                            // whether it was Live or Cached.
+                                            let previousFetchedAt =
+                                                match currentSource with
+                                                | Live t -> t
+                                                | Cached(t, _, _) -> t
+                                            let reLabelled = Cached(previousFetchedAt, FromLocalFile, Some reason)
+                                            snapshot <- ValueSome(current, reLabelled)
+                                            sourceChanged.Trigger(reLabelled)
+                                            return Updated(current, reLabelled)
+                                        | ValueNone ->
+                                            // Refresh called before Initialize
+                                            // landed an in-memory dictionary.
+                                            // Surface NoDictionaryAvailable rather
+                                            // than synthesising a Cached state
+                                            // from thin air.
+                                            return NoDictionaryAvailable reason
+                                }
+
+                            tcs.TrySetResult(update) |> ignore
+                        with ex ->
+                            tcs.TrySetException(ex) |> ignore
+                    finally
+                        lock inFlightLock (fun () -> inFlight <- ValueNone)
+                }
+                ()
+
+            tcs.Task
