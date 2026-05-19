@@ -22,9 +22,17 @@ open Stem.ButtonPanelTester.GUI.Dictionary
 let private cacheFilePath =
     @"C:\Users\test\AppData\Local\Stem.ButtonPanelTester\dictionary.json"
 
+let private noop () = ()
+
 let private renderToStackPanel (source: DictionarySource) : StackPanel =
     let materialized =
-        VirtualDom.create (DictionaryStatusRow.view cacheFilePath source)
+        VirtualDom.create (
+            DictionaryStatusRow.view
+                cacheFilePath
+                source
+                DictionaryStatusRow.Idle
+                noop
+                noop)
 
     materialized :?> StackPanel
 
