@@ -128,11 +128,32 @@ module RegistrationDialog =
         | RegistrationCompleted(Error err) ->
             { model with State = Failed(errorMessage err) }
 
+    /// `phases/phase-7.md` slice 4: status-row hint surfaced only
+    /// while the registration POST is in flight. Mirrors the
+    /// `DictionaryStatusRow.coldStartHintText` value (slice 1) so
+    /// both surfaces present the same explanation when the Azure
+    /// App Service Free-tier worker is mid-cold-boot.
+    let coldStartHintText : string =
+        "This may take up to a minute if the service has been idle."
+
     /// Pure rendering function. `dispatch` is invoked from the view's
     /// `onTextChanged` / `onClick` handlers; the host's loop is the
     /// only consumer in production, the test's captured-list dispatch
     /// in T047.
     let view (model: Model) (dispatch: Message -> unit) : IView =
+        let coldStartHint : IView option =
+            match model.State with
+            | Submitting ->
+                TextBlock.create [
+                    TextBlock.name "ColdStartHint"
+                    TextBlock.text coldStartHintText
+                    TextBlock.foreground Brushes.Gray
+                    TextBlock.textWrapping TextWrapping.Wrap
+                ]
+                :> IView
+                |> Some
+            | _ -> None
+
         let inlineError =
             match model.State with
             | Failed message ->
@@ -156,47 +177,67 @@ module RegistrationDialog =
             | Submitting -> "Submitting…"
             | _ -> "Submit"
 
-        StackPanel.create [
-            StackPanel.margin (Thickness 20.0)
-            StackPanel.spacing 12.0
-            StackPanel.children [
-                TextBlock.create [
-                    TextBlock.text "Register your tool"
-                    TextBlock.fontSize 18.0
-                    TextBlock.fontWeight FontWeight.Bold
-                ]
-                TextBlock.create [
-                    TextBlock.text
-                        "Paste the bootstrap token STEM sent you out of band, then submit."
-                    TextBlock.textWrapping TextWrapping.Wrap
-                ]
-                TextBox.create [
-                    TextBox.name "TokenInput"
-                    TextBox.text model.Token
-                    TextBox.watermark "Bootstrap token"
-                    TextBox.isEnabled (model.State <> Submitting)
-                    TextBox.onTextChanged (fun text ->
-                        let value =
-                            match text with
-                            | null -> ""
-                            | s -> s
-                        dispatch (TokenChanged value))
-                ]
-                inlineError
-                StackPanel.create [
-                    StackPanel.orientation Orientation.Horizontal
-                    StackPanel.spacing 8.0
-                    StackPanel.horizontalAlignment HorizontalAlignment.Right
-                    StackPanel.children [
-                        Button.create [
-                            Button.name "SubmitButton"
-                            Button.content submitCaption
-                            Button.isEnabled (canSubmit model)
-                            Button.onClick (fun _ -> dispatch Submit)
-                        ]
+        let title : IView =
+            TextBlock.create [
+                TextBlock.text "Register your tool"
+                TextBlock.fontSize 18.0
+                TextBlock.fontWeight FontWeight.Bold
+            ]
+            :> IView
+
+        let instructions : IView =
+            TextBlock.create [
+                TextBlock.text
+                    "Paste the bootstrap token STEM sent you out of band, then submit."
+                TextBlock.textWrapping TextWrapping.Wrap
+            ]
+            :> IView
+
+        let tokenInput : IView =
+            TextBox.create [
+                TextBox.name "TokenInput"
+                TextBox.text model.Token
+                TextBox.watermark "Bootstrap token"
+                TextBox.isEnabled (model.State <> Submitting)
+                TextBox.onTextChanged (fun text ->
+                    let value =
+                        match text with
+                        | null -> ""
+                        | s -> s
+                    dispatch (TokenChanged value))
+            ]
+            :> IView
+
+        let buttonRow : IView =
+            StackPanel.create [
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.spacing 8.0
+                StackPanel.horizontalAlignment HorizontalAlignment.Right
+                StackPanel.children [
+                    Button.create [
+                        Button.name "SubmitButton"
+                        Button.content submitCaption
+                        Button.isEnabled (canSubmit model)
+                        Button.onClick (fun _ -> dispatch Submit)
                     ]
                 ]
             ]
+            :> IView
+
+        let hintChildren : IView list =
+            match coldStartHint with
+            | Some h -> [ h ]
+            | None -> []
+
+        let children : IView list =
+            [ title; instructions; tokenInput; inlineError ]
+            @ hintChildren
+            @ [ buttonRow ]
+
+        StackPanel.create [
+            StackPanel.margin (Thickness 20.0)
+            StackPanel.spacing 12.0
+            StackPanel.children children
         ]
         :> IView
 
