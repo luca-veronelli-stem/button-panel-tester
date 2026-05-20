@@ -19,6 +19,11 @@ open System
 type BootstrapToken =
     private BootstrapToken of string
     with
+    /// Trim `raw` and validate non-emptiness. Returns
+    /// `Ok BootstrapToken` on success, `Error "token is empty"` when
+    /// `raw` is `null`, whitespace-only, or empty. The only public
+    /// constructor — `private BootstrapToken` cannot be invoked
+    /// directly by callers.
     static member TryCreate(raw: string | null) : Result<BootstrapToken, string> =
         match raw with
         | null -> Error "token is empty"
@@ -26,6 +31,10 @@ type BootstrapToken =
             let trimmed = s.Trim()
             if String.IsNullOrEmpty trimmed then Error "token is empty"
             else Ok(BootstrapToken trimmed)
+    /// Trimmed token value as a plain string. Callers MUST treat this
+    /// as a secret: do not log, do not surface in error messages, do
+    /// not embed in URLs. The only legitimate sink is the
+    /// `bootstrapToken` field of a `POST /register` request body.
     member this.Value =
         let (BootstrapToken s) = this in s
 
@@ -44,7 +53,14 @@ type BootstrapToken =
 type InstallationCredential =
     private InstallationCredential of string
     with
+    /// Total constructor wrapping the verbatim `apiCredential` field
+    /// from a successful `POST /register` response. The server is the
+    /// sole authority on the value's shape, so no client-side
+    /// validation is performed.
     static member Create(raw: string) = InstallationCredential raw
+    /// Underlying credential string. Callers MUST treat this as a
+    /// secret: the only legitimate sink is the outbound `X-Api-Key`
+    /// header on dictionary-service requests.
     member this.Value =
         let (InstallationCredential s) = this in s
 
@@ -86,10 +102,31 @@ type InstallationCredential =
 ///     `RegistrationNetworkUnreachable | RegistrationTimeout | ...`
 ///     enumeration.
 type RegistrationError =
+    /// Server returned HTTP 401 — token unknown / scope mismatch /
+    /// policy-lookup miss (the three causes are deliberately conflated
+    /// server-side).
     | TokenInvalid
+    /// Server returned HTTP 409 — the bootstrap token was consumed by
+    /// a prior successful registration on this or another installation.
     | TokenAlreadyUsed
+    /// Server returned HTTP 410 — the bootstrap token's TTL elapsed
+    /// before this attempt.
     | TokenExpired
+    /// Server returned HTTP 423 — the bootstrap token was
+    /// administratively revoked.
     | TokenRevoked
+    /// Server returned HTTP 400 — request descriptor was malformed,
+    /// missing a required field, carried a zero `installGuid`, or the
+    /// `bootstrapToken` field was empty. `detail` is the server's
+    /// verbatim `error` body, included for log diagnostics only.
     | DescriptorRejected of detail: string
+    /// Server returned 5xx (today only 500 / `AuditFailure`, but the
+    /// client tolerates the broader range to avoid lock-step coupling
+    /// with the server's status taxonomy). `httpStatus` is the
+    /// integer code as returned.
     | RegistrationServerError of httpStatus: int
+    /// Off-the-wire failure — `NetworkUnreachable` for
+    /// `HttpRequestException`, `Timeout` for the client-side 10 s
+    /// timeout. Reuses `FetchFailureReason` to avoid a parallel
+    /// registration-side network enumeration.
     | RegistrationNetwork of FetchFailureReason

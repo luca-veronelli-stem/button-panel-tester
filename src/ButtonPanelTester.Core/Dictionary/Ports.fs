@@ -16,6 +16,9 @@ open System.Threading.Tasks
 /// `Tests.Fakes.FrozenClock` (T019, exposes `Advance` and
 /// `SetTo` for scripted time progression).
 type IClock =
+    /// Current UTC instant. Production implementations wrap
+    /// `DateTimeOffset.UtcNow`; test fakes return a scripted value
+    /// independent of the system clock.
     abstract member UtcNow: unit -> DateTimeOffset
 
 /// Live dictionary fetch over the wire, per
@@ -36,6 +39,10 @@ type IClock =
 /// adapter: `Tests.Fakes.InMemoryDictionaryProvider` (T019,
 /// scripted-queue of pre-built `DictionaryFetchResult` values).
 type IDictionaryProvider =
+    /// Fetch the dictionary identified by the adapter's bound
+    /// configuration (`Dictionary:Id`). Honours `ct`: cancellation
+    /// raises `OperationCanceledException`; every other expected
+    /// failure mode is reified as `Failed(reason, detail)`.
     abstract member FetchAsync: ct: CancellationToken -> Task<DictionaryFetchResult>
 
 /// On-disk dictionary cache, per
@@ -65,13 +72,29 @@ type IDictionaryProvider =
 /// `Tests.Fakes.InMemoryDictionaryCache` (T019, ref-cell
 /// state with a `SeedWith` setup hook).
 type IDictionaryCache =
+    /// `true` iff both the JSON file and its sidecar are present.
+    /// Does not validate the sidecar hash; callers that need full
+    /// integrity call `ReadAsync`.
     abstract member ExistsAsync: ct: CancellationToken -> Task<bool>
+    /// Read the cache. Returns `Success(dict, fetchedAt)` when the
+    /// JSON envelope parses and the sidecar hash matches the JSON
+    /// bytes; otherwise `Failed(CacheAbsent, _)` (file missing) or
+    /// `Failed(CacheUnreadable, detail)` (hash mismatch, malformed
+    /// envelope, IO error).
     abstract member ReadAsync: ct: CancellationToken -> Task<DictionaryFetchResult>
+    /// Persist `dict` with the supplied `fetchedAt`. Atomic
+    /// temp+rename of both the JSON file and the sidecar; the
+    /// skip-write optimisation suppresses the write when the
+    /// computed sidecar hash equals the on-disk sidecar.
     abstract member WriteAsync:
         dict: ButtonPanelDictionary *
         fetchedAt: DateTimeOffset *
         ct: CancellationToken ->
             Task
+    /// No-op when `ExistsAsync` returns `true`. Otherwise extract
+    /// the embedded `Assets/dictionary.seed.json` resource to the
+    /// cache directory via the same atomic temp+rename used by
+    /// `WriteAsync`.
     abstract member ExtractSeedIfMissingAsync: ct: CancellationToken -> Task
 
 /// Persistent store for the server-issued `InstallationCredential`,
@@ -100,9 +123,20 @@ type IDictionaryCache =
 /// `Tests.Fakes.InMemoryCredentialStore` (T019, ref-cell
 /// state).
 type ICredentialStore =
+    /// `true` iff the credential file is present on disk. Does not
+    /// attempt decryption; callers that need a usable credential
+    /// call `LoadAsync`.
     abstract member ExistsAsync: ct: CancellationToken -> Task<bool>
+    /// Return `Some credential` when the file is present and
+    /// decrypts cleanly; `None` when it is absent or decryption
+    /// fails. Decrypt failures are logged via the bound `ILogger`
+    /// but never thrown.
     abstract member LoadAsync: ct: CancellationToken -> Task<InstallationCredential option>
+    /// Persist `credential` via atomic temp+rename. Overwrites any
+    /// prior value at the target path.
     abstract member SaveAsync: credential: InstallationCredential * ct: CancellationToken -> Task
+    /// Remove the credential file. Idempotent: returns successfully
+    /// when the file is already absent.
     abstract member DeleteAsync: ct: CancellationToken -> Task
 
 /// Bootstrap registration exchange against the server, per
@@ -126,6 +160,10 @@ type ICredentialStore =
 /// `Map<string, Result<_,_>>`-scripted; unscripted tokens
 /// default to `Error TokenInvalid`).
 type IRegistrationClient =
+    /// Exchange `token` for an `InstallationCredential`. `Ok` carries
+    /// the verbatim server `apiCredential`; `Error` carries a typed
+    /// `RegistrationError` for any expected HTTP outcome. Honours
+    /// `ct`: cancellation raises `OperationCanceledException`.
     abstract member RegisterAsync:
         token: BootstrapToken * ct: CancellationToken ->
             Task<Result<InstallationCredential, RegistrationError>>

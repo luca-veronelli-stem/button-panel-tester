@@ -22,7 +22,14 @@ open Stem.ButtonPanelTester.Core.Dictionary
 ///     `FetchFailureReason` (T013). The GUI surfaces this as a
 ///     "dictionary unavailable" banner.
 type DictionaryStateUpdate =
+    /// A usable dictionary is in memory. `dictionary` is the current
+    /// in-memory copy; `source` tells the status row whether it came
+    /// from a Live fetch or from the Cached fallback (with the
+    /// most-recent-failure reason carried in the `Cached` payload).
     | Updated of dictionary: ButtonPanelDictionary * source: DictionarySource
+    /// Every byte-source (live + cache + seed) failed. `reason`
+    /// carries the most-relevant `FetchFailureReason`; the GUI
+    /// surfaces this as a "dictionary unavailable" banner.
     | NoDictionaryAvailable of reason: FetchFailureReason
 
 /// Single-instance dictionary orchestration service, per
