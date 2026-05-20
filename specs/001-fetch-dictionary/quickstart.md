@@ -55,7 +55,7 @@ You should see:
 4. Paste the `STEM-BT-DEV-KEY-2026` (or your real `BootstrapToken`) and click **Submit**.
 5. The dialog closes. The status row reads **"Live · synced now"** in green within ~1 s.
 
-If step 5 fails, the status row stays orange and the detail affordance shows the failure reason. Check `%LOCALAPPDATA%\Stem.ButtonPanelTester\app.log` for details (the LOGGING standard governs format).
+If step 5 fails, the status row stays orange and the detail affordance shows the failure reason. Check `%LOCALAPPDATA%\Stem.ButtonPanelTester\app.log` for details — the NReco file sink wired in `CompositionRoot.configure` rolls at 5 MB and keeps 3 files (`app.log`, `app.1.log`, `app.2.log`). The `HttpRegistrationClient` `Warning` line records the failure mode (`HTTP 401` vs network timeout vs payload error), and `HttpDictionaryProvider` emits the immediate post-registration fetch outcome on the next line. The LOGGING standard governs the format.
 
 ## 5. Verify the on-disk artifacts
 
@@ -144,7 +144,7 @@ The script fetches `GET /api/dictionaries/2/resolved` from the configured URL, n
 
 ## Troubleshooting
 
-**Status row stays "Cached · last synced \<seed build date\>" after submitting a valid token**: check the network. The registration succeeded (the dialog closed) but the immediate post-registration fetch failed. Click Refresh again or inspect `app.log`.
+**Status row stays "Cached · last synced \<seed build date\>" after submitting a valid token**: check the network. The registration succeeded (the dialog closed) but the immediate post-registration fetch failed. Click Refresh again or inspect `%LOCALAPPDATA%\Stem.ButtonPanelTester\app.log` — the `HttpDictionaryProvider` `Warning` / `Error` line names the failure (4xx, 5xx, timeout, or network failure) with its template parameters.
 
 **`CryptographicException` on launch**: `credential.dpapi` was written under a different user account or was copied between machines. Delete the file (see step 9); the registration dialog will re-appear.
 
