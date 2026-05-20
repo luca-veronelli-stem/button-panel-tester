@@ -10,6 +10,7 @@ open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
+open NReco.Logging.File
 open Stem.ButtonPanelTester.Core.Dictionary
 open Stem.ButtonPanelTester.Infrastructure
 open Stem.ButtonPanelTester.Infrastructure.Auth
@@ -86,11 +87,18 @@ module CompositionRoot =
     /// this function.
     ///
     /// Phase 4 (US2) additions over Phase 3's bindings:
-    ///   - `services.AddLogging()` so `ILogger<T>` resolutions
-    ///     succeed for `DpapiCredentialStore`, `HttpRegistrationClient`,
-    ///     and `RegistrationDialogWindow`. Without further provider
-    ///     calls (e.g. `AddConsole`) MEL provides a no-op
-    ///     `NullLoggerFactory`; a real sink is a follow-up.
+    ///   - `services.AddLogging(...)` wires three providers behind the
+    ///     `ILogger<T>` resolutions used by `DpapiCredentialStore`,
+    ///     `HttpRegistrationClient`, `HttpDictionaryProvider`,
+    ///     `DictionaryWarmUp`, etc.: `AddSimpleConsole()` for terminal-
+    ///     launched dev runs, `AddDebug()` for the IDE Output window,
+    ///     and `AddFile(...)` (NReco) writing a rolling text log to
+    ///     `%LOCALAPPDATA%\Stem.ButtonPanelTester\app.log` — the path
+    ///     `specs/001-fetch-dictionary/quickstart.md` Troubleshooting
+    ///     tail tells supplier operators to inspect. Default minimum
+    ///     level is `Information`; the `Microsoft.*` category is held
+    ///     at `Warning` so framework chatter (HTTP, DI scopes) does
+    ///     not drown app lines.
     ///   - `services.AddHttpClient()` so `HttpRegistrationClient`
     ///     can resolve an `HttpClient` per request from
     ///     `IHttpClientFactory`.
@@ -102,7 +110,36 @@ module CompositionRoot =
     ///   - `IRegistrationClient → HttpRegistrationClient`, replacing
     ///     the US1 `OfflineRegistrationClient` placeholder.
     let configure (services: IServiceCollection) (config: IConfiguration) : IServiceCollection =
-        services.AddLogging() |> ignore
+        // Make sure the cache directory exists before NReco opens
+        // `app.log` for append — the directory is otherwise created
+        // on first cache write by `JsonFileDictionaryCache`, which
+        // can be later than the first log line.
+        let logDir = defaultCacheDirectory ()
+        Directory.CreateDirectory(logDir) |> ignore
+        let logPath = Path.Combine(logDir, "app.log")
+
+        services.AddLogging(fun builder ->
+            builder
+                .SetMinimumLevel(LogLevel.Information)
+                // Suppress framework chatter (DI, options, HTTP request
+                // start/end) at Information so app lines stay readable.
+                // `System.Net.Http` covers the `IHttpClientFactory`
+                // pipeline categories (`System.Net.Http.HttpClient.<name>.*`)
+                // — they sit outside the `Microsoft.*` prefix.
+                .AddFilter("Microsoft", LogLevel.Warning)
+                .AddFilter("System.Net.Http", LogLevel.Warning)
+                .AddSimpleConsole()
+                .AddDebug()
+                .AddFile(
+                    logPath,
+                    fun opts ->
+                        opts.Append <- true
+                        opts.FileSizeLimitBytes <- 5L * 1024L * 1024L
+                        opts.MaxRollingFiles <- 3
+                )
+            |> ignore)
+        |> ignore
+
         services.Configure<DictionaryOptions>(config.GetSection("Dictionary")) |> ignore
 
         // ApiKeyAuthHandler reads ICredentialStore.LoadAsync per

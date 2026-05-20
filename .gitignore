@@ -62,5 +62,11 @@ desktop.ini
 *.swo
 WIP.md
 
+# App log (NReco file sink writes to %LOCALAPPDATA%\Stem.ButtonPanelTester\app.log
+# at runtime; defensive entry against an `app.log` ever landing inside the worktree
+# during dev with a misconfigured CWD or relative log path).
+app.log
+app.*.log
+
 # resolve-ticket-supervised: local supervisor state (subagents never read it)
 llm/supervisor.md
