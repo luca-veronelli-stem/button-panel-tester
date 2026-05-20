@@ -11,8 +11,7 @@
 
 ## Overview
 
-<!-- TODO: replace this placeholder with the project overview. -->
-*[TODO — 1-3 paragraphs: what it does, who it's for, why.]*
+ButtonPanelTester is a bench tool that exercises STEM button-panel hardware over CAN. The user-visible surface today is a single window whose **dictionary status row** reports the provenance, age, and health of the loaded variable dictionary (live, cached, or extracted from an embedded seed) and offers a one-click **Refresh** against a remote `stem-dictionaries-manager`. A first-launch **registration ceremony** swaps a short-lived bootstrap token for a long-lived per-installation API credential stored under DPAPI, so the operator authenticates the tool once per machine and the credential is rotated atomically server-side on any subsequent Re-register. See [`specs/001-fetch-dictionary/quickstart.md`](specs/001-fetch-dictionary/quickstart.md) for the end-to-end operator walkthrough.
 
 ## Quick Start
 
@@ -40,6 +39,7 @@ eng/                             build / release scripts
 
 ## Documentation
 
+- Dictionary fetch & registration walkthrough: [`specs/001-fetch-dictionary/quickstart.md`](./specs/001-fetch-dictionary/quickstart.md).
 - Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.5.3`.
 - Changelog: [`CHANGELOG.md`](./CHANGELOG.md).
 - Repo-specific notes: [`CLAUDE.md`](./CLAUDE.md).
