@@ -167,3 +167,23 @@ type IRegistrationClient =
     abstract member RegisterAsync:
         token: BootstrapToken * ct: CancellationToken ->
             Task<Result<InstallationCredential, RegistrationError>>
+
+/// Startup-time priming for the dictionary service, per
+/// `specs/001-fetch-dictionary/phases/phase-7.md` slice 3. Issues a
+/// single unauthenticated probe against the service's `GET /health`
+/// endpoint so the Azure App Service Free-tier worker is hot before
+/// the technician's first explicit network action (Refresh click or
+/// registration submit).
+///
+/// Contract: thin adapter over the wire. The adapter SHOULD let
+/// transport exceptions (`HttpRequestException`, `TaskCanceledException`)
+/// propagate; the orchestration class (`Services.Dictionary.DictionaryWarmUp`)
+/// owns the "swallow non-cancellation" policy. Returning normally
+/// means the worker is responsive — the server's health verdict
+/// itself is not load-bearing here (the production fetch path is
+/// the source of truth for service health).
+type IDictionaryServiceWarmUp =
+    /// Probe the dictionary service. Honours `ct`: cancellation
+    /// raises `OperationCanceledException`. Returning successfully
+    /// means a response of any HTTP status was observed.
+    abstract member WarmUpAsync: ct: CancellationToken -> Task<unit>

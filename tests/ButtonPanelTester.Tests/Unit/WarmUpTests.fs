@@ -7,97 +7,96 @@ open Xunit
 open Stem.ButtonPanelTester.Core.Dictionary
 open Stem.ButtonPanelTester.Services.Dictionary
 
-/// Tests for `Services.Dictionary.WarmUp.runAsync` per
-/// `specs/001-fetch-dictionary/phases/phase-7.md` (issue #92, slice 2).
-/// The warm-up runs once at GUI startup, fire-and-forget, so the Azure
-/// App Service Free-tier worker is hot before the technician clicks
-/// Refresh. Three contracts pinned here:
-///   1. `FetchAsync` is called exactly once per `runAsync` invocation.
-///   2. Non-cancellation outcomes (success and any `Failed` reason)
-///      are swallowed — the production fetch path is the source of
-///      truth, the warm-up just primes the worker.
+/// Tests for `Services.Dictionary.DictionaryWarmUp.RunAsync` per
+/// `specs/001-fetch-dictionary/phases/phase-7.md` slice 3 (issue #92).
+/// The warm-up runs once at GUI startup, fire-and-forget, so the
+/// Azure App Service Free-tier worker is hot before the technician
+/// clicks Refresh or submits the registration token. Three contracts
+/// pinned here:
+///   1. `WarmUpAsync` is called exactly once per `RunAsync` invocation.
+///   2. Non-cancellation outcomes (the adapter throwing a transport
+///      exception) are swallowed — the production fetch path remains
+///      the source of truth for surfaced errors.
 ///   3. `OperationCanceledException` originating from the caller's
 ///      `ct` propagates so the GUI's shutdown path can stop the
 ///      in-flight warm-up cleanly.
+///
+/// The adapter shape — `GET /health` against the unauthenticated
+/// dictionary-service endpoint — is exercised separately in
+/// `tests/ButtonPanelTester.Tests.Windows/Integration/HttpDictionaryServiceWarmUpTests.fs`.
 
-/// Counting `IDictionaryProvider` stub. Records the number of
-/// `FetchAsync` invocations and yields a scripted `DictionaryFetchResult`
-/// per call.
-type private CountingProvider(scripted: DictionaryFetchResult) =
+/// Counting `IDictionaryServiceWarmUp` stub. Records the number of
+/// `WarmUpAsync` invocations and yields a scripted outcome per call —
+/// either returns normally (success) or throws a scripted exception
+/// (so the orchestration's swallow-policy and cancellation
+/// propagation can be exercised without spinning up an `HttpClient`).
+type private CountingWarmUp(scriptedException: exn option) =
     let mutable calls = 0
 
     member _.Calls = calls
 
-    interface IDictionaryProvider with
-        member _.FetchAsync(_: CancellationToken) : Task<DictionaryFetchResult> =
+    interface IDictionaryServiceWarmUp with
+        member _.WarmUpAsync(ct: CancellationToken) : Task<unit> =
             task {
                 calls <- calls + 1
-                return scripted
-            }
-
-/// Cancellation-aware stub. Calls `ct.ThrowIfCancellationRequested()`
-/// before yielding — the production adapter's contract is that
-/// `OperationCanceledException` may only leak when the caller's `ct`
-/// fired (`HttpDictionaryProvider` lines 326-333). This stub
-/// simulates that path so the warm-up test can verify propagation
-/// without spinning up a real `HttpClient`.
-type private CancellableProvider() =
-    interface IDictionaryProvider with
-        member _.FetchAsync(ct: CancellationToken) : Task<DictionaryFetchResult> =
-            task {
                 ct.ThrowIfCancellationRequested()
-                return Success(
-                    { ContentHash = String.replicate 64 "0"; PanelTypes = [] },
-                    System.DateTimeOffset.UtcNow
-                )
+
+                match scriptedException with
+                | Some ex -> raise ex
+                | None -> return ()
             }
 
-let private aDictionary () : ButtonPanelDictionary = {
-    ContentHash = String.replicate 64 "a"
-    PanelTypes = []
-}
-
 [<Fact>]
-let WarmUp_CallsFetchAsyncExactlyOnce () =
+let RunAsync_CallsWarmUpAsyncExactlyOnce () =
     task {
-        let provider =
-            CountingProvider(Success(aDictionary (), System.DateTimeOffset.UtcNow))
+        let stub = CountingWarmUp(None)
 
-        do!
-            WarmUp.runAsync
-                (provider :> IDictionaryProvider)
-                NullLogger.Instance
-                CancellationToken.None
+        let warmUp =
+            DictionaryWarmUp(
+                stub :> IDictionaryServiceWarmUp,
+                NullLogger<DictionaryWarmUp>.Instance
+            )
 
-        Assert.Equal(1, provider.Calls)
+        do! warmUp.RunAsync(CancellationToken.None)
+
+        Assert.Equal(1, stub.Calls)
     }
 
 [<Fact>]
-let WarmUp_SwallowsFailedResult () =
-    // A `Failed` outcome surfaces in logs but must not raise — the
-    // production fetch path retries from the user's Refresh click.
+let RunAsync_SwallowsAdapterException () =
+    // The production fetch path retries from the user's Refresh
+    // click; the warm-up's job is just to prime the worker.
     task {
-        let provider =
-            CountingProvider(Failed(NetworkUnreachable, Some "warm-up DNS failed"))
+        let stub =
+            CountingWarmUp(
+                Some(System.Net.Http.HttpRequestException("simulated DNS failure"))
+            )
 
-        do!
-            WarmUp.runAsync
-                (provider :> IDictionaryProvider)
-                NullLogger.Instance
-                CancellationToken.None
+        let warmUp =
+            DictionaryWarmUp(
+                stub :> IDictionaryServiceWarmUp,
+                NullLogger<DictionaryWarmUp>.Instance
+            )
 
-        Assert.Equal(1, provider.Calls)
+        do! warmUp.RunAsync(CancellationToken.None)
+
+        Assert.Equal(1, stub.Calls)
     }
 
 [<Fact>]
-let WarmUp_PropagatesCancellationFromCallersCt () =
+let RunAsync_PropagatesCancellationFromCallersCt () =
     task {
         use cts = new CancellationTokenSource()
         cts.Cancel()
-        let provider = CancellableProvider() :> IDictionaryProvider
+        let stub = CountingWarmUp(None)
 
-        let act () : Task =
-            WarmUp.runAsync provider NullLogger.Instance cts.Token
+        let warmUp =
+            DictionaryWarmUp(
+                stub :> IDictionaryServiceWarmUp,
+                NullLogger<DictionaryWarmUp>.Instance
+            )
+
+        let act () : Task = warmUp.RunAsync(cts.Token)
 
         let! _ = Assert.ThrowsAnyAsync<System.OperationCanceledException>(act)
         ()

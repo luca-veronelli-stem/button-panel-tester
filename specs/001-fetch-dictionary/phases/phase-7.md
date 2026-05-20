@@ -91,7 +91,10 @@ client-side deadline fires, just at 90 s instead of 10 s.
 
 ## Design
 
-Two vertical slices.
+Four vertical slices. Slices 1 and 2 land the original options 1 + 3
+from the issue's discussion; slices 3 and 4 are reworks driven by
+review findings during the PR (race / unregistered-install / log
+noise / LOGGING-standard deviation).
 
 ### Slice 1 — 90 s timeout + UI hint + docs
 
@@ -174,6 +177,106 @@ tested keeps the proof at the right level; the App.fs invocation is
 a one-line `let _ : Task = WarmUp.runAsync ...` whose only failure
 mode (typo / forgotten call) is caught at compile time.
 
+### Slice 3 — rework warm-up: `/health` endpoint + class shape
+
+Driven by three findings surfaced during PR #95 review:
+
+1. **Unregistered installs send a spurious 401.** Slice 2's `FetchAsync`
+   warm-up reaches `/api/dictionaries/{id}/resolved`, which requires
+   `X-Api-Key`. On a fresh install the credential store is empty,
+   the `ApiKeyAuthHandler` omits the header, and the server replies
+   401 — logged as `Failed(Unauthorized, _)` in the warm-up's
+   Information line. The 401 also pollutes the dictionary service's
+   access logs.
+2. **The 401 is, however, load-bearing for the registration UX.**
+   The wasted request still cold-boots the worker. On a fresh
+   install the technician then opens the registration dialog and
+   spends seconds-to-tens-of-seconds finding their bootstrap token;
+   by the time they click Submit, the worker is warm and `POST
+   /register` returns in <1 s. Gating the warm-up on credential
+   presence would regress the registration UX (silent 60 s
+   "Submitting…").
+3. **The warm-up's logger shape deviates from LOGGING.** `WarmUp` is
+   an F# module with no `T` for `ILogger<T>`. The standard's F#
+   section addresses classes but not modules.
+
+The rework hits all three at once:
+
+- **New port** `Stem.ButtonPanelTester.Core.Dictionary.IDictionaryServiceWarmUp`
+  with one method `WarmUpAsync : CancellationToken -> Task<unit>`.
+  Throws on transport failure, swallows nothing — exception-based
+  control flow at the adapter boundary, swallow-policy at the
+  orchestration.
+- **New adapter** `Infrastructure.Http.HttpDictionaryServiceWarmUp`,
+  an F# **class** with `ILogger<HttpDictionaryServiceWarmUp>`,
+  issuing `GET /health` against the dictionary service's
+  unauthenticated endpoint (`stem-dictionaries-manager`
+  `Program.cs:86-87` + `ApiKeyMiddleware` allow-list). Reuses the
+  named "Dictionary" `HttpClient` — `ApiKeyAuthHandler` is harmless
+  on `/health` (server ignores `X-Api-Key` for allow-listed paths;
+  unregistered installs omit the header). 90 s timeout, uniform
+  with the other adapters.
+- **`WarmUp` module → `DictionaryWarmUp` class.** With a port and
+  DI, the canonical archetype-A class shape is the natural fit.
+  `ILogger<DictionaryWarmUp>` resolves the LOGGING-standard
+  deviation entirely. Orchestration policy (Stopwatch, log
+  Information on success, swallow non-cancellation, propagate
+  cancellation) stays unchanged.
+- **`CompositionRoot`** binds the new port + adapter and the
+  `DictionaryWarmUp` class as singletons.
+- **`App.fs`** resolves `DictionaryWarmUp` from DI and calls
+  `RunAsync(CancellationToken.None)` fire-and-forget, replacing
+  the module function call.
+
+Why `/health` and not a dedicated `/warmup` endpoint:
+
+- Cold-boot in Azure App Service is process-level (JIT, DI, EF
+  `DbContext` init). Any endpoint pays it; the worker is warm the
+  moment the first response returns.
+- `/health` already exercises `AddDbContextCheck<AppDbContext>`,
+  which primes EF's query plan cache more thoroughly than a
+  constant-return endpoint would.
+- `/health` is already used by the dictionary service's deploy
+  workflow for post-deploy cold-start probing — there's prior art.
+- A dedicated `/warmup` adds nothing concrete, just self-documenting
+  semantics, at the cost of a coordinated server-side rollout.
+
+Proof:
+
+- `HttpDictionaryServiceWarmUpTests` (new module in `Tests.Windows`)
+  — stubbed `HttpMessageHandler` asserts: GET issued to `/health`,
+  `Accept: application/json` header, 200 returns unit, non-200 still
+  returns unit (server liveness is what matters for cold-boot
+  purposes, not the health-check verdict), `HttpRequestException`
+  propagates, internal timeout maps to `OperationCanceledException`
+  per the same guarded-catch pattern as `HttpDictionaryProvider`.
+- `WarmUpTests` (refactored) — stub `IDictionaryServiceWarmUp`
+  records call count and yields scripted outcomes; the three
+  contracts (called once, swallow non-cancellation, propagate
+  cancellation) move from the module function to the class
+  `RunAsync` method.
+
+### Slice 4 — registration dialog cold-start hint
+
+The cold-start hint added in slice 1 only lives in
+`DictionaryStatusRow`. On a fresh install where the warm-up's
+worker-priming didn't complete in time (technician registers
+immediately, no human-time window), `POST /register` pays the
+cold-boot itself and the dialog's `Submitting` state stays visible
+for ~60 s with no explanation — reads as "broken".
+
+Slice 4 mirrors slice 1's pattern in `RegistrationDialog.fs`:
+
+- Add a `ColdStartHint` named `TextBlock` rendered only in the
+  `Submitting` model state, with the same documented text:
+  "This may take up to a minute if the service has been idle."
+- The hint is absent in `Idle` (steady state) and `Failed`
+  (post-error state, where a different explanation belongs).
+
+Proof: `[<AvaloniaFact>]`s in `RegistrationDialogTests.fs`
+covering all three model states, same headless-harness pattern as
+the existing tests.
+
 ## Out of scope
 
 - Smart-retry orchestration (option 2).
@@ -199,9 +302,10 @@ dotnet format --verify-no-changes
 Boundary smoke: not added. The cold-start probe data already lives
 in PR #91 + this issue's discussion; re-running it against
 `app-dictionaries-manager-prod.azurewebsites.net` is an operator
-follow-up, not a per-commit gate. The unit-level proof for both
-slices is sufficient because the only production code change is a
-literal value (90 s) and an additive UI element.
+follow-up, not a per-commit gate. The unit-level proof for the four
+slices is sufficient because the production code changes are a
+literal value (90 s), two additive UI elements, one new port and
+adapter, and a class-shape conversion.
 
 ## Tasks
 
@@ -210,5 +314,14 @@ Mapped one-to-one to entries in [`../tasks.md`](../tasks.md):
 - T067 — Slice 1: raise timeout to 90 s in both adapters + UI hint
   in `DictionaryStatusRow` + spec/contract/quickstart updates +
   new timeout-value tests + new status-row hint tests.
-- T068 — Slice 2: `Services.Dictionary.WarmUp` module + invocation
-  from `App.fs` `Opened` handler + unit tests.
+- T068 — Slice 2: initial warm-up via `IDictionaryProvider.FetchAsync`
+  + `WarmUp` module + invocation from `App.fs` `Opened` handler +
+  unit tests. Reworked in T069.
+- T069 — Slice 3: introduce `IDictionaryServiceWarmUp` port +
+  `HttpDictionaryServiceWarmUp` adapter hitting `GET /health` +
+  convert `WarmUp` module to `DictionaryWarmUp` class with
+  `ILogger<DictionaryWarmUp>` + refactor `WarmUpTests` + new
+  `HttpDictionaryServiceWarmUpTests` integration test +
+  `CompositionRoot` and `App.fs` rewiring.
+- T070 — Slice 4: `ColdStartHint` in `RegistrationDialog.Submitting`
+  model state + `[<AvaloniaFact>]`s in `RegistrationDialogTests`.
