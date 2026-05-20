@@ -2,60 +2,81 @@
   "schemaVersion": 1,
   "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
   "fetchedAt": null,
-  "seededAt": "2026-05-15T00:00:00+00:00",
+  "seededAt": "2026-05-20T10:17:59.947+00:00",
   "panelTypes": [
     {
       "id": 2,
-      "name": "Pulsantiere (embedded seed placeholder)",
-      "description": "Embedded seed placeholder — overwritten on first live fetch. Refresh via eng/refresh-seed.ps1 at release time (T064).",
+      "name": "Pulsantiere",
+      "description": "Dizionario variabili logiche per tastiere esterne STEM",
       "variables": [
         {
-          "name": "BTN_RIGHT_TOP",
-          "addressHigh": 1,
-          "addressLow": 17,
-          "dataType": "uint8",
-          "access": "read",
-          "description": "Top-right button",
+          "name": "Firmware macchina",
+          "addressHigh": 0,
+          "addressLow": 0,
+          "dataType": "UInt16",
+          "access": "ReadOnly",
+          "description": "Versione firmware globale della macchina",
           "min": 0,
-          "max": 1,
-          "unit": null,
-          "isStandard": false
-        },
-        {
-          "name": "BTN_RIGHT_BOTTOM",
-          "addressHigh": 1,
-          "addressLow": 18,
-          "dataType": "uint8",
-          "access": "read",
-          "description": null,
-          "min": 0,
-          "max": 1,
-          "unit": null,
-          "isStandard": false
-        },
-        {
-          "name": "BTN_LEFT_TOP",
-          "addressHigh": 1,
-          "addressLow": 33,
-          "dataType": "uint8",
-          "access": "read",
-          "description": "Top-left button",
-          "min": 0,
-          "max": 1,
-          "unit": null,
-          "isStandard": false
-        },
-        {
-          "name": "BATT_VOLTAGE",
-          "addressHigh": 2,
-          "addressLow": 5,
-          "dataType": "float32",
-          "access": "read",
-          "description": "Battery voltage reading",
-          "min": null,
-          "max": null,
-          "unit": "V",
+          "max": 255.255,
           "isStandard": true
+        },
+        {
+          "name": "Firmware scheda",
+          "addressHigh": 0,
+          "addressLow": 1,
+          "dataType": "UInt16",
+          "access": "ReadOnly",
+          "description": "Versione firmware della singola scheda",
+          "min": 0,
+          "max": 255.255,
+          "isStandard": true
+        },
+        {
+          "name": "Foto Tasti",
+          "addressHigh": 128,
+          "addressLow": 0,
+          "dataType": "UInt8",
+          "access": "ReadOnly",
+          "description": "Variabile logica gestita dalla tastiera esterna",
+          "isStandard": false
+        },
+        {
+          "name": "Comando Led Verde",
+          "addressHigh": 128,
+          "addressLow": 2,
+          "dataType": "Bitmapped[4]",
+          "access": "ReadWrite",
+          "description": "Pattern lampeggio LED verde. \nWord 0: tempo off tra cicli di lampeggi (4ms). \nWord 1: tempo OFF tra lampeggi (4ms). \nWord 2: tempo ON tra lampeggi (4ms). \nWord 3: attivazione LED, numero di ripetizioni",
+          "isStandard": false
+        },
+        {
+          "name": "Comando Led Rosso",
+          "addressHigh": 128,
+          "addressLow": 3,
+          "dataType": "Bitmapped[4]",
+          "access": "ReadWrite",
+          "description": "Pattern lampeggio LED rosso. \nWord 0: tempo off tra cicli di lampeggi (4ms). \nWord 1: tempo OFF tra lampeggi (4ms). \nWord 2: tempo ON tra lampeggi (4ms). \nWord 3: attivazione LED, numero di ripetizioni",
+          "isStandard": false
+        },
+        {
+          "name": "Comando Buzzer",
+          "addressHigh": 128,
+          "addressLow": 4,
+          "dataType": "Bitmapped[4]",
+          "access": "ReadWrite",
+          "description": "Pattern suono buzzer. \nWord 0: tempo off tra cicli di lampeggi (4ms). \nWord 1: tempo OFF tra lampeggi (4ms). \nWord 2: tempo ON tra lampeggi (4ms). \nWord 3: attivazione buzzer, numero di ripetizioni",
+          "isStandard": false
+        },
+        {
+          "name": "Beep tasti",
+          "addressHigh": 128,
+          "addressLow": 5,
+          "dataType": "Bool",
+          "access": "ReadWrite",
+          "description": "Abilitazione beep alla pressione dei tasti. 0 = off, 1 = on",
+          "min": 0,
+          "max": 1,
+          "isStandard": false
         }
       ]
     }
