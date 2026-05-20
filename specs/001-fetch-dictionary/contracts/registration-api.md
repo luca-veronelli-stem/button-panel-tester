@@ -138,7 +138,7 @@ below, not the server's `error` field).
 | 423 | `TokenRevoked` | `TokenRevoked` | "The bootstrap token has been revoked. Contact STEM." |
 | 5xx | `AuditFailure` (500 specifically) / any other | `RegistrationServerError httpStatus` | "The dictionary service is temporarily unavailable (HTTP <n>). Try again later." |
 | network failure | n/a | `RegistrationNetwork NetworkUnreachable` | "Could not reach the dictionary service. Check your network and try again." |
-| client timeout (10 s) | n/a | `RegistrationNetwork Timeout` | "The registration request timed out. Try again." |
+| client timeout (90 s) | n/a | `RegistrationNetwork Timeout` | "The registration request timed out. Try again." |
 
 The dialog renders the message in the `Failed` state. The dialog
 stays open so the technician can correct the token and retry (for
@@ -164,8 +164,7 @@ build is broken.
 
 ## Timeout and retries
 
-- Client-side timeout: **10 s**, same as the dictionary fetch (uniform
-  user expectation).
+- Client-side timeout: **90 s** (`HttpRegistrationClient.TimeoutSeconds`), same as the dictionary fetch (uniform user expectation). Raised from the original 10 s in [`../phases/phase-7.md`](../phases/phase-7.md) to absorb Azure App Service Free-tier cold-start latency (issue #92).
 - Retries: **none**. The technician is at the keyboard; if it fails
   they retry by clicking Submit again. The dialog's internal Elmish
   loop handles the retry-on-failure UX; the wire client makes no

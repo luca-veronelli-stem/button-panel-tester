@@ -152,6 +152,15 @@ module DictionaryStatusRow =
         | Idle -> "Refresh"
         | Refreshing -> "⟳"
 
+    /// `phases/phase-7.md`: status-row hint surfaced only while a
+    /// refresh is in flight. Warns the technician that the first
+    /// click after a long idle window may take up to ~90 s because
+    /// the Azure App Service Free-tier worker has to cold-boot.
+    /// The text is the contract the test suite pins; changing it
+    /// belongs in the same commit that updates the test.
+    let coldStartHintText : string =
+        "This may take up to a minute if the service has been idle."
+
     /// Pure rendering function. Refresh-state tracking, callbacks,
     /// and the wall-clock `now` (used by the seed-staleness check)
     /// live on the App.fs host.
@@ -236,10 +245,27 @@ module DictionaryStatusRow =
                 ]
             ]
 
-        let allChildren =
+        let withReregister =
             match reregisterChild with
             | Some r -> withRefresh @ [ r ]
             | None -> withRefresh
+
+        // Cold-start hint trails the action buttons so it sits at
+        // the visual tail of the row, only while a refresh is in
+        // flight. Absent when Idle — phase-7.md keeps the steady
+        // state uncluttered.
+        let allChildren =
+            match refreshState with
+            | Refreshing ->
+                withReregister @ [
+                    TextBlock.create [
+                        TextBlock.name "ColdStartHint"
+                        TextBlock.text coldStartHintText
+                        TextBlock.verticalAlignment VerticalAlignment.Center
+                    ]
+                    :> IView
+                ]
+            | Idle -> withReregister
 
         StackPanel.create [
             StackPanel.orientation Orientation.Horizontal

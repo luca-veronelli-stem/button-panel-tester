@@ -102,7 +102,14 @@ type private RegistrationErrorDto = { Error: string | null }
 /// | 423 | `Error TokenRevoked` |
 /// | other 5xx | `Error (RegistrationServerError httpStatus)` |
 /// | `HttpRequestException` | `Error (RegistrationNetwork NetworkUnreachable)` |
-/// | client timeout (10 s) | `Error (RegistrationNetwork Timeout)` |
+/// | client timeout (90 s, `TimeoutSeconds`) | `Error (RegistrationNetwork Timeout)` |
+///
+/// Uniform with `HttpDictionaryProvider.TimeoutSeconds` per the
+/// "uniform user expectation" rule in
+/// `contracts/registration-api.md` §"Timeout and retries"; raised
+/// from 10 s to 90 s in `phases/phase-7.md` (issue #92) to absorb
+/// Azure App Service Free-tier cold-start latency. The result
+/// mapping is unchanged.
 type HttpRegistrationClient
     (
         httpClient: HttpClient,
@@ -174,12 +181,21 @@ type HttpRegistrationClient
                 return ""
         }
 
+    /// Client-side timeout (seconds) for the registration request.
+    /// Mirrors `HttpDictionaryProvider.TimeoutSeconds` per the
+    /// "uniform user expectation" rule in
+    /// `contracts/registration-api.md` §"Timeout and retries".
+    static member val TimeoutSeconds = 90.0
+
     interface IRegistrationClient with
         member _.RegisterAsync(token: BootstrapToken, ct: CancellationToken) =
             task {
                 use request = buildRequest token
 
-                use timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10.0))
+                use timeoutCts =
+                    new CancellationTokenSource(
+                        TimeSpan.FromSeconds(HttpRegistrationClient.TimeoutSeconds)
+                    )
                 use linkedCts =
                     CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token)
 
@@ -254,7 +270,10 @@ type HttpRegistrationClient
                 // the port contract (only `OperationCanceledException` from the
                 // caller's `ct` is permitted to leak out).
                 | :? OperationCanceledException when not ct.IsCancellationRequested ->
-                    logger.LogWarning("Registration timed out after 10 s.")
+                    logger.LogWarning(
+                        "Registration timed out after {TimeoutSeconds} s.",
+                        HttpRegistrationClient.TimeoutSeconds
+                    )
                     return Error(RegistrationNetwork Timeout)
                 | :? HttpRequestException as ex ->
                     logger.LogWarning(ex, "Registration network failure.")

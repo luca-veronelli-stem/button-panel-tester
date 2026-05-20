@@ -152,6 +152,8 @@ The script fetches `GET /api/dictionaries/2/resolved` from the configured URL, n
 
 **Lean `lake build` fails**: ensure you have the toolchain pinned in `lean/lean-toolchain` installed (`elan toolchain install <version>`). The constitution mandates no `sorry`, so a failing proof is a build break, not a warning.
 
+**Refresh appears to hang for up to a minute**: the dictionary service is hosted on Azure App Service Free tier with Always-On off, so the worker unloads after ~30 min of idle traffic. The first refresh after idle triggers cold-boot (max observed ~90 s in PR #91's diagnostics). The status row's "This may take up to a minute if the service has been idle." hint surfaces during the in-flight window; the client-side timeout is 90 s per [`phases/phase-7.md`](phases/phase-7.md). Subsequent refreshes against the warm worker return in <1 s.
+
 # Compliance
 
 **FR-020 (T063, audited 2026-05-20)**: zero raw machine-name / OS-user / machine-identifier / MAC / SID fields cross the dictionary-fetch wire — `GET /api/dictionaries/{id}/resolved` carries only the configured `Dictionary:Id` (URL), the `X-Api-Key` header injected by `ApiKeyAuthHandler`, an `Accept: application/json` header, and a static `Stem.ButtonPanelTester/<assemblyVersion>` `User-Agent` header; no request body. Per-installation identifiers reach STEM only via the registration descriptor (`POST /register`), which transmits the lowercase SHA-256 hex digest of `osUserId` and `machineId` as permitted by FR-020 — raw values do not cross the supplier↔STEM boundary.

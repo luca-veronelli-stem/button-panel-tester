@@ -95,8 +95,14 @@ type DictionaryResolvedDto = {
 /// | 5xx | `Failed(ServerError, Some httpStatus)` |
 /// | other 4xx | `Failed(ServerError, Some httpStatus)` |
 /// | `HttpRequestException` | `Failed(NetworkUnreachable, Some ex.Message)` |
-/// | client timeout (10 s) | `Failed(Timeout, None)` |
+/// | client timeout (90 s, `TimeoutSeconds`) | `Failed(Timeout, None)` |
 /// | body present but does not deserialise | `Failed(MalformedPayload, Some ex.Message)` |
+///
+/// The 90 s client-side deadline (raised from the original 10 s in
+/// `phases/phase-7.md` / issue #92) absorbs Azure App Service Free-tier
+/// cold-start latency observed against
+/// `app-dictionaries-manager-prod.azurewebsites.net`. The DTO + result
+/// mapping is unchanged.
 type HttpDictionaryProvider
     (
         httpClient: HttpClient,
@@ -250,13 +256,23 @@ type HttpDictionaryProvider
             return None
     }
 
+    /// Client-side timeout (seconds) for the dictionary fetch. Raised
+    /// from 10 s to 90 s per `phases/phase-7.md` to absorb Azure App
+    /// Service Free-tier cold-start latency (max observed 89.91 s in
+    /// PR #91's diagnostic probes). Exposed as a static member so the
+    /// value is reviewable without a real-time test wait.
+    static member val TimeoutSeconds = 90.0
+
     interface IDictionaryProvider with
         member _.FetchAsync(ct: CancellationToken) : Task<DictionaryFetchResult> = task {
             use request = new HttpRequestMessage(HttpMethod.Get, relativeUrl ())
             request.Headers.UserAgent.ParseAdd(userAgentValue)
             request.Headers.Accept.ParseAdd("application/json")
 
-            use timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10.0))
+            use timeoutCts =
+                new CancellationTokenSource(
+                    TimeSpan.FromSeconds(HttpDictionaryProvider.TimeoutSeconds)
+                )
             use linkedCts =
                 CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token)
 
@@ -331,7 +347,10 @@ type HttpDictionaryProvider
             // `OperationCanceledException` from the caller's `ct` may
             // leak out).
             | :? OperationCanceledException when not ct.IsCancellationRequested ->
-                logger.LogWarning("Dictionary fetch timed out after 10 s.")
+                logger.LogWarning(
+                    "Dictionary fetch timed out after {TimeoutSeconds} s.",
+                    HttpDictionaryProvider.TimeoutSeconds
+                )
                 return Failed(Timeout, None)
             | :? HttpRequestException as ex ->
                 logger.LogWarning(ex, "Dictionary fetch network failure.")

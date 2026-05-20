@@ -90,7 +90,7 @@ The response represents one panel type. The client wraps it in `PanelTypes = [pt
 | `503 Service Unavailable` | `{ "error": "Database unavailable." }` (development includes `detail`) | `ServerError` |
 | any other 4xx/5xx | best-effort `{ "error": ... }` | `ServerError` |
 | TCP / DNS / TLS failure | n/a | `NetworkUnreachable` |
-| HttpClient timeout (10 s) | n/a | `Timeout` |
+| HttpClient timeout (90 s) | n/a | `Timeout` |
 | Body present but does not deserialise | n/a | `MalformedPayload` |
 
 ## What we do **not** rely on
@@ -101,5 +101,5 @@ The response represents one panel type. The client wraps it in `PanelTypes = [pt
 
 ## Timeout and retries
 
-- Client-side timeout: **10 s** total (HttpClient.Timeout).
+- Client-side timeout: **90 s** total (`HttpDictionaryProvider.TimeoutSeconds`). Raised from the original 10 s in [`../phases/phase-7.md`](../phases/phase-7.md) to absorb Azure App Service Free-tier cold-start latency (issue #92).
 - Retries: **none** — the seed/cache is the resilience story (R1/R5 in research.md). On any failure the client surfaces the `FetchFailureReason` and the user retries via the Refresh button.
