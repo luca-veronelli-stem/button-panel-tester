@@ -8,12 +8,17 @@
         <Compile Include="Dictionary/DictionaryOptions.fs" />
         <Compile Include="Dictionary/IDictionaryService.fs" />
         <Compile Include="Dictionary/DictionaryService.fs" />
+        <Compile Include="Dictionary/WarmUp.fs" />
         <Compile Include="Registration/RegistrationOutcome.fs" />
         <Compile Include="Registration/App.fs" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\ButtonPanelTester.Core\ButtonPanelTester.Core.fsproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     </ItemGroup>
 
 </Project>
