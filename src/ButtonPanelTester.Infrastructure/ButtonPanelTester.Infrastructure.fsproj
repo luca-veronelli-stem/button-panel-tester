@@ -14,6 +14,7 @@
         <Compile Include="Http/HttpRegistrationClient.fs" />
         <Compile Include="Http/ApiKeyAuthHandler.fs" />
         <Compile Include="Http/HttpDictionaryProvider.fs" />
+        <Compile Include="Http/HttpDictionaryServiceWarmUp.fs" />
     </ItemGroup>
 
     <ItemGroup>

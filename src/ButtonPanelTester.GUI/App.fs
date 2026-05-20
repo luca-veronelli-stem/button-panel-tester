@@ -38,9 +38,7 @@ type MainWindow(services: IServiceProvider) as this =
     let service = services.GetRequiredService<IDictionaryService>()
     let credentialStore = services.GetRequiredService<ICredentialStore>()
     let registrationClient = services.GetRequiredService<IRegistrationClient>()
-    let dictionaryProvider = services.GetRequiredService<IDictionaryProvider>()
-    let warmUpLogger =
-        (services.GetRequiredService<ILoggerFactory>()).CreateLogger("Dictionary.WarmUp")
+    let warmUp = services.GetRequiredService<DictionaryWarmUp>()
     let clock = services.GetRequiredService<IClock>()
     let dialogLogger =
         services.GetRequiredService<ILogger<RegistrationDialogWindow>>()
@@ -163,15 +161,14 @@ type MainWindow(services: IServiceProvider) as this =
                 let initTask = service.InitializeAsync(CancellationToken.None)
                 // Fire-and-forget dictionary warm-up per phase-7.md:
                 // primes the Azure Free-tier worker so the technician's
-                // first explicit Refresh click hits a warm process.
-                // Non-cancellation outcomes are swallowed inside
-                // `WarmUp.runAsync`; the production fetch path is the
-                // source of truth for user-visible errors.
-                let _ : Task<unit> =
-                    WarmUp.runAsync
-                        dictionaryProvider
-                        warmUpLogger
-                        CancellationToken.None
+                // first explicit Refresh click — or registration POST
+                // on a fresh install — hits a warm process. Hits the
+                // unauthenticated GET /health endpoint so unregistered
+                // installs do not produce a spurious 401. Non-cancellation
+                // outcomes are swallowed inside `DictionaryWarmUp.RunAsync`;
+                // the production fetch path is the source of truth for
+                // user-visible errors.
+                let _ : Task<unit> = warmUp.RunAsync(CancellationToken.None)
                 let! _ =
                     App.tryRegister
                         credentialStore

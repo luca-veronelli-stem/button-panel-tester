@@ -169,4 +169,16 @@ module CompositionRoot =
                 let descriptor = sp.GetRequiredService<InstallationDescriptor>()
                 let logger = sp.GetRequiredService<ILogger<HttpRegistrationClient>>()
                 HttpRegistrationClient(client, options, descriptor, logger) :> IRegistrationClient)
+            // IDictionaryServiceWarmUp → HttpDictionaryServiceWarmUp,
+            // hitting the unauthenticated GET /health endpoint per
+            // phase-7.md slice 3. Reuses the named "Dictionary"
+            // HttpClient — the ApiKeyAuthHandler in that pipeline is
+            // harmless because /health is in the server's unauth
+            // allow-list (stem-dictionaries-manager Program.cs:86-87).
+            .AddSingleton<IDictionaryServiceWarmUp>(fun sp ->
+                let factory = sp.GetRequiredService<IHttpClientFactory>()
+                let httpClient = factory.CreateClient("Dictionary")
+                let logger = sp.GetRequiredService<ILogger<HttpDictionaryServiceWarmUp>>()
+                HttpDictionaryServiceWarmUp(httpClient, logger) :> IDictionaryServiceWarmUp)
+            .AddSingleton<DictionaryWarmUp>()
             .AddSingleton<IDictionaryService, DictionaryService>()
