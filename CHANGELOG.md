@@ -6,6 +6,8 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 ### Added
 
+- Dictionary fetch with status row, registration ceremony, and manual refresh ([spec 001](specs/001-fetch-dictionary/spec.md)).
+
 ### Changed
 
 ### Fixed
