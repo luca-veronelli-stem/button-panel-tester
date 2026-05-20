@@ -151,3 +151,7 @@ The script fetches `GET /api/dictionaries/2/resolved` from the configured URL, n
 **`dotnet test` says `Avalonia.Headless` fails to load**: ensure you're running on Windows; `Avalonia.Headless` runs cross-platform but the test harness in this repo currently boots a Windows-specific platform service. If you're on WSL, run from the Windows-side terminal.
 
 **Lean `lake build` fails**: ensure you have the toolchain pinned in `lean/lean-toolchain` installed (`elan toolchain install <version>`). The constitution mandates no `sorry`, so a failing proof is a build break, not a warning.
+
+# Compliance
+
+**FR-020 (T063, audited 2026-05-20)**: zero raw machine-name / OS-user / machine-identifier / MAC / SID fields cross the dictionary-fetch wire — `GET /api/dictionaries/{id}/resolved` carries only the configured `Dictionary:Id` (URL), the `X-Api-Key` header injected by `ApiKeyAuthHandler`, an `Accept: application/json` header, and a static `Stem.ButtonPanelTester/<assemblyVersion>` `User-Agent` header; no request body. Per-installation identifiers reach STEM only via the registration descriptor (`POST /register`), which transmits the lowercase SHA-256 hex digest of `osUserId` and `machineId` as permitted by FR-020 — raw values do not cross the supplier↔STEM boundary.
