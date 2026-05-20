@@ -116,6 +116,42 @@ if (-not $response.variables -or $response.variables.Count -eq 0) {
 
 $now = [DateTimeOffset]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffzzz")
 
+# Normalise each variable into the canonical Core.Dictionary.Variable
+# shape: every F# option field (description, min, max, unit) must
+# appear explicitly in JSON — `null` when absent — so the cache adapter
+# (`JsonFileDictionaryCache`) can deserialise via JsonFSharpConverter,
+# which requires every record field to be present. The production
+# server omits these fields when null on the wire; HttpDictionaryProvider
+# tolerates that because it uses CLR-nullable wire DTOs, but the cache
+# envelope is read into Core types directly and must be strict.
+function Get-FieldOrNull($obj, $name) {
+    if ($null -eq $obj) { return $null }
+    if ($obj.PSObject.Properties.Match($name).Count -eq 0) { return $null }
+    return $obj.$name
+}
+
+$normalisedVariables = $response.variables | ForEach-Object {
+    [ordered]@{
+        name        = $_.name
+        addressHigh = $_.addressHigh
+        addressLow  = $_.addressLow
+        dataType    = $_.dataType
+        access      = $_.access
+        description = Get-FieldOrNull $_ 'description'
+        min         = Get-FieldOrNull $_ 'min'
+        max         = Get-FieldOrNull $_ 'max'
+        unit        = Get-FieldOrNull $_ 'unit'
+        isStandard  = $_.isStandard
+    }
+}
+
+$normalisedPanelType = [ordered]@{
+    id          = $response.id
+    name        = $response.name
+    description = Get-FieldOrNull $response 'description'
+    variables   = @($normalisedVariables)
+}
+
 # Envelope matches CacheFile in JsonFileDictionaryCache.fs. The
 # `contentHash` placeholder is intentional: it guarantees the first
 # live fetch overwrites the cache (the real hash will never match
@@ -126,7 +162,7 @@ $envelope = [ordered]@{
     contentHash   = '0000000000000000000000000000000000000000000000000000000000000000'
     fetchedAt     = $null
     seededAt      = $now
-    panelTypes    = @($response)
+    panelTypes    = @($normalisedPanelType)
 }
 
 $json = $envelope | ConvertTo-Json -Depth 10

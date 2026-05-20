@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "contentHash": "0000000000000000000000000000000000000000000000000000000000000000",
   "fetchedAt": null,
-  "seededAt": "2026-05-20T10:17:59.947+00:00",
+  "seededAt": "2026-05-20T12:04:28.083+00:00",
   "panelTypes": [
     {
       "id": 2,
@@ -18,6 +18,7 @@
           "description": "Versione firmware globale della macchina",
           "min": 0,
           "max": 255.255,
+          "unit": null,
           "isStandard": true
         },
         {
@@ -29,6 +30,7 @@
           "description": "Versione firmware della singola scheda",
           "min": 0,
           "max": 255.255,
+          "unit": null,
           "isStandard": true
         },
         {
@@ -38,6 +40,9 @@
           "dataType": "UInt8",
           "access": "ReadOnly",
           "description": "Variabile logica gestita dalla tastiera esterna",
+          "min": null,
+          "max": null,
+          "unit": null,
           "isStandard": false
         },
         {
@@ -47,6 +52,9 @@
           "dataType": "Bitmapped[4]",
           "access": "ReadWrite",
           "description": "Pattern lampeggio LED verde. \nWord 0: tempo off tra cicli di lampeggi (4ms). \nWord 1: tempo OFF tra lampeggi (4ms). \nWord 2: tempo ON tra lampeggi (4ms). \nWord 3: attivazione LED, numero di ripetizioni",
+          "min": null,
+          "max": null,
+          "unit": null,
           "isStandard": false
         },
         {
@@ -56,6 +64,9 @@
           "dataType": "Bitmapped[4]",
           "access": "ReadWrite",
           "description": "Pattern lampeggio LED rosso. \nWord 0: tempo off tra cicli di lampeggi (4ms). \nWord 1: tempo OFF tra lampeggi (4ms). \nWord 2: tempo ON tra lampeggi (4ms). \nWord 3: attivazione LED, numero di ripetizioni",
+          "min": null,
+          "max": null,
+          "unit": null,
           "isStandard": false
         },
         {
@@ -65,6 +76,9 @@
           "dataType": "Bitmapped[4]",
           "access": "ReadWrite",
           "description": "Pattern suono buzzer. \nWord 0: tempo off tra cicli di lampeggi (4ms). \nWord 1: tempo OFF tra lampeggi (4ms). \nWord 2: tempo ON tra lampeggi (4ms). \nWord 3: attivazione buzzer, numero di ripetizioni",
+          "min": null,
+          "max": null,
+          "unit": null,
           "isStandard": false
         },
         {
@@ -76,6 +90,7 @@
           "description": "Abilitazione beep alla pressione dei tasti. 0 = off, 1 = on",
           "min": 0,
           "max": 1,
+          "unit": null,
           "isStandard": false
         }
       ]
