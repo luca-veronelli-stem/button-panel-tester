@@ -145,6 +145,40 @@ Mapped one-to-one to the task list in [`../tasks.md`](../tasks.md) lines
   `Infrastructure`; the FR-020 grep (T063) shows zero
   PII-shaped fields on the HTTP layer and the result is
   recorded in `quickstart.md` "Troubleshooting".
+
+## Logging audit notes (T062)
+
+The four LOGGING red flags fail cleanly: 24 log call sites
+across `Services` and `Infrastructure`, all parameterised
+templates, no `Console.WriteLine` / `Debug.WriteLine` /
+`Trace.WriteLine` anywhere under `src/`, and no
+`BootstrapToken.Value` or `InstallationCredential.Value`
+reaching any `Log*` argument (the `.Value` accessors are
+only consumed at the three legitimate sinks — registration
+request body, `X-Api-Key` header injection, DPAPI plaintext
+encryption).
+
+Two long-standing gaps to the LOGGING archetype-A "every
+adapter takes `ILogger<TThis>` via DI" rule pre-date Phase 6
+and are deliberately not fixed in this release-hardening PR
+(per the standard's adoption clause: "doesn't have to
+retro-add logging everywhere"):
+
+- `Services.Dictionary.DictionaryService` (orchestrator) —
+  Phase 3/5 review let it through without an `ILogger`. A
+  good candidate for a follow-up ticket: log
+  `InitializeAsync` outcome (live/cache/seed/no-dict),
+  `RefreshAsync` outcome including the coalescing-leader
+  flag, and any unexpected exception promoted to
+  `tcs.TrySetException`.
+- `Infrastructure.Persistence.JsonFileDictionaryCache`
+  (IO adapter) — same Phase 3 origin. Useful follow-up log
+  sites: sidecar hash mismatch, IOException during atomic
+  write, skip-write decisions.
+
+Pure types (`SystemClock`, `EmbeddedSeedExtractor`) are
+correctly logger-less per the standard's "pure functions /
+DTOs / records — no logger field" carve-out.
 - `tasks.md` ticks T058–T063 and T066; T064 and T065 remain
   unticked for the operator to claim after merge.
 
