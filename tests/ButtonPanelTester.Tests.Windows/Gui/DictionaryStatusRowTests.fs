@@ -40,6 +40,30 @@ let private renderToStackPanel (source: DictionarySource) : StackPanel =
 
     materialized :?> StackPanel
 
+let private renderToStackPanelWithState
+    (source: DictionarySource)
+    (refreshState: DictionaryStatusRow.RefreshState)
+    : StackPanel =
+    let materialized =
+        VirtualDom.create (
+            DictionaryStatusRow.view
+                cacheFilePath
+                source
+                fixedNow
+                refreshState
+                noop
+                noop)
+
+    materialized :?> StackPanel
+
+let private tryColdStartHint (panel: StackPanel) : TextBlock option =
+    panel.Children
+    |> Seq.choose (fun c ->
+        match box c with
+        | :? TextBlock as t when t.Name = "ColdStartHint" -> Some t
+        | _ -> None)
+    |> Seq.tryHead
+
 let private ellipseChild (panel: StackPanel) : Ellipse =
     panel.Children
     |> Seq.choose (fun c ->
@@ -134,3 +158,33 @@ let View_CachedWithFailureReason_DetailSurfacesReasonAndLocalCopy () =
         let text = tooltip.ToString()
         Assert.Contains("from local copy", text)
         Assert.Contains("Unauthorized", text)
+
+// --- tests: cold-start hint (phase-7) ---
+
+[<AvaloniaFact>]
+let View_Idle_DoesNotRenderColdStartHint () =
+    // Steady state: the hint is reserved for the in-flight window so
+    // it does not visually clutter the row at rest.
+    let source = Live(DateTimeOffset(2026, 5, 18, 14, 30, 0, TimeSpan.Zero))
+
+    let panel = renderToStackPanelWithState source DictionaryStatusRow.Idle
+
+    Assert.Equal(None, tryColdStartHint panel)
+
+[<AvaloniaFact>]
+let View_Refreshing_RendersColdStartHintWithDocumentedText () =
+    // While a refresh is in flight the row surfaces the worst-case
+    // cold-start wait so the technician understands why the network
+    // call may take up to ~90 s on a worker that just unloaded.
+    let source = Live(DateTimeOffset(2026, 5, 18, 14, 30, 0, TimeSpan.Zero))
+
+    let panel = renderToStackPanelWithState source DictionaryStatusRow.Refreshing
+
+    match tryColdStartHint panel with
+    | None ->
+        Assert.Fail("expected a TextBlock named \"ColdStartHint\" while Refreshing")
+    | Some hint ->
+        Assert.Equal(
+            "This may take up to a minute if the service has been idle.",
+            hint.Text
+        )
