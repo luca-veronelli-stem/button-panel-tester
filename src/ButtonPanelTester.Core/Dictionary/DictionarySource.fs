@@ -11,7 +11,12 @@ open System
 ///   - `FromLocalFile`:   the on-disk cache (JSON + sidecar) written
 ///     by the most recent successful live fetch in any prior session.
 type CacheOrigin =
+    /// Bytes extracted from the embedded `Assets/dictionary.seed.json`
+    /// manifest resource; first-launch fallback before any live fetch
+    /// has succeeded on the machine.
     | FromEmbeddedSeed
+    /// Bytes loaded from the on-disk cache (JSON + sidecar) written by
+    /// the most recent successful live fetch in any prior session.
     | FromLocalFile
 
 /// Wrapper around the in-memory `ButtonPanelDictionary` that carries
@@ -29,7 +34,14 @@ type CacheOrigin =
 ///      refresh attempt failed with `r`; `None` when the most recent
 ///      attempt succeeded or no attempt has been made.
 type DictionarySource =
+    /// The dictionary in memory came from a successful live fetch in
+    /// the current session; `FetchedAt` is the server response time.
     | Live   of FetchedAt : DateTimeOffset
+    /// The dictionary in memory came from a cache/seed source.
+    /// `FetchedAt` is the timestamp of the last successful live fetch
+    /// (or seed build time when `Origin = FromEmbeddedSeed`); `Origin`
+    /// names the byte-source; `LastFailureReason` carries the most-
+    /// recent refresh failure (`None` if no refresh has been attempted).
     | Cached of FetchedAt        : DateTimeOffset
               * Origin           : CacheOrigin
               * LastFailureReason: FetchFailureReason option

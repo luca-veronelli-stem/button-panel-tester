@@ -20,5 +20,10 @@ open System
 /// `Reason` only, never `Detail`. `Detail` is not load-bearing
 /// for logic.
 type DictionaryFetchResult =
+    /// Successful fetch carrying the loaded dictionary and the
+    /// server-response timestamp.
     | Success of ButtonPanelDictionary * FetchedAt: DateTimeOffset
+    /// Failed fetch carrying the typed `FetchFailureReason` (the
+    /// branching key) and an optional human-readable detail string
+    /// surfaced by the status row's detail affordance.
     | Failed  of Reason: FetchFailureReason * Detail: string option
