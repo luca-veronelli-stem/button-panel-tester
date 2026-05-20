@@ -304,3 +304,71 @@ let View_FailedState_RendersInlineErrorMessage () =
             | null -> false
             | t -> t = expectedMessage
     )
+
+// --- tests: cold-start hint (phase-7 slice 4) ---
+
+let private tryColdStartHint (panel: StackPanel) : TextBlock option =
+    let rec walk (parent: Panel) : TextBlock option =
+        let direct =
+            parent.Children
+            |> Seq.choose (fun c ->
+                match box c with
+                | :? TextBlock as t when t.Name = "ColdStartHint" -> Some t
+                | _ -> None)
+            |> Seq.tryHead
+
+        match direct with
+        | Some t -> Some t
+        | None ->
+            parent.Children
+            |> Seq.choose (fun c ->
+                match c with
+                | :? Panel as p -> walk p
+                | _ -> None)
+            |> Seq.tryHead
+
+    walk panel
+
+let private noopDispatch (_: RegistrationDialog.Message) = ()
+
+[<AvaloniaFact>]
+let View_Idle_DoesNotRenderColdStartHint () =
+    let panel = renderToStackPanel RegistrationDialog.initial noopDispatch
+
+    Assert.Equal(None, tryColdStartHint panel)
+
+[<AvaloniaFact>]
+let View_Submitting_RendersColdStartHintWithDocumentedText () =
+    // The hint explains the cold-start wait while POST /register is
+    // in flight; the text is identical to the slice-1 hint shown in
+    // `DictionaryStatusRow` while a refresh is in flight, so both
+    // surfaces present the same explanation.
+    let model =
+        { RegistrationDialog.initial with
+            Token = "valid-token"
+            State = RegistrationDialog.Submitting }
+
+    let panel = renderToStackPanel model noopDispatch
+
+    match tryColdStartHint panel with
+    | None ->
+        Assert.Fail("expected a TextBlock named \"ColdStartHint\" while Submitting")
+    | Some hint ->
+        Assert.Equal(
+            "This may take up to a minute if the service has been idle.",
+            hint.Text
+        )
+
+[<AvaloniaFact>]
+let View_Failed_DoesNotRenderColdStartHint () =
+    // Post-error, the failure message is the user-facing surface;
+    // the cold-start hint would compete for attention.
+    let model =
+        { RegistrationDialog.initial with
+            Token = "stale-token"
+            State =
+                RegistrationDialog.Failed(RegistrationDialog.errorMessage TokenInvalid) }
+
+    let panel = renderToStackPanel model noopDispatch
+
+    Assert.Equal(None, tryColdStartHint panel)
