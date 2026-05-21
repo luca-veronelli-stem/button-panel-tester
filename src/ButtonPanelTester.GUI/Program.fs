@@ -2,6 +2,7 @@ namespace Stem.ButtonPanelTester.GUI
 
 open System
 open Avalonia
+open Avalonia.Media
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Stem.ButtonPanelTester.GUI.Composition
@@ -60,6 +61,15 @@ module Program =
         CompositionRoot.configure services config |> ignore
         services.BuildServiceProvider() :> IServiceProvider
 
+    /// Poppins family resolver against the `Resources/fonts/*.ttf`
+    /// bundle wired as `AvaloniaResource` in the GUI fsproj. Avalonia's
+    /// font manager matches the `#FamilyName` suffix against the
+    /// `name` table of each embedded TTF, so the same URI carries every
+    /// weight (`Light/Regular/Medium/SemiBold/Bold`) and `FontWeight`
+    /// chooses among them at the call site (see `Typography.fs`).
+    let private poppinsFamilyUri =
+        "avares://ButtonPanelTester.GUI/Resources/fonts/#Poppins"
+
     [<EntryPoint; STAThread>]
     let main (argv: string[]) : int =
         let config = buildConfiguration ()
@@ -67,4 +77,5 @@ module Program =
         AppBuilder
             .Configure<App>(fun () -> App(provider))
             .UsePlatformDetect()
+            .With(FontManagerOptions(DefaultFamilyName = poppinsFamilyUri))
             .StartWithClassicDesktopLifetime(argv)
