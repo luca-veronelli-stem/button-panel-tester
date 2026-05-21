@@ -256,6 +256,24 @@ type MainWindow(services: IServiceProvider) as this =
         service.SourceChanged.Add(fun s ->
             Dispatcher.UIThread.Post(fun () -> renderStatusRow s))
 
+        // ActualThemeVariantChanged → swap title-bar / taskbar icon
+        // and re-render the body so the brand-mark `Image.Source`
+        // refreshes. The event fires on the UI thread (Avalonia
+        // raises it as the OS theme change propagates through the
+        // Win32 message pump), so we mutate `currentTheme` and
+        // repaint inline. If `lastSource` hasn't arrived yet we
+        // repaint the initializing view; otherwise we re-run
+        // `renderStatusRow` with the last known source.
+        match Application.Current with
+        | null -> ()
+        | app ->
+            app.ActualThemeVariantChanged.Add(fun _ ->
+                currentTheme <- Chrome.currentTheme ()
+                this.Icon <- Chrome.windowIcon currentTheme
+                match lastSource with
+                | Some source -> renderStatusRow source
+                | None -> renderInitializing ())
+
         // On first open:
         //   1. Kick off InitializeAsync so the status row paints
         //      populated within 1 s of the first frame (SC-001 /
