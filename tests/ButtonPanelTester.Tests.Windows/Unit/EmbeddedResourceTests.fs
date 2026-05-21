@@ -41,6 +41,10 @@ let ``Resources_BrandMarkPng_IsEmbeddedAndReachable`` () =
 let ``Resources_AppIconIco_IsEmbeddedAndReachable`` () =
     assertReachable (guiAvares "Resources/branding/app-icons/stem-app-icon-positive.ico")
 
+[<AvaloniaFact>]
+let ``Resources_AppIconMonoWhiteIco_IsEmbeddedAndReachable`` () =
+    assertReachable (guiAvares "Resources/branding/app-icons/stem-app-icon-mono-white.ico")
+
 /// Catches a package-wiring regression distinct from raw resource
 /// embedding: `Svg.Controls.Skia.Avalonia` could be removed from
 /// `Directory.Packages.props`, or the runtime SVG parser could fail
