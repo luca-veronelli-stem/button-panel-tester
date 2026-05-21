@@ -42,6 +42,12 @@
     </ItemGroup>
 
     <ItemGroup>
+        <AvaloniaResource Include="Resources/fonts/*.ttf" />
+        <AvaloniaResource Include="Resources/branding/**/*.svg" />
+        <AvaloniaResource Include="Resources/branding/**/*.png" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\ButtonPanelTester.Core\ButtonPanelTester.Core.fsproj" />
         <ProjectReference Include="..\ButtonPanelTester.Services\ButtonPanelTester.Services.fsproj" />
         <ProjectReference Include="..\ButtonPanelTester.Infrastructure\ButtonPanelTester.Infrastructure.fsproj" />
