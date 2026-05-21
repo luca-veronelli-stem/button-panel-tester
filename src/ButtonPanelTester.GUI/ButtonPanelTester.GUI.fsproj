@@ -30,6 +30,7 @@
         <Compile Include="Typography.fs" />
         <Compile Include="Spacing.fs" />
         <Compile Include="Branding.fs" />
+        <Compile Include="Strings.fs" />
         <Compile Include="Composition/CompositionRoot.fs" />
         <Compile Include="Dictionary/DictionaryStatusRow.fs" />
         <Compile Include="Dictionary/RegistrationDialog.fs" />
