@@ -27,6 +27,8 @@
 
     <ItemGroup>
         <Compile Include="Brand.fs" />
+        <Compile Include="Typography.fs" />
+        <Compile Include="Spacing.fs" />
         <Compile Include="Composition/CompositionRoot.fs" />
         <Compile Include="Dictionary/DictionaryStatusRow.fs" />
         <Compile Include="Dictionary/RegistrationDialog.fs" />
