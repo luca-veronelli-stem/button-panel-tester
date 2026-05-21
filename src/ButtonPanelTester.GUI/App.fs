@@ -9,6 +9,7 @@ open Avalonia.Controls
 open Avalonia.Controls.ApplicationLifetimes
 open Avalonia.Layout
 open Avalonia.Platform
+open Avalonia.Styling
 open Avalonia.Svg.Skia
 open Avalonia.Themes.Fluent
 open Avalonia.Threading
@@ -28,32 +29,61 @@ open Stem.ButtonPanelTester.GUI.Dictionary
 /// re-renders the body but reuses the parsed brand-mark picture.
 module private Chrome =
 
-    let private brandSvgUri =
+    // Asset URIs by theme. Light + Default render the positive brand
+    // mark on the navy `stem-app-icon-positive.ico`; Dark renders the
+    // negative brand mark on the `stem-app-icon-mono-white.ico` so
+    // the title-bar icon stays visible against the dark chrome.
+    // `mono-white` is the brand-manual variant for tiny surfaces
+    // (16/32/48 px app icon); `negative` is the variant for the
+    // full-colour mark on a dark canvas. No new artwork — both ship
+    // under `Resources/branding/` already.
+    let private positiveBrandSvgUri =
         "avares://ButtonPanelTester.GUI/Resources/branding/brand-marks/positive/stem-corporate.svg"
+
+    let private negativeBrandSvgUri =
+        "avares://ButtonPanelTester.GUI/Resources/branding/brand-marks/negative/stem-corporate.svg"
 
     // Multi-frame .ico — Windows picks the matching frame for each surface
     // (16/32/48/256 px). Necessary because Avalonia's `WindowIcon(Bitmap)`
     // overload feeds a single-resolution raster to the title-bar (~16 px)
     // and the taskbar (~32-48 px), and Skia's single-step downsample of
     // the agency 2134×2134 PNG produces visible aliasing on the small
-    // surfaces. The same .ico drives the `.exe` shell icon via the
-    // MSBuild `<ApplicationIcon>` property — one asset, two delivery
-    // mechanisms (PE resource block + avares://).
-    let private appIconUri =
+    // surfaces. The positive .ico also drives the `.exe` shell icon via
+    // the MSBuild `<ApplicationIcon>` property — one asset, two delivery
+    // mechanisms (PE resource block + avares://). The PE resource block
+    // is single-icon by construction; only the avares:// surface
+    // theme-swaps.
+    let private positiveAppIconUri =
         Uri("avares://ButtonPanelTester.GUI/Resources/branding/app-icons/stem-app-icon-positive.ico")
+
+    let private monoWhiteAppIconUri =
+        Uri("avares://ButtonPanelTester.GUI/Resources/branding/app-icons/stem-app-icon-mono-white.ico")
 
     // Process-wide cache: SvgSource.Load parses and rasterises the SVG
     // once; every SvgImage wrapper after that reuses the same picture.
-    let private brandSvgSource = SvgSource.Load(brandSvgUri, null)
+    // Pre-load both variants so a theme switch swaps a cached reference
+    // instead of triggering a fresh parse on the UI thread.
+    let private positiveBrandSvgSource = SvgSource.Load(positiveBrandSvgUri, null)
+    let private negativeBrandSvgSource = SvgSource.Load(negativeBrandSvgUri, null)
+
+    let private isDark (theme: ThemeVariant) = theme = ThemeVariant.Dark
+
+    let private brandSvgSourceFor (theme: ThemeVariant) =
+        if isDark theme then negativeBrandSvgSource else positiveBrandSvgSource
+
+    let private appIconUriFor (theme: ThemeVariant) =
+        if isDark theme then monoWhiteAppIconUri else positiveAppIconUri
 
     let private brandMargin = Thickness(Spacing.lg, Spacing.sm, Spacing.lg, Spacing.sm)
 
     /// Inline brand mark for the window header. ~28px high matches the
     /// in-line `h2` type (`Typography.h2 = 20.0`) with breathing room
     /// either side; the `corporate` positive mark is selected via
-    /// `Branding.division = Division.None`.
-    let brandHeader () : Control =
-        let svgImage = SvgImage(Source = brandSvgSource)
+    /// `Branding.division = Division.None`. The `theme` argument picks
+    /// the brand-manual treatment (positive on light, negative on
+    /// dark).
+    let brandHeader (theme: ThemeVariant) : Control =
+        let svgImage = SvgImage(Source = brandSvgSourceFor theme)
         let img = Image()
         img.Source <- svgImage
         img.Height <- 28.0
@@ -65,9 +95,9 @@ module private Chrome =
     /// top of a `DockPanel`. Both `renderInitializing` and the
     /// `renderStatusRow` slot consume this so the header stays visible
     /// for every render state.
-    let wrapWithHeader (body: Control) : Control =
+    let wrapWithHeader (theme: ThemeVariant) (body: Control) : Control =
         let panel = DockPanel()
-        let header = brandHeader ()
+        let header = brandHeader theme
         DockPanel.SetDock(header, Dock.Top)
         panel.Children.Add(header)
         panel.Children.Add(body)
@@ -80,9 +110,18 @@ module private Chrome =
     /// frame, Alt-Tab the 256 px frame. Each surface lands on a
     /// pre-rendered raster instead of a single oversize bitmap
     /// scaled at draw time.
-    let windowIcon () : WindowIcon =
-        use stream = AssetLoader.Open(appIconUri)
+    let windowIcon (theme: ThemeVariant) : WindowIcon =
+        use stream = AssetLoader.Open(appIconUriFor theme)
         WindowIcon(stream)
+
+    /// Reads the current Avalonia application's `ActualThemeVariant`,
+    /// falling back to `Default` when the framework hasn't fully
+    /// initialised yet (rare; mainly the unit-test path that
+    /// constructs `MainWindow` without a running `Application`).
+    let currentTheme () : ThemeVariant =
+        match Application.Current with
+        | null -> ThemeVariant.Default
+        | app -> app.ActualThemeVariant
 
 /// Main window for the US1 offline-launch surface. Hosts the
 /// `DictionaryStatusRow` view (T034) docked at top, kicks off
@@ -119,8 +158,14 @@ type MainWindow(services: IServiceProvider) as this =
     let mutable refreshState = DictionaryStatusRow.Idle
     let mutable lastSource: DictionarySource option = None
 
+    // Active Avalonia theme. Initial value read once at construction
+    // from `Application.Current.ActualThemeVariant`; every render
+    // reads from this cell so a future `ActualThemeVariantChanged`
+    // subscription can swap chrome by mutating one field + repainting.
+    let mutable currentTheme = Chrome.currentTheme ()
+
     let renderInitializing () =
-        this.Content <- Chrome.wrapWithHeader (VirtualDom.create (
+        this.Content <- Chrome.wrapWithHeader currentTheme (VirtualDom.create (
             TextBlock.create [
                 TextBlock.text "Initializing dictionary…"
             ]))
@@ -189,7 +234,7 @@ type MainWindow(services: IServiceProvider) as this =
     do
         renderStatusRow <- fun (source: DictionarySource) ->
             lastSource <- Some source
-            this.Content <- Chrome.wrapWithHeader (VirtualDom.create (
+            this.Content <- Chrome.wrapWithHeader currentTheme (VirtualDom.create (
                 DictionaryStatusRow.view
                     cacheFilePath
                     source
@@ -202,7 +247,7 @@ type MainWindow(services: IServiceProvider) as this =
         this.Title <- "Button Panel Tester"
         this.Width <- 600.0
         this.Height <- 400.0
-        this.Icon <- Chrome.windowIcon ()
+        this.Icon <- Chrome.windowIcon currentTheme
         renderInitializing ()
 
         // SourceChanged → re-render on the UI thread. The event may
