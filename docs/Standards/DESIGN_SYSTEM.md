@@ -1,6 +1,6 @@
 # Standard: DESIGN_SYSTEM
 
-> **Stability:** v1.5.0
+> **Stability:** v1.6.0
 > **Principle:** every archetype A app shares the **same visual contract**: the same theme, the same spacing rhythm, the same icon source, the same localisation mechanism, the same error-and-progress surfaces. Internal STEM tooling reads as one product family even when each app is a separate repo. Brand assets (corporate palette / typography / logo) follow once received from STEM; until then the design system is anchored to neutral Fluent defaults.
 > **Applies to:** archetype A.
 > **Pairs with:** [`GUI.md`](./GUI.md). `GUI` governs project shape and the MVU paradigm; this standard governs everything the user sees inside that shape.
@@ -186,21 +186,41 @@ The Stem-Regular custom font from the brand manual is **not** used in software �
 
 ## Logo
 
-The corporate brand mark and division marks ship as SVGs under `Resources/branding/`:
+The corporate brand mark, division marks, and app icons ship as SVG + PNG pairs under `Resources/branding/`. The archetype A rollout drops the full library into each adopted repo at bootstrap (and on every bump), so views can reference any treatment by relative path without per-repo asset wrangling.
 
 ```
 Resources/branding/
-├── stem-mark.svg                  corporate brand mark (simbolo + "Stem")
-├── stem-mark-negative.svg         white-on-color variant
-├── stem-ems-mark.svg              EMS division mark (corporate + "EMS" in VerdeEMS)
-├── stem-commercial-vehicles-mark.svg
-├── stem-marine-mark.svg
-└── stem-france-mark.svg
+├── brand-marks/                   full lockup (simbolo + "Stem" + optional division wordmark)
+│   ├── positive/                  full-colour on light canvas
+│   │   ├── stem-corporate.{svg,png}
+│   │   ├── stem-ems.{svg,png}
+│   │   ├── stem-commercial-vehicles.{svg,png}
+│   │   └── stem-marine.{svg,png}
+│   ├── negative/                  full-colour on dark / image canvas (white wordmark)
+│   │   └── … same four divisions
+│   └── mono-white/                single-colour white-out for printing or photo overlays
+│       └── … same four divisions
+├── symbols/                       simbolo only (sanctioned standalone use, tavola 21)
+│   ├── positive/
+│   ├── negative/
+│   └── mono-white/
+│       └── … same four divisions each
+└── app-icons/                     square 512 px Windows / macOS / Linux app icon
+    ├── stem-app-icon-positive.{svg,png}
+    └── stem-app-icon-mono-white.{svg,png}
 ```
 
-Per-app, `Branding.division` selects which division mark to render alongside the corporate mark. Brand-mark application rules (when to use positive vs negative vs monochrome white, contrast requirements against photo backgrounds) follow `tavola 21–50` of the brand manual — those rules apply to the splash, About dialog, and any print export the app produces. They do not constrain in-app chrome, which uses palette tokens rather than rendered brand marks.
+Per-app, `Branding.division` (defined above) selects which division's brand mark to render. The fill colour of every positive SVG is **`#004483`** — the agency's authoritative Blu Stem for the brand mark. This is one hex step off the palette token (`BluStem = #004682`); both values approximate Pantone 2154 C and the gap is small enough not to read as a colour change in a rendered surface, but the palette will likely realign on a follow-up bump. Don't tint or recolour the SVG fills per-app.
 
-**Asset source.** The SVGs are not in this standard's repo. They live in Stem's brand-asset library and are dropped into each adopted repo's `Resources/branding/` at app-init time. The rollout script does not copy them — they are per-repo assets, not templates.
+**Symbol-only standalone.** Tavola 21 of the brand manual sanctions the simbolo as a standalone mark when the full lockup is too dense for the surface (favicons, small toolbar slots, watermark stamps). Views may use anything under `symbols/` without pairing it to a `brand-marks/` lockup; both directories are first-class.
+
+**Application rules.** When to use **positive** vs **negative** vs **mono-white**, minimum clear-space around the mark, minimum legible size, and contrast requirements against photographic backgrounds are all defined in the brand manual's tavolas **28–50** (per-division application rules, with corporate covering tavolas 28–32 and each division 33–50). These rules apply to the splash, About dialog, app icon, and any print export the app produces. They do not constrain in-app chrome — chrome uses palette tokens, not rendered brand marks.
+
+**Asset source.** The bundle is shipped from this standards repo's `shared/templates/archetypes/A/src/ButtonPanelTester.GUI/Resources/branding/`. The rollout script copies it byte-identical via the same archetype A overlay path the Poppins fonts use — `.svg` is on the no-substitute extensions list, so the rollout treats the assets as binary (no LF normalization, no `{{Placeholder}}` scan). Cropping or re-tinting a brand mark for app-specific reasons is **not** allowed; if a treatment is missing, the fix is to expand this bundle upstream rather than to hand-edit assets per repo.
+
+**Brand manual.** The full brand manual (`stem-brand-manual.pdf`) is checked into the standards repo at [`shared/brand-manual/stem-brand-manual.pdf`](../brand-manual/stem-brand-manual.pdf). It is **not** propagated to adopted repos — it is reference material for designers and reviewers, not a runtime asset.
+
+**Stem France.** The Stem France filiale (tavolas 14–15, 26–27, 46–50) is intentionally not shipped in v1.6.0. The `Branding.Division.France` case continues to render `BluFrance` as a badge colour, but no France brand-mark assets exist under `branding/` yet. A future bump will land them when the first France-targeted app earns its keep.
 
 ## Spacing
 
