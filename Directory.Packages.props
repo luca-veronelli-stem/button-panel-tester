@@ -25,6 +25,15 @@
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.7" />
     <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.7" />
     <PackageVersion Include="Avalonia.FuncUI" Version="1.5.1" />
+    <!-- Svg.Controls.Skia.Avalonia is the actively-maintained replacement
+         for the deprecated Avalonia.Svg.Skia (same author, same Skia-backed
+         engine). Pin 11.3.0 (not the head 11.3.9.x) because the 11.3.9.x
+         line transitively requires Avalonia >= 11.3.9, which would force
+         a cross-cutting Avalonia bump out of scope for the Tier 3 design
+         system PR. 11.3.0 only requires Avalonia >= 11.3.0 and pairs
+         cleanly with the 11.3.7 pin above. Re-evaluate when bumping the
+         Avalonia line for unrelated reasons. -->
+    <PackageVersion Include="Svg.Controls.Skia.Avalonia" Version="11.3.0.1" />
 
     <!-- Configuration / DI / Logging -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />

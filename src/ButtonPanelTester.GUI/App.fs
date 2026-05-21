@@ -7,6 +7,9 @@ open System.Threading.Tasks
 open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.ApplicationLifetimes
+open Avalonia.Layout
+open Avalonia.Platform
+open Avalonia.Svg.Skia
 open Avalonia.Themes.Fluent
 open Avalonia.Threading
 open Avalonia.FuncUI.DSL
@@ -18,6 +21,68 @@ open Stem.ButtonPanelTester.Core.Dictionary
 open Stem.ButtonPanelTester.Services.Dictionary
 open Stem.ButtonPanelTester.Services.Registration
 open Stem.ButtonPanelTester.GUI.Dictionary
+
+/// Chrome wiring for `MainWindow` — the brand-mark header and the
+/// taskbar / title-bar icon. Lives at namespace scope so the static
+/// `SvgSource` cache binds once for the process: every refresh
+/// re-renders the body but reuses the parsed brand-mark picture.
+module private Chrome =
+
+    let private brandSvgUri =
+        "avares://ButtonPanelTester.GUI/Resources/branding/brand-marks/positive/stem-corporate.svg"
+
+    // Multi-frame .ico — Windows picks the matching frame for each surface
+    // (16/32/48/256 px). Necessary because Avalonia's `WindowIcon(Bitmap)`
+    // overload feeds a single-resolution raster to the title-bar (~16 px)
+    // and the taskbar (~32-48 px), and Skia's single-step downsample of
+    // the agency 2134×2134 PNG produces visible aliasing on the small
+    // surfaces. The same .ico drives the `.exe` shell icon via the
+    // MSBuild `<ApplicationIcon>` property — one asset, two delivery
+    // mechanisms (PE resource block + avares://).
+    let private appIconUri =
+        Uri("avares://ButtonPanelTester.GUI/Resources/branding/app-icons/stem-app-icon-positive.ico")
+
+    // Process-wide cache: SvgSource.Load parses and rasterises the SVG
+    // once; every SvgImage wrapper after that reuses the same picture.
+    let private brandSvgSource = SvgSource.Load(brandSvgUri, null)
+
+    let private brandMargin = Thickness(Spacing.lg, Spacing.sm, Spacing.lg, Spacing.sm)
+
+    /// Inline brand mark for the window header. ~28px high matches the
+    /// in-line `h2` type (`Typography.h2 = 20.0`) with breathing room
+    /// either side; the `corporate` positive mark is selected via
+    /// `Branding.division = Division.None`.
+    let brandHeader () : Control =
+        let svgImage = SvgImage(Source = brandSvgSource)
+        let img = Image()
+        img.Source <- svgImage
+        img.Height <- 28.0
+        img.HorizontalAlignment <- HorizontalAlignment.Left
+        img.Margin <- brandMargin
+        img :> Control
+
+    /// Wraps any body control with the brand-mark header docked at the
+    /// top of a `DockPanel`. Both `renderInitializing` and the
+    /// `renderStatusRow` slot consume this so the header stays visible
+    /// for every render state.
+    let wrapWithHeader (body: Control) : Control =
+        let panel = DockPanel()
+        let header = brandHeader ()
+        DockPanel.SetDock(header, Dock.Top)
+        panel.Children.Add(header)
+        panel.Children.Add(body)
+        panel :> Control
+
+    /// `Window.Icon` from the multi-frame .ico. `WindowIcon(Stream)`
+    /// hands the bytes to the Win32 backend's `IconImpl`, which parses
+    /// the ICONDIR table and exposes every frame for Windows to pick
+    /// from — title-bar gets the 16 px frame, taskbar the 32/48 px
+    /// frame, Alt-Tab the 256 px frame. Each surface lands on a
+    /// pre-rendered raster instead of a single oversize bitmap
+    /// scaled at draw time.
+    let windowIcon () : WindowIcon =
+        use stream = AssetLoader.Open(appIconUri)
+        WindowIcon(stream)
 
 /// Main window for the US1 offline-launch surface. Hosts the
 /// `DictionaryStatusRow` view (T034) docked at top, kicks off
@@ -55,10 +120,10 @@ type MainWindow(services: IServiceProvider) as this =
     let mutable lastSource: DictionarySource option = None
 
     let renderInitializing () =
-        this.Content <- VirtualDom.create (
+        this.Content <- Chrome.wrapWithHeader (VirtualDom.create (
             TextBlock.create [
                 TextBlock.text "Initializing dictionary…"
-            ])
+            ]))
 
     /// Production `runDialog` callback for the registration
     /// orchestration: constructs a `RegistrationDialogWindow` with the
@@ -124,19 +189,20 @@ type MainWindow(services: IServiceProvider) as this =
     do
         renderStatusRow <- fun (source: DictionarySource) ->
             lastSource <- Some source
-            this.Content <- VirtualDom.create (
+            this.Content <- Chrome.wrapWithHeader (VirtualDom.create (
                 DictionaryStatusRow.view
                     cacheFilePath
                     source
                     (clock.UtcNow())
                     refreshState
                     kickoffRefresh
-                    kickoffReregister)
+                    kickoffReregister))
 
     do
         this.Title <- "Button Panel Tester"
         this.Width <- 600.0
         this.Height <- 400.0
+        this.Icon <- Chrome.windowIcon ()
         renderInitializing ()
 
         // SourceChanged → re-render on the UI thread. The event may
