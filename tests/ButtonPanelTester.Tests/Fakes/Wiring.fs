@@ -226,3 +226,42 @@ type InMemoryRegistrationClient() =
                 | Some r -> return r
                 | None -> return Error TokenInvalid
             }
+
+
+/// In-memory test adapter for `IInstallationDescriptorProvider`, per
+/// `specs/001-fetch-dictionary/contracts/ports.md`
+/// §IInstallationDescriptorProvider. Holds a mutable
+/// `InstallationDescriptor` cell standing in for the production
+/// adapter's hash cache + `install.guid` sidecar; `ResetInstallGuid`
+/// rotates the descriptor's `InstallGuid` to a fresh `Guid` so the
+/// orchestration's "next Current() yields a new InstallGuid"
+/// contract can be observed without touching the filesystem.
+///
+/// `ResetCalls` exposes the invocation count so tests asserting on
+/// the Re-Register wipe order (credential first, then descriptor)
+/// can distinguish "reset never happened" from "reset happened but
+/// descriptor unchanged" (the latter is the production behaviour
+/// when the sidecar was already missing).
+///
+/// Tests register this directly via the test-side wiring rather than
+/// going through the GUI composition root. The production-side
+/// counterpart is
+/// `Infrastructure.Auth.InstallationDescriptorProvider`.
+type InMemoryInstallationDescriptorProvider(initial: InstallationDescriptor) =
+    let mutable descriptor = initial
+    let mutable resetCalls = 0
+
+    /// Replace the cell verbatim. Test helper for arranging a
+    /// pre-rotation state.
+    member _.Set(d: InstallationDescriptor) = descriptor <- d
+
+    /// Count of `ResetInstallGuid` invocations observed since
+    /// construction. Test-only surface.
+    member _.ResetCalls = resetCalls
+
+    interface IInstallationDescriptorProvider with
+        member _.Current() = descriptor
+
+        member _.ResetInstallGuid() =
+            resetCalls <- resetCalls + 1
+            descriptor <- { descriptor with InstallGuid = Guid.NewGuid() }

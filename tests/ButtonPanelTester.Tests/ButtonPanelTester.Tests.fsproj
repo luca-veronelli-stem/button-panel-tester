@@ -17,6 +17,7 @@
         <Compile Include="Property/CacheConsistencyTests.fs" />
         <Compile Include="Integration/DictionaryServiceInitializeTests.fs" />
         <Compile Include="Integration/RegistrationFlowTests.fs" />
+        <Compile Include="Integration/ReregisterResetTests.fs" />
         <Compile Include="Integration/DictionaryServiceRefreshTests.fs" />
         <Compile Include="Unit/WarmUpTests.fs" />
     </ItemGroup>

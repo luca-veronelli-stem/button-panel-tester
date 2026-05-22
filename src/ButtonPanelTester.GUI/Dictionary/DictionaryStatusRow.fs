@@ -28,9 +28,14 @@ open Stem.ButtonPanelTester.Core.Dictionary
 ///      disabled and showing a spinner glyph while in flight.
 ///   5. **Re-register button** — appears only when
 ///      `LastFailureReason = Some Unauthorized` (FR-018; `research.md`
-///      R11). Re-opens `RegistrationDialogWindow` without deleting
-///      the existing credential — atomic server-side rotation per
-///      `stem-dictionaries-manager` v0.8.0 (#74).
+///      R11). Re-opens `RegistrationDialogWindow` after wiping local
+///      install state (credential + `install.guid` sidecar) via
+///      `Services.Registration.App.resetForReregister` (issue #98):
+///      a fresh `installGuid` makes the next `POST /register` look
+///      like a clean install server-side, so the flow recovers from
+///      both the v0.8.0 atomic-rotation path (#74) and from an
+///      admin-revoked Installation row (companion server-side ticket
+///      `stem-dictionaries-manager` #85).
 ///
 /// The view is a pure render. Refresh-state tracking and the
 /// callbacks themselves live on the App.fs host (T052 wires the

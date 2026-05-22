@@ -142,10 +142,13 @@ type MainWindow(services: IServiceProvider) as this =
     let service = services.GetRequiredService<IDictionaryService>()
     let credentialStore = services.GetRequiredService<ICredentialStore>()
     let registrationClient = services.GetRequiredService<IRegistrationClient>()
+    let descriptorProvider =
+        services.GetRequiredService<IInstallationDescriptorProvider>()
     let warmUp = services.GetRequiredService<DictionaryWarmUp>()
     let clock = services.GetRequiredService<IClock>()
     let dialogLogger =
         services.GetRequiredService<ILogger<RegistrationDialogWindow>>()
+    let mainLogger = services.GetRequiredService<ILogger<MainWindow>>()
     let cacheFilePath =
         let local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         Path.Combine(local, "Stem.ButtonPanelTester", "dictionary.json")
@@ -217,15 +220,45 @@ type MainWindow(services: IServiceProvider) as this =
             }
             ()
 
-    // Re-register: re-open the registration dialog without touching
-    // the existing credential. `stem-dictionaries-manager` v0.8.0
-    // (#74) handles the server-side atomic rotation: a fresh
-    // bootstrap token registered against an existing installation
-    // overwrites the prior credential on success, leaving the prior
-    // value intact on failure.
+    // Re-register: wipe local install state (credential + install.guid
+    // sidecar) so the next /register POST is treated server-side as a
+    // fresh installation, then re-open the registration dialog.
+    //
+    // Issue #98: the prior Re-Register flow assumed
+    // `stem-dictionaries-manager` v0.8.0 (#74) atomic rotation — a
+    // fresh bootstrap token registered against an existing installation
+    // overwrites the prior credential on success. That assumption holds
+    // for a Live installation but breaks when an admin has revoked the
+    // Installation row server-side: the server matches
+    // `(clientApp, installGuid)`, finds `Status = Revoked`, and returns
+    // `ExistingInstallationRevoked` (today conflated to HTTP 401, see
+    // dictionaries-manager#85 for the status-code follow-up). Wiping
+    // `install.guid` here makes the next POST carry a fresh GUID, and
+    // the server treats the machine as a clean install.
     let kickoffReregister () =
         Dispatcher.UIThread.Post(fun () ->
             let _ : Task = task {
+                try
+                    do!
+                        App.resetForReregister
+                            credentialStore
+                            descriptorProvider
+                            CancellationToken.None
+
+                    mainLogger.LogInformation(
+                        "Re-register requested: wiped local install state; opening dialog."
+                    )
+                with ex ->
+                    // The wipe failing is non-fatal — open the dialog
+                    // anyway. The user can still get a fresh credential
+                    // if the wipe partially succeeded; if it failed
+                    // entirely the registration will surface the same
+                    // failure mode the user was already seeing.
+                    mainLogger.LogWarning(
+                        ex,
+                        "Failed to wipe local install state before Re-Register; opening dialog anyway."
+                    )
+
                 let! _ = runDialog ()
                 ()
             }
