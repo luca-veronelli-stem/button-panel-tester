@@ -74,13 +74,14 @@ type private RegistrationErrorDto = { Error: string | null }
 ///     is read per-request.
 ///   - `options` — `IOptions<DictionaryOptions>` bound to the
 ///     `"Dictionary"` section of `appsettings.json`.
-///   - `descriptor` — `InstallationDescriptor` singleton built at
-///     the composition root by
-///     `Infrastructure.Auth.InstallationDescriptorBuilder.build`.
-///     Carries the hashed `osUserId` + `machineId` (FR-020), the
-///     persisted `installGuid`, and the SemVer 2.0 `appVersion`.
-///     One descriptor per installation; the same value flows to
-///     every registration attempt this process makes.
+///   - `descriptorProvider` — `IInstallationDescriptorProvider`
+///     resolved from the composition root (production binding is
+///     `Infrastructure.Auth.InstallationDescriptorProvider`). Carries
+///     the hashed `osUserId` + `machineId` (FR-020), the persisted
+///     `installGuid`, and the SemVer 2.0 `appVersion`. The provider's
+///     `Current()` is called once per `RegisterAsync` so the
+///     Re-Register flow (issue #98) can rotate the `installGuid`
+///     between attempts within a single process lifetime.
 ///   - `logger` — required `ILogger<HttpRegistrationClient>` per
 ///     the STEM LOGGING standard for archetype A. Logs successful
 ///     and failed registration attempts at `Information` /
@@ -114,7 +115,7 @@ type HttpRegistrationClient
     (
         httpClient: HttpClient,
         options: IOptions<DictionaryOptions>,
-        descriptor: InstallationDescriptor,
+        descriptorProvider: IInstallationDescriptorProvider,
         logger: ILogger<HttpRegistrationClient>
     ) =
 
@@ -143,13 +144,20 @@ type HttpRegistrationClient
         let baseUrl = options.Value.BaseUrl
         baseUrl.TrimEnd('/') + "/register"
 
-    let descriptorDto: RegistrationDescriptorDto = {
-        ClientApp = descriptor.ClientApp
-        OsUserId = descriptor.OsUserId
-        MachineId = descriptor.MachineId
-        InstallGuid = descriptor.InstallGuid
-        AppVersion = descriptor.AppVersion
-    }
+    let descriptorDto () : RegistrationDescriptorDto =
+        // Read the descriptor per call so a `ResetInstallGuid()` from
+        // the Re-Register flow (issue #98) is observed by the next
+        // `RegisterAsync` — the provider's `Current()` re-reads the
+        // `install.guid` sidecar each call while keeping the hashed
+        // identifiers cached at construction.
+        let descriptor = descriptorProvider.Current()
+        {
+            ClientApp = descriptor.ClientApp
+            OsUserId = descriptor.OsUserId
+            MachineId = descriptor.MachineId
+            InstallGuid = descriptor.InstallGuid
+            AppVersion = descriptor.AppVersion
+        }
 
     let buildRequest (token: BootstrapToken) =
         let request = new HttpRequestMessage(HttpMethod.Post, registrationUrl ())
@@ -157,7 +165,7 @@ type HttpRegistrationClient
         request.Headers.Accept.ParseAdd("application/json")
         let body: RegistrationRequestDto = {
             BootstrapToken = token.Value
-            Descriptor = descriptorDto
+            Descriptor = descriptorDto ()
         }
         request.Content <- JsonContent.Create(body, options = serializerOptions)
         request

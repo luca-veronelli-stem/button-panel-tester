@@ -14,6 +14,7 @@
         <Compile Include="Unit/JsonFileDictionaryCacheTests.fs" />
         <Compile Include="Unit/DpapiCredentialStoreTests.fs" />
         <Compile Include="Unit/EmbeddedResourceTests.fs" />
+        <Compile Include="Unit/InstallationDescriptorProviderTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTimeoutTests.fs" />
         <Compile Include="Integration/HttpDictionaryProviderTests.fs" />

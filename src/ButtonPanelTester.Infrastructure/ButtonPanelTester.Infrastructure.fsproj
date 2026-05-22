@@ -10,7 +10,7 @@
         <Compile Include="Persistence/JsonFileDictionaryCache.fs" />
         <Compile Include="Persistence/EmbeddedSeedExtractor.fs" />
         <Compile Include="Persistence/DpapiCredentialStore.fs" />
-        <Compile Include="Auth/InstallationDescriptorBuilder.fs" />
+        <Compile Include="Auth/InstallationDescriptorProvider.fs" />
         <Compile Include="Http/HttpRegistrationClient.fs" />
         <Compile Include="Http/ApiKeyAuthHandler.fs" />
         <Compile Include="Http/HttpDictionaryProvider.fs" />

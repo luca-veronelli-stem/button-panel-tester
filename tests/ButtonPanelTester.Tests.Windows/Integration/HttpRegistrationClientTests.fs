@@ -64,7 +64,7 @@ let private optionsFor (baseUrl: string) : IOptions<DictionaryOptions> =
 /// Deterministic stub `InstallationDescriptor` — hashed-identifier
 /// strings are hand-crafted 64-hex literals so assertions can match
 /// them verbatim without exercising the real
-/// `InstallationDescriptorBuilder` (which would need a Windows SID +
+/// `InstallationDescriptorProvider` (which would need a Windows SID +
 /// machine-GUID registry read).
 let private stubDescriptor: InstallationDescriptor = {
     ClientApp = "ButtonPanelTester"
@@ -73,6 +73,25 @@ let private stubDescriptor: InstallationDescriptor = {
     InstallGuid = Guid("11111111-2222-3333-4444-555555555555")
     AppVersion = Some "1.0.0"
 }
+
+/// Scriptable `IInstallationDescriptorProvider` stub. Returns whatever
+/// descriptor sits in its mutable cell at the moment of `Current()`;
+/// `Set` rotates that descriptor mid-test so the per-call-rebuild
+/// contract of `HttpRegistrationClient` can be exercised without
+/// touching the filesystem or the registry.
+type private StubDescriptorProvider(initial: InstallationDescriptor) =
+    let mutable current = initial
+    let mutable resetCalls = 0
+
+    member _.Set(descriptor: InstallationDescriptor) = current <- descriptor
+    member _.ResetCalls = resetCalls
+
+    interface IInstallationDescriptorProvider with
+        member _.Current() = current
+        member _.ResetInstallGuid() = resetCalls <- resetCalls + 1
+
+let private stubProviderFor (descriptor: InstallationDescriptor) =
+    StubDescriptorProvider(descriptor)
 
 let private makeJsonResponse (status: HttpStatusCode) (body: string) =
     let response = new HttpResponseMessage(status)
@@ -102,8 +121,10 @@ let private makeClient (handler: StubHttpHandler) =
     let httpClient = new HttpClient(handler, disposeHandler = false)
     let options = optionsFor "https://stub.example"
     let logger = NullLogger<HttpRegistrationClient>.Instance
+    let provider =
+        stubProviderFor stubDescriptor :> IInstallationDescriptorProvider
 
-    HttpRegistrationClient(httpClient, options, stubDescriptor, logger)
+    HttpRegistrationClient(httpClient, options, provider, logger)
     :> IRegistrationClient
 
 let private aToken () =
@@ -322,12 +343,14 @@ let RegisterAsync_DescriptorEmitsAppVersionAsNullWhenNone () =
         let recordingHandler =
             new StubHttpHandler(successHandler 1 "irrelevant" "2026-05-18T00:00:00Z")
         use httpClient = new HttpClient(recordingHandler, disposeHandler = false)
+        let provider =
+            stubProviderFor descriptor :> IInstallationDescriptorProvider
 
         let client =
             HttpRegistrationClient(
                 httpClient,
                 optionsFor "https://stub.example",
-                descriptor,
+                provider,
                 NullLogger<HttpRegistrationClient>.Instance
             )
             :> IRegistrationClient
@@ -437,4 +460,69 @@ let RegisterAsync_PostsToRegisterPath () =
             | u -> u
 
         Assert.Equal("/register", uri.AbsolutePath)
+    }
+
+// --- tests: per-call descriptor rebuild (#98 Re-Register path) ---
+
+[<Fact>]
+let RegisterAsync_PicksUpRotatedInstallGuidBetweenCalls () =
+    // The Re-Register flow (#98) calls IInstallationDescriptorProvider.
+    // ResetInstallGuid() before opening the dialog; the next
+    // RegisterAsync MUST send the rotated installGuid. The adapter
+    // achieves this by calling provider.Current() per request rather
+    // than snapshotting the descriptor at construction.
+    task {
+        let firstGuid = Guid("aaaaaaaa-1111-1111-1111-111111111111")
+        let secondGuid = Guid("bbbbbbbb-2222-2222-2222-222222222222")
+
+        let provider =
+            stubProviderFor { stubDescriptor with InstallGuid = firstGuid }
+
+        use handler =
+            new StubHttpHandler(successHandler 1 "irrelevant" "2026-05-18T00:00:00Z")
+
+        use httpClient = new HttpClient(handler, disposeHandler = false)
+
+        let client =
+            HttpRegistrationClient(
+                httpClient,
+                optionsFor "https://stub.example",
+                provider :> IInstallationDescriptorProvider,
+                NullLogger<HttpRegistrationClient>.Instance
+            )
+            :> IRegistrationClient
+
+        let! _ = client.RegisterAsync(aToken (), CancellationToken.None)
+
+        let firstBody =
+            match handler.LastBody with
+            | Some b -> b
+            | None ->
+                Assert.Fail("expected the stub to have observed a first body")
+                ""
+
+        Assert.Contains(
+            sprintf "\"installGuid\":\"%s\"" (firstGuid.ToString("D")),
+            firstBody
+        )
+
+        // Rotate the descriptor mid-flight, then re-register.
+        provider.Set({ stubDescriptor with InstallGuid = secondGuid })
+
+        let! _ = client.RegisterAsync(aToken (), CancellationToken.None)
+
+        let secondBody =
+            match handler.LastBody with
+            | Some b -> b
+            | None ->
+                Assert.Fail("expected the stub to have observed a second body")
+                ""
+
+        Assert.Contains(
+            sprintf "\"installGuid\":\"%s\"" (secondGuid.ToString("D")),
+            secondBody
+        )
+
+        // Defensive: the rotated body MUST NOT still carry the old GUID.
+        Assert.DoesNotContain(firstGuid.ToString("D"), secondBody)
     }

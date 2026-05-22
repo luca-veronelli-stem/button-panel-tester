@@ -192,20 +192,25 @@ module CompositionRoot =
                 let clock = sp.GetRequiredService<IClock>()
                 let logger = sp.GetRequiredService<ILogger<HttpDictionaryProvider>>()
                 HttpDictionaryProvider(httpClient, options, clock, logger) :> IDictionaryProvider)
-            // InstallationDescriptor is built once at first resolve via
-            // InstallationDescriptorBuilder (Windows SID + machine GUID
-            // hashed; install.guid sidecar read or created). Registered
-            // as a singleton so every IRegistrationClient call carries
-            // the same descriptor across this process's lifetime.
-            .AddSingleton<InstallationDescriptor>(fun _ ->
-                InstallationDescriptorBuilder.build (defaultCacheDirectory ()) (guiAssembly ()))
+            // IInstallationDescriptorProvider caches the hashed Windows
+            // SID + machine GUID + AppVersion at construction (immutable
+            // host facts) but re-reads the install.guid sidecar on every
+            // Current() call so the Re-Register flow (#98) can rotate
+            // the InstallGuid between registration attempts within a
+            // single process lifetime. Registered as a singleton so the
+            // hash cache survives across calls.
+            .AddSingleton<IInstallationDescriptorProvider>(fun _ ->
+                InstallationDescriptorProvider(defaultCacheDirectory (), guiAssembly ())
+                :> IInstallationDescriptorProvider)
             .AddSingleton<IRegistrationClient>(fun sp ->
                 let factory = sp.GetRequiredService<IHttpClientFactory>()
                 let client = factory.CreateClient()
                 let options = sp.GetRequiredService<IOptions<DictionaryOptions>>()
-                let descriptor = sp.GetRequiredService<InstallationDescriptor>()
+                let descriptorProvider =
+                    sp.GetRequiredService<IInstallationDescriptorProvider>()
                 let logger = sp.GetRequiredService<ILogger<HttpRegistrationClient>>()
-                HttpRegistrationClient(client, options, descriptor, logger) :> IRegistrationClient)
+                HttpRegistrationClient(client, options, descriptorProvider, logger)
+                :> IRegistrationClient)
             // IDictionaryServiceWarmUp → HttpDictionaryServiceWarmUp,
             // hitting the unauthenticated GET /health endpoint per
             // phase-7.md slice 3. Reuses the named "Dictionary"
