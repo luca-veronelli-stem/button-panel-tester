@@ -53,3 +53,27 @@ module App =
             else
                 return! runDialog ()
         }
+
+    /// Wipe local installation state before a Re-Register attempt
+    /// (issue #98). The credential file is deleted first so a crash
+    /// between the two steps leaves the system in a state that
+    /// `tryRegister` will treat as a clean install (no credential →
+    /// dialog opens); then the `install.guid` sidecar is rotated so
+    /// the next `IRegistrationClient.RegisterAsync` carries a fresh
+    /// `InstallGuid` and the server treats the machine as new — the
+    /// recovery path from an admin-revoked Installation row.
+    ///
+    /// Idempotent end-to-end: both adapter contracts
+    /// (`ICredentialStore.DeleteAsync`,
+    /// `IInstallationDescriptorProvider.ResetInstallGuid`) are
+    /// themselves idempotent, so calling this against a clean
+    /// machine is a safe no-op.
+    let resetForReregister
+        (credentialStore: ICredentialStore)
+        (descriptorProvider: IInstallationDescriptorProvider)
+        (ct: CancellationToken)
+        : Task =
+        task {
+            do! credentialStore.DeleteAsync(ct)
+            descriptorProvider.ResetInstallGuid()
+        }
