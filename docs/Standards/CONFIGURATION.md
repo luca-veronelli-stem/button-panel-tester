@@ -157,6 +157,8 @@ If the app needs reload semantics, switch the consuming service to `IOptionsMoni
 
 Section name matches the type name (less the `Configuration` suffix). One section per consuming service; no nested-everything godconfigs. Layer environment overrides via `appsettings.{Environment}.json` and user secrets in development; no secrets ever in `appsettings.json`.
 
+`appsettings.json` continues to ship next to the `.exe`. Whether per-user overrides should live under [`APP_DATA.md`](./APP_DATA.md)'s `<LocalApplicationData>\Stem\<AppName>\` root (`appsettings.Production.json`, user-edited tweaks) is a deferred decision — revisit if a real per-user override use case appears.
+
 ## F#
 
 F# records bind cleanly:

@@ -37,7 +37,7 @@ module Stem.<App>.GUI.Brand
 open Avalonia.Media
 
 // Primary (corporate identity, all divisions)
-let BluStem        = Color.Parse "#004682"   // Pantone 2154 C
+let BluStem        = Color.Parse "#004483"   // Pantone 2154 C
 
 // Blu Stem sanctioned tints
 let BluStem30      = Color.Parse "#B1C9F8"   // Pantone 658 C — icon tint paired with Blu Stem
@@ -174,13 +174,33 @@ let h1           = 28.0    // page title
 let display      = 40.0    // empty-state hero text
 ```
 
-**Bundling:** ship Poppins in `Resources/fonts/Poppins-*.ttf` (Regular, Medium, SemiBold, Bold, Light), referenced via `App.axaml`:
+**Bundling:** ship Poppins in `Resources/fonts/Poppins-*.ttf` (Regular, Medium, SemiBold, Bold, Light) and register the family as the default at `AppBuilder` time in `Program.fs`:
 
-```xml
-<Application.Resources>
-    <FontFamily x:Key="StemFontFamily">avares://Stem.&lt;App&gt;.GUI/Resources/fonts/#Poppins</FontFamily>
-</Application.Resources>
+```fsharp
+// ButtonPanelTester.GUI/Program.fs
+open Avalonia
+open Avalonia.Media
+open System
+
+[<EntryPoint; STAThread>]
+let main argv =
+    AppBuilder
+        .Configure<App>(fun () -> App())
+        .UsePlatformDetect()
+        .With(FontManagerOptions(DefaultFamilyName =
+            "avares://Stem.<App>.GUI/Resources/fonts/#Poppins"))
+        .StartWithClassicDesktopLifetime(argv)
 ```
+
+`FontManagerOptions` lives in **`Avalonia.Media`**, not `Avalonia.Media.Fonts` — the namespace mistake is the first thing autocomplete suggests.
+
+- *For XAML hosts (archetype B / hosted scenarios).* The same family resolves via an `Application.Resources` entry, kept as a sub-form rather than the default:
+
+  ```xml
+  <Application.Resources>
+      <FontFamily x:Key="StemFontFamily">avares://Stem.&lt;App&gt;.GUI/Resources/fonts/#Poppins</FontFamily>
+  </Application.Resources>
+  ```
 
 The Stem-Regular custom font from the brand manual is **not** used in software — it is reserved for division wordmarks inside the print/marketing brand mark and ships as part of the corporate logo SVG (rendered, not loaded as a font).
 
@@ -210,7 +230,7 @@ Resources/branding/
     └── stem-app-icon-mono-white.{svg,png}
 ```
 
-Per-app, `Branding.division` (defined above) selects which division's brand mark to render. The fill colour of every positive SVG is **`#004483`** — the agency's authoritative Blu Stem for the brand mark. This is one hex step off the palette token (`BluStem = #004682`); both values approximate Pantone 2154 C and the gap is small enough not to read as a colour change in a rendered surface, but the palette will likely realign on a follow-up bump. Don't tint or recolour the SVG fills per-app.
+Per-app, `Branding.division` (defined above) selects which division's brand mark to render. The fill colour of every positive SVG is **`#004483`** — the agency's authoritative Blu Stem for the brand mark, matching the palette token (`BluStem = #004483`) per Pantone 2154 C. Don't tint or recolour the SVG fills per-app.
 
 **Symbol-only standalone.** Tavola 21 of the brand manual sanctions the simbolo as a standalone mark when the full lockup is too dense for the surface (favicons, small toolbar slots, watermark stamps). Views may use anything under `symbols/` without pairing it to a `brand-marks/` lockup; both directories are first-class.
 
@@ -221,6 +241,52 @@ Per-app, `Branding.division` (defined above) selects which division's brand mark
 **Brand manual.** The full brand manual (`stem-brand-manual.pdf`) is checked into the standards repo at [`shared/brand-manual/stem-brand-manual.pdf`](../brand-manual/stem-brand-manual.pdf). It is **not** propagated to adopted repos — it is reference material for designers and reviewers, not a runtime asset.
 
 **Stem France.** The Stem France filiale (tavolas 14–15, 26–27, 46–50) is intentionally not shipped in v1.6.0. The `Branding.Division.France` case continues to render `BluFrance` as a badge colour, but no France brand-mark assets exist under `branding/` yet. A future bump will land them when the first France-targeted app earns its keep.
+
+## App-icon wiring (archetype A, Windows)
+
+The bundle ships `stem-app-icon-positive.ico` and `stem-app-icon-mono-white.ico` under `Resources/branding/app-icons/` since **v1.7.1**, generated from the matching SVG masters by [`eng/New-StemAppIcon.ps1`](../../eng/New-StemAppIcon.ps1) (4-frame 16/32/48/256 px, alpha-verified). The `<AvaloniaResource>` glob landed in v1.7.0 (#100).
+
+The same `.ico` file feeds two unrelated Windows surfaces through two independent delivery channels. Both channels must be wired or the `.ico` will only show up in one place.
+
+| Surface | Source | Mechanism |
+| --- | --- | --- |
+| `.exe` shell icon (Explorer, file thumbnails, taskbar pin to the binary) | `Resources/branding/app-icons/stem-app-icon-positive.ico` | `<ApplicationIcon>` MSBuild property — bakes the icon into the PE resource block at build time |
+| Title-bar + taskbar (running window) | Same `.ico`, via `avares://` | `<AvaloniaResource>` glob (per-app `.fsproj`) + `WindowIcon(stream)` at runtime |
+| Alt-Tab thumbnail | Same `.ico`, via `avares://` | Same as title-bar — Windows picks the 256 px frame from the multi-frame `.ico` |
+
+```xml
+<!-- Stem.<App>.GUI/Stem.<App>.GUI.fsproj -->
+<PropertyGroup>
+    <ApplicationIcon>Resources/branding/app-icons/stem-app-icon-positive.ico</ApplicationIcon>
+</PropertyGroup>
+
+<ItemGroup>
+    <!-- Plus the fonts / brand-marks globs (see Logo above). The `.ico` glob
+         was added to the archetype A scaffold so the runtime channel resolves
+         out of the box. -->
+    <AvaloniaResource Include="Resources/branding/app-icons/*.ico" />
+</ItemGroup>
+```
+
+```fsharp
+open System
+open Avalonia.Controls
+open Avalonia.Platform
+
+let private appIconUri =
+    Uri "avares://Stem.<App>.GUI/Resources/branding/app-icons/stem-app-icon-positive.ico"
+
+let windowIcon () : WindowIcon =
+    use stream = AssetLoader.Open appIconUri
+    WindowIcon stream
+
+// in the MainWindow constructor (or wherever the Window is built):
+this.Icon <- windowIcon ()
+```
+
+**Don't** call `WindowIcon(Bitmap(stream))` against a single oversize PNG (e.g. the 2134 × 2134 agency master). Skia downsamples a 2000+ px raster to a 16 px target in one step, which aliases visibly on the title bar and taskbar. The multi-frame `.ico` (16 / 32 / 48 / 256 px) lets Windows pick the matching pre-rendered frame per surface — crisp at every size.
+
+The `.ico` glob (`Resources/branding/app-icons/*.ico`) is part of the scaffold's [`<AvaloniaResource>` ItemGroup](#logo) so the avares:// channel resolves immediately on bootstrap. `<ApplicationIcon>` stays per-app — different apps may want to point at different `.ico` files under `app-icons/`.
 
 ## Spacing
 
@@ -356,7 +422,7 @@ Each severity maps to a token from `Brand.Semantic`:
 
 | Severity | Token | Hex | Source |
 | --- | --- | --- | --- |
-| `Info` | `Brand.Semantic.Info` | `#004682` | brand `BluStem` (Pantone 2154 C) |
+| `Info` | `Brand.Semantic.Info` | `#004483` | brand `BluStem` (Pantone 2154 C) |
 | `Success` | `Brand.Semantic.Success` | `#16A34A` | software-derived — distinct from `VerdeEMS` to prevent division-color collision |
 | `Warning` | `Brand.Semantic.Warning` | `#D97706` | software-derived — distinct from `GialloCommercialVehicles` to prevent division-color collision |
 | `Error` | `Brand.Semantic.Error` | `#E40032` | brand `RossoAlert` (Pantone 185 C — sanctioned alert color) |

@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   mirror:
-    uses: luca-veronelli-stem/standards/.github/workflows/mirror-bitbucket.yml@v1.6.0
+    uses: luca-veronelli-stem/standards/.github/workflows/mirror-bitbucket.yml@v1.9.0
     with:
       bitbucket-repo: stem-fw/button-panel-tester
     secrets:

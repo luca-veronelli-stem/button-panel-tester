@@ -1,6 +1,6 @@
-# STEM standards (Standard version: v1.6.0)
+# STEM standards (Standard version: v1.9.0)
 
-These are inline copies pinned to `v1.6.0`. Upstream source of truth is [standards/shared/standards/](https://github.com/luca-veronelli-stem/standards/tree/v1.6.0/shared/standards).
+These are inline copies pinned to `v1.9.0`. Upstream source of truth is [standards/shared/standards/](https://github.com/luca-veronelli-stem/standards/tree/v1.9.0/shared/standards).
 
 | Standard | Purpose |
 | --- | --- |
@@ -23,6 +23,7 @@ These are inline copies pinned to `v1.6.0`. Upstream source of truth is [standar
 | [GUI.md](./GUI.md) | Avalonia + FuncUI + Elmish-MVU; <App>.GUI/ layout; composition root; legacy WinForms/WPF carve-out. |
 | [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md) | Fluent theme + light default (brand-aligned); 4-pt spacing scale; Fluent System Icons; Poppins typography; Stem brand palette; F# strings module for i18n; toast/banner/inline/modal error surfaces. |
 | [APP_SHELL.md](./APP_SHELL.md) | Canonical views (Settings, About, LanguagePicker, NotificationCenter, ConnectionStatus); typed ShellSlots record; Navigation pinned to left sidebar. |
+| [APP_DATA.md](./APP_DATA.md) | <LocalApplicationData>\Stem\<AppName>\ per-user data root; logs/cache/credentials/db sub-folders; transient migration helper for legacy roots. |
 
 ## Bumping the standard version
 

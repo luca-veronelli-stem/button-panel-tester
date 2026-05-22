@@ -14,7 +14,7 @@ From `v1.4.0`, the workflows the rollout writes into an adopted repo are **calle
 | **Release** (archetype A) | `.github/workflows/release.yml` | `.github/workflows/release-archetype-a.yml` | tag `v*.*.*` |
 | **Release** (archetype B) | `.github/workflows/release.yml` | `.github/workflows/release-archetype-b.yml` | tag `v*.*.*` |
 
-The stubs live under `shared/templates/.github/workflows/` (common: `ci.yml`, `mirror-bitbucket.yml`) and `shared/templates/archetypes/{A,B}/.github/workflows/release.yml` (archetype overlays) and are copied into each repo by the rollout script (see REPO_STRUCTURE). The rollout substitutes `v1.6.0` into the `uses:` pin at bump time, so each adopted repo references the exact tag it is pinned to. Migrating an existing repo across this shape change is covered in MIGRATION.md → "Rollout phase for v1.4.0".
+The stubs live under `shared/templates/.github/workflows/` (common: `ci.yml`, `mirror-bitbucket.yml`) and `shared/templates/archetypes/{A,B}/.github/workflows/release.yml` (archetype overlays) and are copied into each repo by the rollout script (see REPO_STRUCTURE). The rollout substitutes `v1.9.0` into the `uses:` pin at bump time, so each adopted repo references the exact tag it is pinned to. Migrating an existing repo across this shape change is covered in MIGRATION.md → "Rollout phase for v1.4.0".
 
 ## ci.yml — invariants
 
@@ -96,11 +96,15 @@ Why the Linux leg loops: vstest cannot filter Windows-only-TFM assemblies via `-
 Triggered on `v*.*.*` tag push. Steps:
 
 1. Checkout, setup-dotnet from `global.json`.
-2. `dotnet publish src/<App>.GUI -c Release -r win-x64 --self-contained -p:PublishSingleFile=true`.
+2. `dotnet publish src/<App>.GUI -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true`.
 3. `Compress-Archive` to `<app>-<version>-win-x64.zip`.
 4. `softprops/action-gh-release@v3` — creates a GitHub Release with the zip attached and the matching CHANGELOG entry as body.
 
 Why archetype A needs a release workflow: the desktop app's distributable is a self-contained zip. Without it, "release" means "open the IDE and copy bin/Release somewhere" — fragile and unreproducible.
+
+`IncludeNativeLibrariesForSelfExtract=true` packs the native binaries (Avalonia/Skia, Plugin.BLE, PCAN, `System.IO.Ports`, …) into the `.exe` bundle's self-extract section so the published artifact is a true single `.exe` — draggable, USB-launchable, no companion `runtimes/win-x64/native/` directory required to run. Pairs with `PublishSingleFile=true` (which alone only bundles the managed DLLs and leaves native deps as siblings). The flag trades default behaviour for shape: on first launch per user per release, the bundle extracts to `%LOCALAPPDATA%\.net\<App>\<content-hash>\` and subsequent launches reuse the extracted copy — invisible in steady state.
+
+The escape hatch for hardened environments where the default extraction path is blocked (EDR products quarantining freshly-materialized `.dll` files, read-only `%LOCALAPPDATA%`) is the `DOTNET_BUNDLE_EXTRACT_BASE_DIR` environment variable: set it to an app-writable path before launch, and the bundle extracts there instead. Rare in supplier-workshop / bench-tech target environments, documented here because adopters debugging a launch failure in a customer site will want one entry point that names the variable.
 
 ## Release workflow — archetype B
 
