@@ -150,8 +150,7 @@ type MainWindow(services: IServiceProvider) as this =
         services.GetRequiredService<ILogger<RegistrationDialogWindow>>()
     let mainLogger = services.GetRequiredService<ILogger<MainWindow>>()
     let cacheFilePath =
-        let local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-        Path.Combine(local, "Stem.ButtonPanelTester", "dictionary.json")
+        Path.Combine(Composition.StemAppData.cacheDir (), "dictionary.json")
 
     // Local mutable refresh state. T052 / FR-006: a click on the
     // Refresh button kicks off `IDictionaryService.RefreshAsync` and

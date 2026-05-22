@@ -62,9 +62,9 @@ desktop.ini
 *.swo
 WIP.md
 
-# App log (NReco file sink writes to %LOCALAPPDATA%\Stem.ButtonPanelTester\app.log
-# at runtime; defensive entry against an `app.log` ever landing inside the worktree
-# during dev with a misconfigured CWD or relative log path).
+# App log (NReco file sink writes to %LOCALAPPDATA%\Stem\ButtonPanelTester\logs\app.log
+# at runtime per STEM APP_DATA.md; defensive entry against an `app.log` ever landing
+# inside the worktree during dev with a misconfigured CWD or relative log path).
 app.log
 app.*.log
 

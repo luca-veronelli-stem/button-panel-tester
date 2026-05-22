@@ -18,10 +18,12 @@ open System
 /// can construct deterministic stubs with literal digests.
 ///
 /// `installGuid` is a non-zero `Guid` per-installation, persisted
-/// in `%LOCALAPPDATA%\Stem.ButtonPanelTester\install.guid`. The
-/// provider creates the sidecar file on first launch and re-reads
-/// it on every `Current()` so the Re-Register flow (issue #98) can
-/// rotate it within a single process lifetime.
+/// in `%LOCALAPPDATA%\Stem\ButtonPanelTester\credentials\install.guid`
+/// per STEM `APP_DATA.md` (v1.9.0) — paired with `credential.dpapi`
+/// because the Re-Register flow (issue #98) rotates both together.
+/// The provider creates the sidecar file on first launch and re-reads
+/// it on every `Current()` so Re-Register can rotate it within a
+/// single process lifetime.
 ///
 /// `appVersion` MUST be SemVer 2.0 when present. Server rejects
 /// malformed values with `DescriptorMalformed → 400`. The builder

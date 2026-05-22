@@ -13,8 +13,9 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 ### Changed
 
-- Bumped STEM standards from v1.5.3 to v1.6.0 ([#88](https://github.com/luca-veronelli-stem/button-panel-tester/issues/88)).
+- Bumped STEM standards from v1.5.3 to v1.6.0 ([#88](https://github.com/luca-veronelli-stem/button-panel-tester/issues/88)), then v1.6.0 to v1.9.0 ([#106](https://github.com/luca-veronelli-stem/button-panel-tester/pull/106)).
 - `.gitattributes` now pins `*.svg` and `*.pdf` as binary (prevents autocrlf line-ending damage on Windows).
+- Per-user app data relocated from `%LOCALAPPDATA%\Stem.ButtonPanelTester\` (flat) to `%LOCALAPPDATA%\Stem\ButtonPanelTester\` per STEM `APP_DATA.md` (v1.9.0), with mandatory `logs/`, `cache/`, `credentials/` sub-folders. NReco rolling log lives under `logs/app.log`; JSON dictionary cache under `cache/dictionary.json` (+ `.sha256` sidecar); DPAPI `credential.dpapi` and the paired `install.guid` under `credentials/`. Path resolution centralised in a new `Stem.ButtonPanelTester.GUI.Composition.StemAppData` module (~15 LOC, `Path.Combine` sugar over `Environment.SpecialFolder.LocalApplicationData`). Greenfield — no transient migration helper; the two existing dev installs lose their throwaway test state on first launch under the new root.
 
 ### Fixed
 
