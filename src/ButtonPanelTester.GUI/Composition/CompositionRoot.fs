@@ -37,7 +37,7 @@ open Stem.ButtonPanelTester.Services.Dictionary
 /// Phase 3 (US1, MVP) bindings:
 ///   - `IClock`              → `SystemClock`                  (T018, real).
 ///   - `IDictionaryCache`    → `JsonFileDictionaryCache`      (T029, real)
-///                              wired with `%LOCALAPPDATA%\Stem.ButtonPanelTester\`
+///                              wired with `%LOCALAPPDATA%\Stem\ButtonPanelTester\cache\`
 ///                              as the cache directory and
 ///                              `EmbeddedSeedExtractor.readSeedBytes`
 ///                              (T031) reading the GUI assembly's
@@ -63,15 +63,6 @@ open Stem.ButtonPanelTester.Services.Dictionary
 [<RequireQualifiedAccess>]
 module CompositionRoot =
 
-    /// Returns `%LOCALAPPDATA%\Stem.ButtonPanelTester` as the cache
-    /// directory root. `JsonFileDictionaryCache` creates the
-    /// directory on first write (`Directory.CreateDirectory` is
-    /// idempotent), so this function is total even on a clean
-    /// machine.
-    let private defaultCacheDirectory () : string =
-        let local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-        Path.Combine(local, "Stem.ButtonPanelTester")
-
     /// Returns the GUI assembly — the one carrying the embedded
     /// `dictionary.seed.json` resource. `Assembly.GetExecutingAssembly`
     /// resolves to whichever assembly the calling code is compiled
@@ -93,7 +84,8 @@ module CompositionRoot =
     ///     `DictionaryWarmUp`, etc.: `AddSimpleConsole()` for terminal-
     ///     launched dev runs, `AddDebug()` for the IDE Output window,
     ///     and `AddFile(...)` (NReco) writing a rolling text log to
-    ///     `%LOCALAPPDATA%\Stem.ButtonPanelTester\app.log` — the path
+    ///     `%LOCALAPPDATA%\Stem\ButtonPanelTester\logs\app.log` per
+    ///     STEM `APP_DATA.md` (v1.9.0) — the path
     ///     `specs/001-fetch-dictionary/quickstart.md` Troubleshooting
     ///     tail tells supplier operators to inspect. Default minimum
     ///     level is `Information`; the `Microsoft.*` category is held
@@ -106,17 +98,15 @@ module CompositionRoot =
     ///     "Dictionary")` so `IOptions<DictionaryOptions>` binds to
     ///     `appsettings.json`'s `Dictionary:` section.
     ///   - `ICredentialStore → DpapiCredentialStore` (real adapter
-    ///     wired to `%LOCALAPPDATA%\Stem.ButtonPanelTester\`).
+    ///     wired to `%LOCALAPPDATA%\Stem\ButtonPanelTester\credentials\`).
     ///   - `IRegistrationClient → HttpRegistrationClient`, replacing
     ///     the US1 `OfflineRegistrationClient` placeholder.
     let configure (services: IServiceCollection) (config: IConfiguration) : IServiceCollection =
-        // Make sure the cache directory exists before NReco opens
-        // `app.log` for append — the directory is otherwise created
-        // on first cache write by `JsonFileDictionaryCache`, which
-        // can be later than the first log line.
-        let logDir = defaultCacheDirectory ()
-        Directory.CreateDirectory(logDir) |> ignore
-        let logPath = Path.Combine(logDir, "app.log")
+        // `StemAppData.logsDir ()` is the per-app `logs/` sub-folder per
+        // STEM `APP_DATA.md`; the helper creates the directory on first
+        // call via `ensureDir`, so NReco opening `app.log` for append
+        // immediately afterwards is safe.
+        let logPath = Path.Combine(StemAppData.logsDir (), "app.log")
 
         services.AddLogging(fun builder ->
             builder
@@ -175,13 +165,11 @@ module CompositionRoot =
         services
             .AddSingleton<IClock, SystemClock>()
             .AddSingleton<IDictionaryCache>(fun _sp ->
-                let cacheDir = defaultCacheDirectory ()
                 let seedReader = EmbeddedSeedExtractor.readSeedBytes (guiAssembly ())
-                JsonFileDictionaryCache(cacheDir, seedReader) :> IDictionaryCache)
+                JsonFileDictionaryCache(StemAppData.cacheDir (), seedReader) :> IDictionaryCache)
             .AddSingleton<ICredentialStore>(fun sp ->
-                let dir = defaultCacheDirectory ()
                 let logger = sp.GetRequiredService<ILogger<DpapiCredentialStore>>()
-                DpapiCredentialStore(dir, logger) :> ICredentialStore)
+                DpapiCredentialStore(StemAppData.credentialsDir (), logger) :> ICredentialStore)
             // IDictionaryProvider → HttpDictionaryProvider against the
             // named "Dictionary" client. Phase 5 / T051: replaces the
             // Phase 3 OfflineDictionaryProvider placeholder.
@@ -199,8 +187,11 @@ module CompositionRoot =
             // the InstallGuid between registration attempts within a
             // single process lifetime. Registered as a singleton so the
             // hash cache survives across calls.
+            // `install.guid` lives alongside `credential.dpapi` because the
+            // Re-Register flow (#98) rotates both together; both are
+            // per-installation identity artefacts.
             .AddSingleton<IInstallationDescriptorProvider>(fun _ ->
-                InstallationDescriptorProvider(defaultCacheDirectory (), guiAssembly ())
+                InstallationDescriptorProvider(StemAppData.credentialsDir (), guiAssembly ())
                 :> IInstallationDescriptorProvider)
             .AddSingleton<IRegistrationClient>(fun sp ->
                 let factory = sp.GetRequiredService<IHttpClientFactory>()

@@ -20,8 +20,9 @@ open Stem.ButtonPanelTester.Core.Dictionary
 ///   - `credentialDirectory` — the directory holding `credential.dpapi`.
 ///     The adapter creates it on first write (idempotent
 ///     `Directory.CreateDirectory`). Production binding is
-///     `%LOCALAPPDATA%\Stem.ButtonPanelTester\` via the composition
-///     root (T044); tests pass a temp directory.
+///     `%LOCALAPPDATA%\Stem\ButtonPanelTester\credentials\` per STEM
+///     `APP_DATA.md` (v1.9.0), wired via `StemAppData.credentialsDir ()`
+///     at the composition root; tests pass a temp directory.
 ///   - `logger` — required `ILogger<DpapiCredentialStore>` (archetype A
 ///     per STEM LOGGING standard). Emits `Information` on save and
 ///     `Warning` (with the exception) on `CryptographicException`

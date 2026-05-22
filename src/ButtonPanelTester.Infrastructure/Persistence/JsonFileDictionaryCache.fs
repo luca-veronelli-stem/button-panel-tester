@@ -62,8 +62,9 @@ type private CacheFile = {
 ///   - `cacheDirectory` — the directory holding both files. The
 ///     adapter creates it on first write (idempotent
 ///     `Directory.CreateDirectory`). Production binding is
-///     `%LOCALAPPDATA%\Stem.ButtonPanelTester\` via the
-///     composition root (T033); tests pass a temp directory.
+///     `%LOCALAPPDATA%\Stem\ButtonPanelTester\cache\` per STEM
+///     `APP_DATA.md` (v1.9.0), wired via `StemAppData.cacheDir ()`
+///     at the composition root; tests pass a temp directory.
 ///   - `seedReader` — lazy source for the embedded seed bytes
 ///     consulted by `ExtractSeedIfMissingAsync`. See
 ///     `SeedBytesReader` for the lifecycle.
