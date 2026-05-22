@@ -13,14 +13,15 @@ open System
 /// MUST be the lowercase SHA-256 hex digest of the raw identifier
 /// for `ButtonPanelTester` (supplier-deployed — FR-020 + the
 /// server's *Privacy posture*). The descriptor type itself does NOT
-/// enforce the hashed form: enforcement lives in the builder
-/// (`Infrastructure.Auth.InstallationDescriptorBuilder.build`) so
-/// tests can construct deterministic stubs with literal digests.
+/// enforce the hashed form: enforcement lives in the provider
+/// (`Infrastructure.Auth.InstallationDescriptorProvider`) so tests
+/// can construct deterministic stubs with literal digests.
 ///
 /// `installGuid` is a non-zero `Guid` per-installation, persisted
-/// in `%LOCALAPPDATA%\Stem.ButtonPanelTester\install.guid` so
-/// re-launches and re-registrations carry the same GUID. The
-/// builder creates the sidecar file on first launch.
+/// in `%LOCALAPPDATA%\Stem.ButtonPanelTester\install.guid`. The
+/// provider creates the sidecar file on first launch and re-reads
+/// it on every `Current()` so the Re-Register flow (issue #98) can
+/// rotate it within a single process lifetime.
 ///
 /// `appVersion` MUST be SemVer 2.0 when present. Server rejects
 /// malformed values with `DescriptorMalformed → 400`. The builder

@@ -168,6 +168,43 @@ type IRegistrationClient =
         token: BootstrapToken * ct: CancellationToken ->
             Task<Result<InstallationCredential, RegistrationError>>
 
+/// Per-installation descriptor source for the registration ceremony,
+/// per `specs/001-fetch-dictionary/contracts/ports.md`
+/// §IInstallationDescriptorProvider. Replaces the original
+/// build-once `InstallationDescriptor` singleton so the Re-Register
+/// flow (#98) can rotate the per-installation `InstallGuid` between
+/// registration attempts within a single process lifetime.
+///
+/// Adapters MUST cache the host-derived facts (hashed Windows SID,
+/// hashed machine GUID, `AppVersion`) at construction — they are
+/// immutable for the process — and MUST read the `InstallGuid`
+/// sidecar on every `Current()` call so a concurrent `ResetInstallGuid()`
+/// is observed by the next `RegisterAsync`.
+///
+/// `Current()` returns a fresh `InstallationDescriptor` record per
+/// call. `ResetInstallGuid()` deletes the `install.guid` sidecar;
+/// the next `Current()` mints a new `Guid` and writes a fresh
+/// sidecar.
+///
+/// Production adapter:
+/// `Infrastructure.Auth.InstallationDescriptorProvider` (Windows-only;
+/// reads the SID via `WindowsIdentity.GetCurrent()` and the machine
+/// GUID via `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid`). The
+/// test side uses a hand-rolled fake (no port-level stub here — the
+/// descriptor record is small enough to fabricate per test).
+type IInstallationDescriptorProvider =
+    /// Current snapshot of the per-installation descriptor. The
+    /// hashed identifiers and `AppVersion` are cached by the adapter
+    /// at construction; the `InstallGuid` is read fresh from the
+    /// `install.guid` sidecar on every call so the Re-Register flow
+    /// can rotate it between attempts.
+    abstract member Current: unit -> InstallationDescriptor
+    /// Delete the `install.guid` sidecar so the next `Current()` mints
+    /// a new `Guid`. Idempotent: no error if the file is already
+    /// absent. Used by the Re-Register flow to recover from an
+    /// admin-revoked install row on the server (issue #98).
+    abstract member ResetInstallGuid: unit -> unit
+
 /// Startup-time priming for the dictionary service, per
 /// `specs/001-fetch-dictionary/phases/phase-7.md` slice 3. Issues a
 /// single unauthenticated probe against the service's `GET /health`

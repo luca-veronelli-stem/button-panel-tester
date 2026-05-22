@@ -184,6 +184,25 @@ type InMemoryRegistrationClient() =
 
 ---
 
+## `IInstallationDescriptorProvider`
+
+```fsharp
+type IInstallationDescriptorProvider =
+    abstract member Current           : unit -> InstallationDescriptor
+    abstract member ResetInstallGuid  : unit -> unit
+```
+
+**Contract**:
+- `Current` returns a fresh `InstallationDescriptor` per call. Adapters cache the host-derived facts (`ClientApp`, `OsUserId`, `MachineId`, `AppVersion`) — those are immutable for the process lifetime — but MUST read the `InstallGuid` sidecar (`install.guid`) on every call so a concurrent `ResetInstallGuid` is observed by the next consumer.
+- `ResetInstallGuid` deletes the `install.guid` sidecar. Idempotent: returns successfully when the file is already absent. Used by the Re-Register flow (issue #98) to recover from an admin-revoked install row on the server: wiping the sidecar means the next `RegisterAsync` is treated as a fresh installation server-side.
+- Neither method is async; both run on the caller's thread. The registration ceremony is single-threaded (the dialog drives one `RegisterAsync` at a time), so no concurrent-access invariant is required.
+
+**Production adapter** (`Infrastructure.Auth.InstallationDescriptorProvider`): Windows-only. Reads the SID via `WindowsIdentity.GetCurrent()` and the machine GUID via `HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid`; both are hashed at construction with SHA-256 (FR-020, no raw identifiers cross the data boundary).
+
+**Test adapter**: hand-rolled per test — the `InstallationDescriptor` record is small enough to fabricate inline. See `tests/.../Integration/HttpRegistrationClientTests.fs#StubDescriptorProvider`.
+
+---
+
 ## Composition root wiring
 
 `GUI.Composition.CompositionRoot` registers the production adapters as singletons in the MEDI container. This is the **only** place where production adapter types are referenced — `Services` and `Core` do not name them. Test bootstraps register the in-memory fakes directly via service-collection extensions in `tests/.../Fakes/Wiring.fs`.
@@ -197,6 +216,7 @@ let configure (services: IServiceCollection) (config: IConfiguration) =
         .AddSingleton<IDictionaryProvider, HttpDictionaryProvider>()
         .AddSingleton<IDictionaryCache, JsonFileDictionaryCache>()
         .AddSingleton<ICredentialStore, DpapiCredentialStore>()
+        .AddSingleton<IInstallationDescriptorProvider, InstallationDescriptorProvider>()
         .AddSingleton<IRegistrationClient, HttpRegistrationClient>()
         .AddSingleton<IDictionaryService, DictionaryService>()
     |> ignore
