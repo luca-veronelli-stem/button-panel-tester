@@ -22,7 +22,7 @@ The first build may take 30–60 s because Avalonia and FuncUI pull a moderate d
 
 ## 2. Configure the dictionary endpoint
 
-`appsettings.Development.json` controls dev-mode wiring. Both `appsettings.json` (production placeholder) and `appsettings.Development.json` (dev URL) are checked in under `src/ButtonPanelTester.GUI/` — the dev URL `https://localhost:7065` is non-secret, and the per-supplier API key never lives in source (it sits DPAPI-encrypted in `%LOCALAPPDATA%\Stem.ButtonPanelTester\credential.dpapi`). If the file is missing locally, recreate it at `src/ButtonPanelTester.GUI/appsettings.Development.json`:
+`appsettings.Development.json` controls dev-mode wiring. Both `appsettings.json` (production placeholder) and `appsettings.Development.json` (dev URL) are checked in under `src/ButtonPanelTester.GUI/` — the dev URL `https://localhost:7065` is non-secret, and the per-supplier API key never lives in source (it sits DPAPI-encrypted in `%LOCALAPPDATA%\Stem\ButtonPanelTester\credentials\credential.dpapi`). If the file is missing locally, recreate it at `src/ButtonPanelTester.GUI/appsettings.Development.json`:
 
 ```json
 {
@@ -50,29 +50,32 @@ dotnet run --project src/ButtonPanelTester.GUI -c Debug
 You should see:
 
 1. The main window opens.
-2. The dictionary status row at the top reads **"Cached · last synced \<seed build date\>"** in orange (the seeded data was extracted to `%LOCALAPPDATA%\Stem.ButtonPanelTester\dictionary.json` on first launch).
+2. The dictionary status row at the top reads **"Cached · last synced \<seed build date\>"** in orange (the seeded data was extracted to `%LOCALAPPDATA%\Stem\ButtonPanelTester\cache\dictionary.json` on first launch).
 3. A modal **Register your tool** dialog appears in front of the main window.
 4. Paste the `STEM-BT-DEV-KEY-2026` (or your real `BootstrapToken`) and click **Submit**.
 5. The dialog closes. The status row reads **"Live · synced now"** in green within ~1 s.
 
-If step 5 fails, the status row stays orange and the detail affordance shows the failure reason. Check `%LOCALAPPDATA%\Stem.ButtonPanelTester\app.log` for details — the NReco file sink wired in `CompositionRoot.configure` rolls at 5 MB and keeps 3 files (`app.log`, `app.1.log`, `app.2.log`). The `HttpRegistrationClient` `Warning` line records the failure mode (`HTTP 401` vs network timeout vs payload error), and `HttpDictionaryProvider` emits the immediate post-registration fetch outcome on the next line. The LOGGING standard governs the format.
+If step 5 fails, the status row stays orange and the detail affordance shows the failure reason. Check `%LOCALAPPDATA%\Stem\ButtonPanelTester\logs\app.log` for details — the NReco file sink wired in `CompositionRoot.configure` rolls at 5 MB and keeps 3 files (`app.log`, `app.1.log`, `app.2.log`). The `HttpRegistrationClient` `Warning` line records the failure mode (`HTTP 401` vs network timeout vs payload error), and `HttpDictionaryProvider` emits the immediate post-registration fetch outcome on the next line. The LOGGING standard governs the format.
 
 ## 5. Verify the on-disk artifacts
 
 ```powershell
-$root = Join-Path $env:LOCALAPPDATA "Stem.ButtonPanelTester"
-Get-ChildItem $root | Format-Table Name, Length, LastWriteTime -AutoSize
+$root = Join-Path $env:LOCALAPPDATA "Stem\ButtonPanelTester"
+Get-ChildItem $root -Recurse | Format-Table FullName, Length, LastWriteTime -AutoSize
 ```
 
-Expected:
-- `dictionary.json` — UTF-8 JSON (canonicalised, no whitespace).
-- `dictionary.json.sha256` — 64-char hex + LF.
-- `credential.dpapi` — opaque binary blob.
+Expected (per STEM `APP_DATA.md`):
+- `cache\dictionary.json` — UTF-8 JSON (canonicalised, no whitespace).
+- `cache\dictionary.json.sha256` — 64-char hex + LF.
+- `credentials\credential.dpapi` — opaque binary blob.
+- `credentials\install.guid` — text Guid (rotated together with `credential.dpapi` by Re-Register).
+- `logs\app.log` — NReco rolling log (also `app.1.log`, `app.2.log` after roll).
 
 ```powershell
 # Validate the sidecar matches the JSON (PowerShell-only; sanity check)
-$expected = (Get-Content "$root\dictionary.json.sha256" -Raw).Trim()
-$actual = (Get-FileHash "$root\dictionary.json" -Algorithm SHA256).Hash.ToLowerInvariant()
+$cache = Join-Path $root "cache"
+$expected = (Get-Content "$cache\dictionary.json.sha256" -Raw).Trim()
+$actual = (Get-FileHash "$cache\dictionary.json" -Algorithm SHA256).Hash.ToLowerInvariant()
 "expected=$expected"
 "actual  =$actual"
 "match:    $($expected -eq $actual)"
@@ -123,9 +126,12 @@ If your `BootstrapToken` was rotated and the next refresh returns `Unauthorized`
 To force a re-register from the OS side (e.g. for testing):
 
 ```powershell
-Remove-Item "$env:LOCALAPPDATA\Stem.ButtonPanelTester\credential.dpapi"
+Remove-Item "$env:LOCALAPPDATA\Stem\ButtonPanelTester\credentials\credential.dpapi"
+Remove-Item "$env:LOCALAPPDATA\Stem\ButtonPanelTester\credentials\install.guid"
 # Restart the GUI
 ```
+
+Wiping both files (not just `credential.dpapi`) matches what the in-app **Re-Register** button does (#98) — the next `POST /register` carries a fresh `installGuid` and the server treats the machine as a clean install.
 
 ## 10. Refreshing the embedded seed (release-time)
 
