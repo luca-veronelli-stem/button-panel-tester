@@ -9,8 +9,8 @@
 
 | Path | Format | Mandatory pair |
 |---|---|---|
-| `%LOCALAPPDATA%\Stem.ButtonPanelTester\dictionary.json` | UTF-8 JSON, canonicalised (no whitespace), no BOM | yes |
-| `%LOCALAPPDATA%\Stem.ButtonPanelTester\dictionary.json.sha256` | UTF-8 ASCII, 64 lowercase hex chars + LF, no BOM | yes |
+| `%LOCALAPPDATA%\Stem\ButtonPanelTester\cache\dictionary.json` | UTF-8 JSON, canonicalised (no whitespace), no BOM | yes |
+| `%LOCALAPPDATA%\Stem\ButtonPanelTester\cache\dictionary.json.sha256` | UTF-8 ASCII, 64 lowercase hex chars + LF, no BOM | yes |
 
 Both files are always present together. A lone `dictionary.json` without a sidecar — or vice versa — is treated as `CacheUnreadable`; the cache adapter falls back to the embedded seed (FR-019).
 

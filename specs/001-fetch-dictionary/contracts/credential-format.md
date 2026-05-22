@@ -8,7 +8,7 @@
 ## File
 
 ```
-%LOCALAPPDATA%\Stem.ButtonPanelTester\credential.dpapi
+%LOCALAPPDATA%\Stem\ButtonPanelTester\credentials\credential.dpapi
 ```
 
 Single file. Binary. Existence indicates "this installation is registered". Absence indicates "first launch — show the registration dialog". No sidecar.
