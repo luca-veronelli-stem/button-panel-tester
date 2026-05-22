@@ -2,7 +2,9 @@
 
 All notable changes to ButtonPanelTester follow [Semantic Versioning](https://semver.org/) and are recorded here in [Keep a Changelog](https://keepachangelog.com/) format.
 
-## [Unreleased]
+## [0.1.0] - 2026-05-22
+
+First tagged release. Ships spec 001 (dictionary fetch + status row + registration ceremony + manual refresh) plus the post-spec hardening that landed before the cut: standards `v1.5.3 → v1.6.0` bump, Stem brand-mark library, and the Re-Register fix for admin-revoked installations.
 
 ### Added
 
@@ -19,5 +21,3 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 ### Fixed
 
 - Re-Register against an admin-revoked Installation no longer silently fails ([#98](https://github.com/luca-veronelli-stem/button-panel-tester/issues/98)). The Re-Register flow now wipes `credential.dpapi` and rotates `install.guid` before opening the registration dialog, so the next `POST /register` carries a fresh `installGuid` and the server treats the machine as a clean install. Companion server-side ticket: `stem-dictionaries-manager` [#85](https://github.com/luca-veronelli-stem/stem-dictionaries-manager/issues/85) (distinct status-code mapping for `ExistingInstallationRevoked`).
-
-### Removed
