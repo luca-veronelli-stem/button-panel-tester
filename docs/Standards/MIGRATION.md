@@ -44,6 +44,58 @@ Per-repo adoption PR (`chore: bump standards to v1.2.0`):
 5. Update `state/repos.md` to reflect the bump.
 6. Single-commit PR.
 
+## Rollout phase for v1.8.0 — single-`.exe` archetype A artifact
+
+`v1.8.0` adds `-p:IncludeNativeLibrariesForSelfExtract=true` to the archetype A reusable release workflow's `dotnet publish` invocation. After this bump, the artifact attached to the GitHub Release for an archetype A adopter is a single self-extracting `.exe` (no sibling `runtimes/win-x64/native/` directory) — draggable, USB-launchable, robust to user-driven moves between folders. Backward-compatible at the caller-stub surface: every input on the reusable (`app`, `repo`, `tag`) keeps the same shape, so a v1.7.x adopter does not need to edit its stub. The only observable change is the shape inside the published zip: one `.exe`, no native sibling DLLs. Closes [#106](https://github.com/luca-veronelli-stem/standards/issues/106).
+
+Per-repo adoption PR (`chore: bump standards to v1.8.0`):
+
+1. Re-run `eng/apply-repo-standard.ps1 -StandardVersion v1.8.0`. The diff is the single `@v1.7.x → @v1.8.0` pin bump in `.github/workflows/release.yml` (the archetype A release stub) — same shape v1.4.0+ adopters see on every patch bump. Hand-customised release workflows hit the local-edit guard and need `-Force` or hand-merge per the v1.4.0 pitfalls.
+2. Bump the per-repo `CLAUDE.md` `**Standard version:**` line to `v1.8.0`.
+3. Update `state/repos.md` to reflect the bump.
+4. Single-commit PR.
+
+No source-code action required. On the adopter's next release tag (`v*.*.*`), the next published artifact's shape changes — flag a one-line note in the adopter's CHANGELOG so anyone debugging a launch on a customer site can correlate.
+
+First-launch extraction note: the bundle extracts native deps to `%LOCALAPPDATA%\.net\<App>\<content-hash>\` on first launch per user per release; subsequent launches reuse the extracted copy. For hardened customer environments where the default path is blocked (EDR quarantine of fresh `.dll` materialization, read-only `%LOCALAPPDATA%`), the escape hatch is the `DOTNET_BUNDLE_EXTRACT_BASE_DIR` environment variable — set it to an app-writable path before launch and the bundle extracts there instead (documented in CI.md alongside the flag).
+
+## Rollout phase for v1.9.0 — `APP_DATA` standard
+
+`v1.9.0` adds [`shared/standards/APP_DATA.md`](./APP_DATA.md), codifying `<LocalApplicationData>\Stem\<AppName>\` as the per-user on-disk root for every STEM desktop app's logs, caches, DPAPI credentials, SQLite databases, and any future per-user configuration overrides. Replaces four divergent conventions surveyed across the stack on 2026-05-22:
+
+| Legacy convention | Repos | Used for |
+| --- | --- | --- |
+| `AppContext.BaseDirectory\logs\` | `stem-device-manager` (pre-v0.4.3) | logs — broken under Program Files / single-file publish (root cause of v0.4.1 silent-Excel-fallback) |
+| `%LocalAppData%\Stem.ButtonPanel.Tester\` (dotted, flat) | `stem-button-panel-tester-fsharp-core` | DPAPI credentials + JSON dictionary cache |
+| `%LocalAppData%\Stem.ButtonPanelTester\` (single-segment, flat) | `button-panel-tester` (greenfield) | NReco rolling `app.log` + dictionary cache |
+| `%AppData%\STEM\<AppName>\` (Roaming, two-segment, ALL-CAPS) | `stem-dictionaries-manager`, `stem-production-tracker` | SQLite databases |
+
+All four collapse to a single shape: `<LocalApplicationData>\Stem\<AppName>\` (PascalCase `Stem`, single-token PascalCase `<AppName>`, no `Stem.` prefix on the inner segment), with mandatory `logs\`/`cache\`/`credentials\`/`db\` sub-folders once a second data type lands. The convention is cross-platform — `Environment.SpecialFolder.LocalApplicationData` resolves to the OS-appropriate root and the segment names are platform-agnostic.
+
+The standard ships a small inline path-resolution helper (`StemAppData`, ~15 LOC) that's permanent in each adopter, and a separate transient migration helper (`StemAppDataMigration` + a `.appdata-version` schema marker file) that an adopter with an existing installed base wires in on the v1.9.0-aligned release and **deletes one or two release cycles later** once the installed base has rolled over. The marker file left on disk after deletion is inert; no future code reads it. The companion future-work ticket [#110](https://github.com/luca-veronelli-stem/standards/issues/110) tracks extracting the path-resolution helper into a `Stem.AppData` NuGet once a second consumer earns its keep — until then, copy-paste is fine.
+
+`LOGGING.md` gains a "Where logs land on disk" subsection cross-referencing `APP_DATA.md`. `CONFIGURATION.md` gains a one-line callout that `appsettings.Production.json` location (next to exe vs `Stem\<App>\`) is a deferred decision. No other standards change. No template changes, no rollout-script behaviour changes beyond the `$standardPurpose` registry entry for `APP_DATA` — adding a standard is the one-file change codified in v1.5.1 ([#71](https://github.com/luca-veronelli-stem/standards/issues/71)).
+
+Per-repo adoption PR (`chore: bump standards to v1.9.0` — separate from the source code change that actually relocates paths):
+
+1. Re-run `eng/apply-repo-standard.ps1 -StandardVersion v1.9.0`. The diff is the new `docs/Standards/APP_DATA.md` inline copy, refreshed `LOGGING.md` + `CONFIGURATION.md` + `docs/Standards/README.md` index, and the standard-version stamp in `CLAUDE.md` / top-level `README.md`. No template or workflow churn.
+2. Bump the per-repo `CLAUDE.md` `**Standard version:**` line to `v1.9.0`.
+3. Update `state/repos.md` to reflect the bump.
+4. Single-commit PR.
+
+**Per-repo path-relocation work** (a separate PR each adopter cuts when it actually moves the source code):
+
+1. Add `StemAppData` (~15 LOC, forever) to the composition root. Point every write site at `StemAppData.GetLogsDir()` / `GetCacheDir()` / `GetCredentialsDir()` / `GetDbDir()`.
+2. If the adopter has an installed base on a legacy root, **also** add `StemAppDataMigration` (transient) and wire `MigrateOnce(legacyRoot)` into the composition root before any logger or cache opens a file. The legacy root depends on the adopter:
+   - `stem-device-manager` — `Path.Combine(AppContext.BaseDirectory, "logs")`
+   - `stem-button-panel-tester-fsharp-core` — `Path.Combine(localAppData, "Stem.ButtonPanel.Tester")`
+   - `button-panel-tester` — `Path.Combine(localAppData, "Stem.ButtonPanelTester")`
+   - `stem-dictionaries-manager`, `stem-production-tracker` — `Path.Combine(appData /* Roaming */, "STEM", appName)`
+3. Greenfield apps (no installed base) skip step 2 entirely — there is nothing to migrate.
+4. After one or two release cycles on the v1.9.0-aligned release, delete `StemAppDataMigration.cs` and its call site. `StemAppData` stays.
+
+`stem-device-manager` v0.4.3 (worktree at `C:\Users\LucaV\Source\Repos\stem-device-manager-v0.4.3`, branch `fix/0.4.3-diagnostics`, paused awaiting this standard) is the first reference adopter. Adoption may bundle the standards bump and the path-relocation work into one PR or split them — that's a v0.4.3-session decision, not a v1.9.0-PR decision.
+
 ## Rollout phase for v1.5.1 — F# runtime restoration, greenfield scaffold, `lean/`-vs-`specs/` clarification
 
 `v1.5.1` ships three first-adopter gap fixes uncovered while bootstrapping `button-panel-tester` against `v1.5.0`:

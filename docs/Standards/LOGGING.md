@@ -155,6 +155,10 @@ let inline logDebug (logger: ILogger) (template: string) ([<ParamArray>] args: o
 
 Apps require the logger non-optionally (matching archetype A); libraries take `ILogger<'T> option`.
 
+## Where logs land on disk
+
+Log files MUST live under the per-app data root defined by [`APP_DATA.md`](./APP_DATA.md) — `<LocalApplicationData>\Stem\<AppName>\logs\`. Forbidden: `AppContext.BaseDirectory\logs\` (fails under Program Files / single-file publish / thumb-drive deployment — root cause of the `stem-device-manager` v0.4.1 silent-Excel-fallback bug), `%AppData%` Roaming, `%ProgramData%`, hardcoded paths. `APP_DATA` owns directory location; this standard owns filename pattern, level filters, and provider choice. See `APP_DATA.md` for the full per-app on-disk convention.
+
 ## What this means in practice
 
 - **New B type that needs logging:** `ILogger<TThis>? = null` in the primary constructor; null-conditional everywhere.
