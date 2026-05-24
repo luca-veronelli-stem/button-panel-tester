@@ -105,11 +105,16 @@ type CanLinkService(link: ICanLink, _clock: IClock, logger: ILogger<CanLinkServi
     let mutable currentState: CanLinkState = Initializing
 
     /// Apply the R8 escalation rule under `stateLock` and return the
-    /// effective state the service should publish. Centralises the
-    /// tracker mutation so the subscriber below is a thin emit.
-    let translate (rawState: CanLinkState) : CanLinkState =
+    /// effective state alongside a flag indicating whether the
+    /// service synthesised the Fatal upgrade (`true`) or merely
+    /// forwarded the link's state verbatim (`false`). The subscriber
+    /// uses the flag to log only genuine escalations — a Fatal
+    /// emitted directly by the link (e.g. PcanCanLink's
+    /// `DllNotFoundException` handling) is not an escalation event
+    /// and would be misleading to log as one.
+    let translate (rawState: CanLinkState) : CanLinkState * bool =
         lock stateLock (fun () ->
-            let effective =
+            let effective, escalated =
                 match rawState with
                 | Error(Recoverable cause, since) ->
                     match lastRecoverableCause with
@@ -119,19 +124,19 @@ type CanLinkService(link: ICanLink, _clock: IClock, logger: ILogger<CanLinkServi
                         let detail =
                             sprintf "%s persists across reconnect — file bug" cause
 
-                        Error(Fatal detail, since)
+                        Error(Fatal detail, since), true
                     | _ ->
                         lastRecoverableCause <- Some cause
                         reconnectSinceLastRecoverable <- false
-                        rawState
+                        rawState, false
                 | Connected _ ->
                     lastRecoverableCause <- None
                     reconnectSinceLastRecoverable <- false
-                    rawState
-                | _ -> rawState
+                    rawState, false
+                | _ -> rawState, false
 
             currentState <- effective
-            effective)
+            effective, escalated)
 
     /// Forward every link-side transition through the service's own
     /// subject after running it through the escalation translator.
@@ -142,15 +147,16 @@ type CanLinkService(link: ICanLink, _clock: IClock, logger: ILogger<CanLinkServi
     let _linkSubscription: IDisposable =
         link.LinkStateChanged
         |> Observable.subscribe (fun rawState ->
-            let effective = translate rawState
+            let effective, escalated = translate rawState
 
-            match effective with
-            | Error(Fatal detail, _) ->
-                logger.LogWarning(
-                    "CanLinkService: PEAK status escalated to Fatal — {Detail}",
-                    detail
-                )
-            | _ -> ()
+            if escalated then
+                match effective with
+                | Error(Fatal detail, _) ->
+                    logger.LogWarning(
+                        "CanLinkService: PEAK status escalated to Fatal — {Detail}",
+                        detail
+                    )
+                | _ -> ()
 
             stateSubject.OnNext effective)
 
