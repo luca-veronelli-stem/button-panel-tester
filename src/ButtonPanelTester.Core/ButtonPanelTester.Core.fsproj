@@ -6,6 +6,7 @@
 
     <ItemGroup>
         <Compile Include="Can/CanLinkState.fs" />
+        <Compile Include="Can/WhoIAmFrame.fs" />
         <Compile Include="Dictionary/ButtonPanelDictionary.fs" />
         <Compile Include="Dictionary/ContentHash.fs" />
         <Compile Include="Dictionary/FetchFailureReason.fs" />
