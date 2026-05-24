@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Vendored C# protocol stack from luca-veronelli-stem/stem-device-manager.
+    Stopgap until Stem.Communication NuGet ships (Phase 5). Frozen — see
+    VENDOR.md for the manifest and re-vendoring procedure.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!--
+      Vendored code stays verbatim (manifest rule 1). Local IDE style
+      rules (var-vs-explicit, braces, etc.) and the missing-XML-doc
+      check would otherwise force edits to the upstream files. Disable
+      both for this project only — the .editorconfig keeps firing in
+      the IDE for new code added here, but the build no longer rejects
+      the vendored set.
+    -->
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Peak.PCANBasic.NET" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+</Project>
