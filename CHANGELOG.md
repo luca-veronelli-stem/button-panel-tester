@@ -4,7 +4,7 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 ## [0.1.0] - 2026-05-22
 
-First tagged release. Ships spec 001 (dictionary fetch + status row + registration ceremony + manual refresh) plus the post-spec hardening that landed before the cut: standards `v1.5.3 → v1.6.0` bump, Stem brand-mark library, and the Re-Register fix for admin-revoked installations.
+First tagged release. Ships spec 001 (dictionary fetch + status row + registration ceremony + manual refresh) plus the post-spec hardening that landed before the cut: standards `v1.5.3 → v1.9.0` bumps, APP_DATA path relocation for the greenfield STEM-wide layout, Stem brand-mark library, and the Re-Register fix for admin-revoked installations.
 
 ### Added
 
