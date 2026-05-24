@@ -37,6 +37,7 @@
         <Compile Include="Composition/CompositionRoot.fs" />
         <Compile Include="Dictionary/DictionaryStatusRow.fs" />
         <Compile Include="Dictionary/RegistrationDialog.fs" />
+        <Compile Include="Can/CanStatusRow.fs" />
         <Compile Include="App.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
