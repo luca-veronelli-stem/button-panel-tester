@@ -8,6 +8,13 @@
 
 **Input**: User description: "Open the configured PEAK PCAN-USB adapter at 250 kbps as soon as the application has finished its dictionary-fetch boot sequence, and keep a persistent CAN-bus status row on the main window with the same shape and behaviour as the dictionary status row from feat-001 (colour-coded headline, human-readable detail, manual reconnect control). While connected, listen for STEM auto-address WHO_I_AM broadcasts on the bus and present any panels seen in a passive Panels-on-bus list: UUID, current MachineType decoded to a marketing variant name where known, and the timestamp of the most recent broadcast from that panel. No commands are sent; this slice is pure observation. Virgin panels self-announce in their AAS_STARTUP state on a UUID-derived ~2–6 s timer, so the supplier QA bench scenario (12 pristine panels) populates without transmit. Claimed panels in AAS_STAND_BY are silent. If no PEAK adapter is present, the status row shows a friendly Disconnected state and the rest of the UI stays usable so the dictionary status from feat-001 remains visible."
 
+## Clarifications
+
+### Session 2026-05-24
+
+- Q: Pruning threshold for the Panels-on-bus list — value? → A: **15 s** (≈ 2.5× the worst-case ~6 s WHO_I_AM broadcast cadence). Plus the bench convention: the tool is connected to **at most one button panel at a time** (the supplier validates panels one-by-one).
+- Q: What triggers the CAN status row's `Error` state vs `Disconnected`, and how granular should the Error state be? → A: **Three top-level chip states (Connected / Disconnected / Error), with the Error state internally sub-typed.** `Disconnected` = anything a reconnect click is the expected resolution for (no adapter, link down, mid-session unplug). `Error` = anything beyond a routine link-down — the chip colour signals "something's wrong" at a glance; the detail affordance labels the case as either **Recoverable** (a reconnect click may clear it: bus-off detected, transient unexpected PEAK driver status) or **Fatal** (the technician must take external action: driver not installed, hardware failure, persistent unrecognised PEAK status). Mirrors the way FR-005 already splits Disconnected sub-cases internally — same pattern, applied to Error.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Inspecting CAN link state at start of shift (Priority: P1)
@@ -38,7 +45,7 @@ Because pristine panels broadcast their identity automatically on a UUID-derived
 
 **Why this priority**: this is the actual supplier QA bench scenario the tool exists to support. P1 makes the tool observable; P2 makes it useful.
 
-**Independent Test**: With the tool running, the adapter Connected, and the bus empty, power on a pristine virgin panel. Verify a single row appears in the Panels-on-bus list within 6 seconds, carrying a UUID, the label "virgin", and a recent last-seen timestamp. Repeat with two more pristine panels powered simultaneously — verify three distinct rows.
+**Independent Test**: With the tool running, the adapter Connected, and the bus empty, power on the single pristine virgin panel on the bench. Verify a single row appears in the Panels-on-bus list within 6 seconds, carrying a UUID, the label "virgin", and a recent last-seen timestamp. (The bench convention is one panel at a time — the supplier validates panels one-by-one — so a multi-panel test is out of scope here.)
 
 **Acceptance Scenarios**:
 
@@ -75,7 +82,10 @@ The CAN status row reflects the loss within a small handful of seconds, the Pane
 - **PEAK driver installed but no physical adapter plugged in**: status row shows Disconnected with a remediation hint pointing to the adapter, distinct from any "wiring/bus problem" presentation.
 - **Multiple PEAK adapters present on the host**: the tool picks the first one enumerated and proceeds. Disambiguation among multiple adapters is deliberately out of scope for this slice.
 - **Bus is connected but silent (no panels powered or all panels in claimed silent state)**: the CAN status row is Connected, the Panels-on-bus list is empty, and the empty state explains that no virgin panels are currently announcing themselves.
-- **A WHO_I_AM frame with a malformed payload (wrong length, garbage bytes)**: the frame is discarded silently; no row is created or updated. The malformed event does not flip the CAN status row to Error.
+- **A WHO_I_AM frame with a malformed payload (wrong length, garbage bytes)**: the frame is discarded silently; no row is created or updated. The malformed event does not flip the CAN status row to Error — malformed frames are a quiet drop, not a link-level fault.
+- **CAN controller enters bus-off**: the link is no longer operational and the controller will not transmit until it is reinitialised. The status row transitions to **Error / Recoverable** with the reason "Bus-off detected — try reconnect"; the reconnect control remains clickable and reinitialises the adapter on click.
+- **PEAK driver returns an unexpected status code on Read or Write**: the status row transitions to **Error**. If the status is observed only once, the classification is **Recoverable** with the reason "PEAK status 0x… — try reconnect". If the same status repeats after a reconnect attempt, the classification escalates to **Fatal** with the reason "PEAK status 0x… persists across reconnect — file bug" so the technician has actionable diagnostic information for escalation.
+- **PEAK driver not installed on the host**: detected on the first Initialize attempt. The status row transitions to **Error / Fatal** with the reason "PEAK driver not installed — install Peak.PCANBasic and restart the tool". Reconnect does not clear this case.
 - **The same panel re-announces several times in quick succession**: the existing row's last-seen timestamp updates with each broadcast; no duplicate row is created.
 - **Pruning a row while the technician is reading it**: the row update is non-destructive on screen — the technician's interaction (hover, selection) is not interrupted by the prune.
 - **Dictionary fetch has not yet completed when the main window appears**: the CAN status row stays in an initialization state until the dictionary boot sequence completes, then transitions to its real state — the CAN link is not opened before the dictionary boot is done (per the input description).
@@ -88,10 +98,17 @@ The CAN status row reflects the loss within a small handful of seconds, the Pane
 **Adapter lifecycle**
 
 - **FR-001**: System MUST open the configured CAN adapter at 250 kbps once the dictionary-fetch boot sequence from feat-001 has completed, not before.
-- **FR-002**: System MUST surface the adapter's current link state (Connected, Disconnected, Error) in a persistent CAN status row alongside the dictionary status row from feat-001.
-- **FR-003**: System MUST provide a manual reconnect control in the CAN status row that re-opens the adapter on demand.
-- **FR-004**: System MUST expose, through a detail affordance attached to the status row, the adapter identification, the bus baud rate, and (when applicable) the most recent error reason.
-- **FR-005**: System MUST distinguish, in the Disconnected presentation, between "no adapter present on the host" and "adapter present but the link is down" — the remediation differs and the technician must not be misled.
+- **FR-002**: System MUST surface the adapter's current link state in a persistent CAN status row alongside the dictionary status row from feat-001. The state set is exactly three top-level chip values:
+  - **Connected** — the adapter is open and the bus is operational.
+  - **Disconnected** — link is down, and a reconnect click is the expected resolution (no adapter present, mid-session unplug, link not yet established at boot, reconnect attempt pending).
+  - **Error** — something beyond a routine link-down; the technician must read the detail affordance for remediation.
+- **FR-002a**: When the state is Error, the detail affordance MUST classify the underlying cause as one of:
+  - **Recoverable** — a reconnect click may clear it (e.g., bus-off detected by the CAN controller, transient unexpected PEAK driver status code). The detail text MUST recommend "Try reconnect; escalate if it doesn't clear."
+  - **Fatal** — the technician must take external action (e.g., PEAK driver not installed, hardware failure, persistent unrecognised PEAK status). The detail text MUST recommend the concrete external step (install driver, restart tool, file bug with the status code).
+  This split mirrors how FR-005 internally splits Disconnected sub-cases.
+- **FR-003**: System MUST provide a manual reconnect control in the CAN status row that re-opens the adapter on demand. The control MUST remain clickable in the Error state (so a Recoverable case can be cleared); in the Fatal sub-case the detail text MUST make clear that the click is unlikely to help.
+- **FR-004**: System MUST expose, through a detail affordance attached to the status row, the adapter identification, the bus baud rate, and (when applicable) the most recent transition reason — including, in the Error state, the underlying trigger (e.g., "Bus-off detected", "PEAK driver returned 0x40000") and the Recoverable/Fatal classification from FR-002a.
+- **FR-005**: System MUST distinguish, in the Disconnected presentation, between "no adapter present on the host" and "adapter present but the link is down" — the remediation differs and the technician must not be misled. The Error state's Recoverable/Fatal sub-classification (FR-002a) is a parallel mechanism for the Error case; both are surfaced through the detail affordance rather than through additional chip colours.
 - **FR-006**: System MUST stay usable when no adapter is present — the dictionary status row from feat-001 remains visible and interactive regardless of CAN state.
 
 **Discovery**
@@ -100,7 +117,7 @@ The CAN status row reflects the loss within a small handful of seconds, the Pane
 - **FR-008**: System MUST identify each panel in the list by its UUID; multiple broadcasts from the same UUID MUST coalesce into one row.
 - **FR-009**: System MUST decode the variant identity byte carried in `WHO_I_AM` to the panel's marketing variant name when that byte is one of the four known values, to the literal "virgin" when the byte is the virgin marker, and to "unknown" otherwise — with the raw byte exposed in either of the latter two cases via the detail affordance.
 - **FR-010**: System MUST show, for each row, the timestamp of the most recent broadcast from that panel — and update that timestamp in place when a new broadcast arrives.
-- **FR-011**: System MUST prune a row from the list once no broadcast has been heard from that panel for a duration that comfortably exceeds the broadcast cadence, so the list reflects what is currently announcing itself rather than what has ever announced itself in this session.
+- **FR-011**: System MUST prune a row from the list once no broadcast has been heard from that panel for **15 seconds** (≈ 2.5× the worst-case ~6 s WHO_I_AM broadcast cadence), so the list reflects what is currently announcing itself rather than what has ever announced itself in this session.
 - **FR-012**: System MUST present an empty-state explanation when the list is empty, distinguishing "the link is down" from "the link is up but nothing is announcing itself right now".
 - **FR-013**: System MUST silently discard a `WHO_I_AM` frame whose payload does not satisfy the documented wire layout — discarded frames MUST NOT flip the CAN status row to Error.
 
@@ -127,14 +144,16 @@ The CAN status row reflects the loss within a small handful of seconds, the Pane
 - **SC-005**: When the PEAK adapter is unplugged mid-session, the CAN status row reflects the Disconnected state within 5 seconds.
 - **SC-006**: A failure mode on the CAN side (no adapter, unplug, malformed frame, bus silent) does **not** affect the dictionary status row from feat-001 in any observable way, across 100% of trials.
 - **SC-007**: The tool sends zero CAN frames while operating in this slice's scope. Verifiable by passively monitoring the bus with an independent capture tool throughout a session — the captured trace shows only frames originating from the panels under test, never from the tool.
+- **SC-008**: When the CAN controller signals a non-routine fault (bus-off, unexpected PEAK driver status), the CAN status row reflects the Error state within 5 seconds, and the detail affordance shows a Recoverable/Fatal classification with a concrete remediation recommendation.
 
 ## Assumptions
 
 - The supplier bench has exactly one PEAK PCAN-USB adapter plugged into the test workstation. Multi-adapter setups are out of scope.
+- **The tool is connected to at most one button panel at a time.** The supplier QA workflow is one-panel-at-a-time: power on a panel, validate it, set it aside, move to the next. Multi-panel topology is bpt-rollout-wide out of scope. The tool's data model still keys observations by UUID (so an accidental two-on-bus event lists both), but the UI and downstream specs (003+) assume a single panel under test.
 - The CAN bus baud rate is 250 kbps. This is fixed by the panel firmware, not configurable by the technician.
 - A pristine board-panel announces itself on the bus on a UUID-derived timer with worst-case cadence approximately 6 seconds. (Source: panel firmware behaviour, recorded in [`docs/Context/bpt-rollout/CORRECTIONS.md`](../../docs/Context/bpt-rollout/CORRECTIONS.md) §C1.)
 - A claimed (previously-baptized) panel does not broadcast in normal operation — surfacing such panels in the list requires the reset-to-virgin flow that lands in a later feature.
-- The pruning threshold for the Panels-on-bus list is generous enough to comfortably accommodate the worst-case re-announcement cadence (so a slow announcement is not mistaken for a panel that has dropped). A default in the order of 15 seconds (≈ 2.5× the worst-case cadence) is appropriate; the exact value can be revisited based on bench observation.
+- The pruning threshold for the Panels-on-bus list is locked at **15 seconds** (≈ 2.5× the worst-case re-announcement cadence). See FR-011.
 - The four known marketing variants and their identity-byte values (EDEN-XP, OPTIMUS-XP, R-3L XP, EDEN-BS8) are stable per the firmware as audited 2026-05-24; the audit is recorded in [`docs/Context/bpt-rollout/CORRECTIONS.md`](../../docs/Context/bpt-rollout/CORRECTIONS.md).
 - A previously-claimed panel reappearing on the bus after a reset-to-virgin will produce a row with the "virgin" variant label until and unless it is re-baptized; that flow lands in a later feature.
 - The dictionary fetched by feat-001 is not consulted to drive any CAN-side decoding in this slice — the variant-byte-to-name mapping and the protocol command codes are firmware constants for the purposes of this feature.
