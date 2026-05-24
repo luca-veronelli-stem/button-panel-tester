@@ -20,6 +20,9 @@
     <ItemGroup>
         <ProjectReference Include="..\ButtonPanelTester.Core\ButtonPanelTester.Core.fsproj" />
         <ProjectReference Include="..\ButtonPanelTester.Services\ButtonPanelTester.Services.fsproj" />
+        <!-- Vendored C# CAN + protocol stack. Same TFM, no NU1201. See
+             ..\ButtonPanelTester.Infrastructure.Protocol\VENDOR.md. -->
+        <ProjectReference Include="..\ButtonPanelTester.Infrastructure.Protocol\ButtonPanelTester.Infrastructure.Protocol.csproj" />
     </ItemGroup>
 
     <ItemGroup>
