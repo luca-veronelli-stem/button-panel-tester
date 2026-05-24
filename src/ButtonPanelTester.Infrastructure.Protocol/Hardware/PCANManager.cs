@@ -36,11 +36,16 @@ public class CANPacketEventArgs : EventArgs
 /// </code>
 /// </example>
 
-public class PCANManager : IPcanDriver
+public class PCANManager : IPcanDriver, IAsyncDisposable
 {
     private const TPCANHandle Channel = 0x51; // PCAN_USB
     private TPCANBaudrate _currentBaudRate;
     private bool _isConnected;
+
+    private readonly CancellationTokenSource _cts = new();
+    private Task? _monitorTask;
+    private Task? _readTask;
+    private int _disposed;
 
     // Evento per lo stato della connessione
     /// <summary>
@@ -97,9 +102,10 @@ public class PCANManager : IPcanDriver
 
     private void StartConnectionMonitoring()
     {
-        Task.Run(async () =>
+        var token = _cts.Token;
+        _monitorTask = Task.Run(async () =>
         {
-            while (true)
+            while (!token.IsCancellationRequested)
             {
                 try
                 {
@@ -137,14 +143,25 @@ public class PCANManager : IPcanDriver
                         ConnectionStatusChanged?.Invoke(this, true);
                     }
                 }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    break;
+                }
                 catch (Exception ex)
                 {
                     ErrorOccurred?.Invoke(this, $"Errore nel monitoraggio della connessione: {ex.Message}");
                 }
 
-                await Task.Delay(1000); // Controllo dello stato ogni secondo
+                try
+                {
+                    await Task.Delay(1000, token); // Controllo dello stato ogni secondo
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
-        });
+        }, token);
     }
 
     /// <summary>
@@ -255,7 +272,8 @@ public class PCANManager : IPcanDriver
 
     public void StartReading()
     {
-        Task.Run(ReadCANMessagesAsync);
+        if (_cts.IsCancellationRequested) return;
+        _readTask = Task.Run(ReadCANMessagesAsync, _cts.Token);
     }
 
 
@@ -309,11 +327,19 @@ public class PCANManager : IPcanDriver
 
     private async Task ReadCANMessagesAsync()
     {
-        while (true)
+        var token = _cts.Token;
+        while (!token.IsCancellationRequested)
         {
             if (!_isConnected)
             {
-                await Task.Delay(500); // Attendi finché non viene ristabilita la connessione
+                try
+                {
+                    await Task.Delay(500, token); // Attendi finché non viene ristabilita la connessione
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
                 continue;
             }
 
@@ -342,7 +368,18 @@ public class PCANManager : IPcanDriver
                     ErrorOccurred?.Invoke(this, errorTextB.ToString());
                 }
 
-                await Task.Delay(50); // Riduzione carico CPU
+                try
+                {
+                    await Task.Delay(50, token); // Riduzione carico CPU
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -355,6 +392,38 @@ public class PCANManager : IPcanDriver
     {
         PCANBasic.Uninitialize(Channel);
         _isConnected = false;
+    }
+
+    /// <summary>
+    /// Cancels the background monitoring and read loops, waits for them to
+    /// exit, then closes the PCAN channel. Safe to call multiple times.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+        if (!_cts.IsCancellationRequested)
+        {
+            try { _cts.Cancel(); }
+            catch (ObjectDisposedException) { /* already disposed */ }
+        }
+
+        var pending = new List<Task>(2);
+        if (_monitorTask is not null) pending.Add(_monitorTask);
+        if (_readTask is not null) pending.Add(_readTask);
+
+        if (pending.Count > 0)
+        {
+            try { await Task.WhenAll(pending); }
+            catch (OperationCanceledException) { /* expected on cancel */ }
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(this, $"Errore durante la chiusura dei loop CAN: {ex.Message}");
+            }
+        }
+
+        Disconnect();
+        _cts.Dispose();
     }
 }
 
