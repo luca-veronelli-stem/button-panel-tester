@@ -15,12 +15,16 @@ open Avalonia.Themes.Fluent
 open Avalonia.Threading
 open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Hosts
+open Avalonia.FuncUI.Types
 open Avalonia.FuncUI.VirtualDom
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
+open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Core.Dictionary
+open Stem.ButtonPanelTester.Services.Can
 open Stem.ButtonPanelTester.Services.Dictionary
 open Stem.ButtonPanelTester.Services.Registration
+open Stem.ButtonPanelTester.GUI.Can
 open Stem.ButtonPanelTester.GUI.Dictionary
 
 /// Chrome wiring for `MainWindow` — the brand-mark header and the
@@ -140,6 +144,7 @@ type MainWindow(services: IServiceProvider) as this =
     inherit HostWindow()
 
     let service = services.GetRequiredService<IDictionaryService>()
+    let canLinkService = services.GetRequiredService<ICanLinkService>()
     let credentialStore = services.GetRequiredService<ICredentialStore>()
     let registrationClient = services.GetRequiredService<IRegistrationClient>()
     let descriptorProvider =
@@ -160,17 +165,27 @@ type MainWindow(services: IServiceProvider) as this =
     let mutable refreshState = DictionaryStatusRow.Idle
     let mutable lastSource: DictionarySource option = None
 
+    /// Latest `CanLinkState` observed via
+    /// `ICanLinkService.LinkStateChanged`. Initial value is
+    /// `Initializing` (the DU's zero-information case) — the row
+    /// renders an "Initializing…" headline until either the user
+    /// clicks Reconnect or `canLinkService.InitializeAsync` resolves
+    /// the first concrete transition (FR-001 ordering: this happens
+    /// only after dictionary boot completes; see the `Opened`
+    /// handler below).
+    let mutable lastCanState: CanLinkState = Initializing
+
     // Active Avalonia theme. Initial value read once at construction
     // from `Application.Current.ActualThemeVariant`; every render
     // reads from this cell so a future `ActualThemeVariantChanged`
     // subscription can swap chrome by mutating one field + repainting.
     let mutable currentTheme = Chrome.currentTheme ()
 
-    let renderInitializing () =
-        this.Content <- Chrome.wrapWithHeader currentTheme (VirtualDom.create (
-            TextBlock.create [
-                TextBlock.text "Initializing dictionary…"
-            ]))
+    // No separate `renderInitializing` slot: `renderCombined` below
+    // produces the "Initializing dictionary…" headline when
+    // `lastSource = None`, so the CAN status row appears alongside
+    // the dictionary placeholder from the first paint (FR-016: the
+    // two rows are observable independently).
 
     /// Production `runDialog` callback for the registration
     /// orchestration: constructs a `RegistrationDialogWindow` with the
@@ -192,19 +207,17 @@ type MainWindow(services: IServiceProvider) as this =
             return! dialog.OutcomeTask
         }
 
-    // Forward-declared mutable holder so the Refresh callback can
-    // call back into `renderStatusRow` after toggling state. F# 10
-    // lacks `letrec`-for-callbacks of this shape; the mutable cell
-    // is the idiomatic workaround.
-    let mutable renderStatusRow : DictionarySource -> unit =
-        fun _ -> ()
+    // Forward-declared mutable holder so the Refresh / Reconnect /
+    // CAN-state-changed paths can call back into the combined
+    // renderer after toggling state. F# 10 lacks
+    // `letrec`-for-callbacks of this shape; the mutable cell is the
+    // idiomatic workaround.
+    let mutable renderCombined: unit -> unit = fun () -> ()
 
     let kickoffRefresh () =
         if refreshState = DictionaryStatusRow.Idle then
             refreshState <- DictionaryStatusRow.Refreshing
-            match lastSource with
-            | Some s -> renderStatusRow s
-            | None -> ()
+            renderCombined ()
 
             let _ : Task = task {
                 try
@@ -213,11 +226,31 @@ type MainWindow(services: IServiceProvider) as this =
                 with _ -> ()
                 Dispatcher.UIThread.Post(fun () ->
                     refreshState <- DictionaryStatusRow.Idle
-                    match lastSource with
-                    | Some s -> renderStatusRow s
-                    | None -> ())
+                    renderCombined ())
             }
             ()
+
+    /// Reconnect-button callback wired into `CanStatusRow.view`.
+    /// Fire-and-forget per FR-003 — `ICanLinkService.ReconnectAsync`
+    /// resolves on its own and any state change surfaces via the
+    /// `LinkStateChanged` subscription below. Exceptions are
+    /// logged + swallowed so a transient failure doesn't crash the
+    /// UI; the user can click again.
+    let kickoffReconnect () =
+        let _ : Task =
+            task {
+                try
+                    do! canLinkService.ReconnectAsync(CancellationToken.None)
+                with
+                | :? OperationCanceledException -> ()
+                | ex ->
+                    mainLogger.LogWarning(
+                        ex,
+                        "ICanLinkService.ReconnectAsync raised; ignored at the UI layer"
+                    )
+            }
+
+        ()
 
     // Re-register: wipe local install state (credential + install.guid
     // sidecar) so the next /register POST is treated server-side as a
@@ -264,29 +297,71 @@ type MainWindow(services: IServiceProvider) as this =
             ())
 
     do
-        renderStatusRow <- fun (source: DictionarySource) ->
-            lastSource <- Some source
-            this.Content <- Chrome.wrapWithHeader currentTheme (VirtualDom.create (
-                DictionaryStatusRow.view
-                    cacheFilePath
-                    source
-                    (clock.UtcNow())
-                    refreshState
-                    kickoffRefresh
-                    kickoffReregister))
+        renderCombined <- fun () ->
+            // Dictionary row (top) — placeholder until SourceChanged
+            // fires for the first time. CAN row (middle) — always
+            // present, starts in `Initializing`. PanelsOnBus row is
+            // reserved for US2 (PR-D) and not rendered yet; the
+            // vertical stack leaves room for it as a third child.
+            let dictionaryView : IView =
+                match lastSource with
+                | Some source ->
+                    DictionaryStatusRow.view
+                        cacheFilePath
+                        source
+                        (clock.UtcNow())
+                        refreshState
+                        kickoffRefresh
+                        kickoffReregister
+                | None ->
+                    TextBlock.create [
+                        TextBlock.text "Initializing dictionary…"
+                    ]
+                    :> IView
+
+            let combinedView : IView =
+                StackPanel.create [
+                    StackPanel.orientation Orientation.Vertical
+                    StackPanel.spacing 8.0
+                    StackPanel.children [
+                        dictionaryView
+                        CanStatusRow.view lastCanState kickoffReconnect
+                    ]
+                ]
+                :> IView
+
+            this.Content <- Chrome.wrapWithHeader
+                currentTheme
+                (VirtualDom.create combinedView)
 
     do
         this.Title <- "Button Panel Tester"
         this.Width <- 600.0
         this.Height <- 400.0
         this.Icon <- Chrome.windowIcon currentTheme
-        renderInitializing ()
+        renderCombined ()
 
         // SourceChanged → re-render on the UI thread. The event may
         // fire on a background thread (the service awaits IO inside
         // InitializeAsync); marshal back via the Avalonia dispatcher.
         service.SourceChanged.Add(fun s ->
-            Dispatcher.UIThread.Post(fun () -> renderStatusRow s))
+            Dispatcher.UIThread.Post(fun () ->
+                lastSource <- Some s
+                renderCombined ()))
+
+        // CAN LinkStateChanged → re-render on the UI thread. The
+        // service's subject fires on whatever thread the link emits
+        // from (the vendored PCANManager monitor task hop chain in
+        // production; a synchronous test caller for `InMemoryCanLink`);
+        // marshal back to the UI thread the same way as SourceChanged.
+        let _ : IDisposable =
+            canLinkService.LinkStateChanged
+            |> Observable.subscribe (fun state ->
+                Dispatcher.UIThread.Post(fun () ->
+                    lastCanState <- state
+                    renderCombined ()))
+
+        ()
 
         // ActualThemeVariantChanged → swap title-bar / taskbar icon
         // and re-render the body so the brand-mark `Image.Source`
@@ -302,9 +377,7 @@ type MainWindow(services: IServiceProvider) as this =
             app.ActualThemeVariantChanged.Add(fun _ ->
                 currentTheme <- Chrome.currentTheme ()
                 this.Icon <- Chrome.windowIcon currentTheme
-                match lastSource with
-                | Some source -> renderStatusRow source
-                | None -> renderInitializing ())
+                renderCombined ())
 
         // On first open:
         //   1. Kick off InitializeAsync so the status row paints
@@ -336,6 +409,24 @@ type MainWindow(services: IServiceProvider) as this =
                         runDialog
                         CancellationToken.None
                 let! _ = initTask
+
+                // FR-001 / SC-001: open the CAN link only AFTER
+                // dictionary boot has completed. Failures surface via
+                // `LinkStateChanged` (the row chip flips to red /
+                // grey) so the technician sees the same observable
+                // state path as a mid-session unplug; this `try`
+                // exists only to keep an unexpected runtime exception
+                // from tearing down the Opened handler.
+                try
+                    do! canLinkService.InitializeAsync(CancellationToken.None)
+                with
+                | :? OperationCanceledException -> ()
+                | ex ->
+                    mainLogger.LogWarning(
+                        ex,
+                        "ICanLinkService.InitializeAsync raised; CAN row will reflect via LinkStateChanged"
+                    )
+
                 ()
             }) |> ignore)
 
