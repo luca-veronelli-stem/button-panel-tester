@@ -14,18 +14,20 @@ let private fixturePath =
     Path.Combine(AppContext.BaseDirectory, "Fixtures", "Can", "whoIAmFixtures.json")
 
 /// In-memory shape of one fixture entry. Mirrors the JSON schema in
-/// `Fixtures/Can/whoIAmFixtures.json`; only fields exercised by the
-/// parse-side assertions in this file are deserialised. The
-/// `expectedVariantIdentity` / `expectedVariantRawByte` fields are
-/// parsed downstream by commit 3 (variant-assertion extension), once
-/// `decodeVariant` lands.
+/// `Fixtures/Can/whoIAmFixtures.json`. The `expectedVariantIdentity`
+/// label is matched against `VariantDecoder.decode` (T014, commit 3);
+/// `expectedVariantRawByte` is only present on the `Unknown` fixture
+/// and carries the raw byte the decoder must surface inside
+/// `VariantIdentity.Unknown raw`.
 type private Fixture =
     { Name: string
       Payload: string
       ExpectsParse: bool
       ExpectedMachineType: byte option
       ExpectedFwType: byte option
-      ExpectedUuid: uint32[] option }
+      ExpectedUuid: uint32[] option
+      ExpectedVariantIdentity: string option
+      ExpectedVariantRawByte: byte option }
 
 let private hexToBytes (hex: string) : byte[] =
     let length = hex.Length / 2
@@ -67,13 +69,38 @@ let private loadFixture (name: string) : Fixture =
       ExpectedFwType = tryGet element "expectedFwType" |> Option.map (fun v -> v.GetByte())
       ExpectedUuid =
         tryGet element "expectedUuid"
-        |> Option.map (fun v -> v.EnumerateArray() |> Seq.map (fun e -> e.GetUInt32()) |> Array.ofSeq) }
+        |> Option.map (fun v -> v.EnumerateArray() |> Seq.map (fun e -> e.GetUInt32()) |> Array.ofSeq)
+      ExpectedVariantIdentity =
+        tryGet element "expectedVariantIdentity"
+        |> Option.bind (fun v ->
+            match v.GetString() with
+            | null -> None
+            | s -> Some s)
+      ExpectedVariantRawByte = tryGet element "expectedVariantRawByte" |> Option.map (fun v -> v.GetByte()) }
 
-/// Parse-side assertion for one fixture: rebuild the wire bytes from
-/// the hex string, run `WhoIAmFrame.parse`, and check the outcome
-/// matches the fixture's `expectsParse` flag plus (on Some) the
-/// machine-type byte, fwType byte, and three UUID words. Variant-
-/// identity assertions live in commit 3, after `decodeVariant` lands.
+let private expectedIdentityFor (fixture: Fixture) : VariantIdentity option =
+    fixture.ExpectedVariantIdentity
+    |> Option.map (fun label ->
+        match label with
+        | "EdenXp" -> Marketing EdenXp
+        | "OptimusXp" -> Marketing OptimusXp
+        | "R3LXp" -> Marketing R3LXp
+        | "EdenBs8" -> Marketing EdenBs8
+        | "Virgin" -> Virgin
+        | "Unknown" ->
+            match fixture.ExpectedVariantRawByte with
+            | Some raw -> Unknown raw
+            | None ->
+                failwithf
+                    "Fixture %s: variant identity 'Unknown' requires expectedVariantRawByte"
+                    fixture.Name
+        | other -> failwithf "Fixture %s: unknown variant identity label %s" fixture.Name other)
+
+/// Combined parse + variant assertion for one fixture: rebuild the
+/// wire bytes from the hex string, run `WhoIAmFrame.parse`, check the
+/// outcome matches the fixture's `expectsParse` flag plus (on Some)
+/// the machine-type byte, fwType byte, three UUID words, and the
+/// decoded `VariantIdentity`.
 let private assertParseMatches (fixtureName: string) =
     let fixture = loadFixture fixtureName
     let bytes = hexToBytes fixture.Payload
@@ -87,6 +114,10 @@ let private assertParseMatches (fixtureName: string) =
         Assert.Equal(fixture.ExpectedMachineType.Value, mt)
         Assert.Equal(fixture.ExpectedFwType.Value, fw)
         Assert.Equal<uint32[]>(fixture.ExpectedUuid.Value, [| u0; u1; u2 |])
+
+        match expectedIdentityFor fixture with
+        | Some expected -> Assert.Equal(expected, VariantDecoder.decode frame.MachineType)
+        | None -> ()
     | false, None -> () // expected silent drop per FR-013
     | true, None -> Assert.Fail $"Fixture {fixtureName}: expected parse Some, got None"
     | false, Some _ -> Assert.Fail $"Fixture {fixtureName}: expected parse None, got Some"
