@@ -19,6 +19,7 @@ import Stem.ButtonPanelTester.Phase2.WhoIAmFrame
 import Stem.ButtonPanelTester.Phase2.PanelObservation
 import Stem.ButtonPanelTester.Phase2.PanelsOnBus
 import Stem.ButtonPanelTester.Phase2.Pruning
+import Stem.ButtonPanelTester.Phase2.PassiveObserver
 
 namespace Stem.ButtonPanelTester.Phase2
 end Stem.ButtonPanelTester.Phase2
