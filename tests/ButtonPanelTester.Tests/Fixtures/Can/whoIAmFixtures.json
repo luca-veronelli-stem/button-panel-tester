@@ -1,0 +1,72 @@
+{
+    "$schema-description": "WHO_I_AM fixture set per specs/002-can-link-and-panel-discovery/contracts/who-i-am-wire-format.md §Fixtures. Each entry: name, hex-string payload, expected parse outcome, expected VariantIdentity (when parse succeeds). Loaded by Tests/Unit/Can/WhoIAmFrameFixtureTests.fs (T033). Payload is 15 bytes for well-formed entries; the two malformed entries are intentionally off-spec.",
+    "fixtures": [
+        {
+            "name": "virgin_panel_uuid_AABBCC",
+            "payload": "FF04000000AA000000BB000000CC00",
+            "expectsParse": true,
+            "expectedMachineType": 255,
+            "expectedFwType": 4,
+            "expectedUuid": [170, 187, 204],
+            "expectedVariantIdentity": "Virgin"
+        },
+        {
+            "name": "eden_xp_uuid_112233",
+            "payload": "0304000000110000002200000033FF",
+            "expectsParse": true,
+            "expectedMachineType": 3,
+            "expectedFwType": 4,
+            "expectedUuid": [17, 34, 51],
+            "expectedVariantIdentity": "EdenXp"
+        },
+        {
+            "name": "optimus_xp_uuid_445566",
+            "payload": "0A0400000044000000550000006600",
+            "expectsParse": true,
+            "expectedMachineType": 10,
+            "expectedFwType": 4,
+            "expectedUuid": [68, 85, 102],
+            "expectedVariantIdentity": "OptimusXp"
+        },
+        {
+            "name": "r3l_xp_uuid_778899",
+            "payload": "0B0400000077000000880000009900",
+            "expectsParse": true,
+            "expectedMachineType": 11,
+            "expectedFwType": 4,
+            "expectedUuid": [119, 136, 153],
+            "expectedVariantIdentity": "R3LXp"
+        },
+        {
+            "name": "eden_bs8_uuid_AABBCC",
+            "payload": "0C04000000AA000000BB000000CC00",
+            "expectsParse": true,
+            "expectedMachineType": 12,
+            "expectedFwType": 4,
+            "expectedUuid": [170, 187, 204],
+            "expectedVariantIdentity": "EdenBs8"
+        },
+        {
+            "name": "unknown_machine_type_uuid_DDEEFF",
+            "payload": "7704000000DD000000EE000000FF00",
+            "expectsParse": true,
+            "expectedMachineType": 119,
+            "expectedFwType": 4,
+            "expectedUuid": [221, 238, 255],
+            "expectedVariantIdentity": "Unknown",
+            "expectedVariantRawByte": 119
+        },
+        {
+            "name": "malformed_too_short_14b",
+            "payload": "FF04000000AA000000BB000000CC",
+            "expectsParse": false,
+            "reason": "Length is 14 bytes — wire contract requires exactly 15 (FR-013 silent drop)."
+        },
+        {
+            "name": "malformed_wrong_fwtype",
+            "payload": "0307000000110000002200000033FF",
+            "expectsParse": false,
+            "reason": "fwType is 0x07 — wire contract requires 0x04 for button panels (FR-013 silent drop)."
+        }
+    ]
+}

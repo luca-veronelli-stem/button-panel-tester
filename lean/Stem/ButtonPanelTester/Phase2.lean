@@ -15,6 +15,7 @@
 -- umbrella forces every Phase-2 theorem file to elaborate.
 
 import Stem.ButtonPanelTester.Phase2.CanLinkState
+import Stem.ButtonPanelTester.Phase2.WhoIAmFrame
 
 namespace Stem.ButtonPanelTester.Phase2
 end Stem.ButtonPanelTester.Phase2

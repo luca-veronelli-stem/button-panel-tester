@@ -16,15 +16,20 @@
         <Compile Include="Property/DictionaryServiceTransitionsTests.fs" />
         <Compile Include="Property/CacheConsistencyTests.fs" />
         <Compile Include="Property/Can/CanLinkStateTransitionsProperties.fs" />
+        <Compile Include="Property/Can/WhoIAmFrameProperties.fs" />
         <Compile Include="Integration/DictionaryServiceInitializeTests.fs" />
         <Compile Include="Integration/RegistrationFlowTests.fs" />
         <Compile Include="Integration/ReregisterResetTests.fs" />
         <Compile Include="Integration/DictionaryServiceRefreshTests.fs" />
         <Compile Include="Unit/WarmUpTests.fs" />
+        <Compile Include="Unit/Can/WhoIAmFrameFixtureTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
         <Content Include="Fixtures/DictionaryResolvedDto.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="Fixtures/Can/whoIAmFixtures.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
