@@ -40,7 +40,7 @@
 
 | File | Lines | Why | Upstream PR |
 |------|-------|-----|-------------|
-| _none yet — populated by T005_ |  |  |  |
+| Hardware/PCANManager.cs | +78, -9 | Add `IAsyncDisposable` + `CancellationTokenSource` so the background connection-monitor and read loops stop cleanly on dispose. `IPcanDriver` is unchanged; the new lifecycle is exposed only on the concrete class. Required by spec-002 `PcanCanLink` (issue #113). | https://github.com/luca-veronelli-stem/stem-device-manager/pull/117 |
 
 ## Removal path
 
@@ -51,6 +51,6 @@ https://github.com/luca-veronelli-stem/button-panel-tester/issues/111
 ## Re-vendoring procedure
 
 See `specs/002-can-link-and-panel-discovery/contracts/vendor-manifest.md`
-section "Re-vendoring procedure". Edit `System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable System.Collections.Hashtable` in
-`eng/vendor-protocol-stack.ps1`, re-run the script, update
-`VENDOR.sha256`.
+section "Re-vendoring procedure". Edit the `ManifestEntries` array
+in `eng/vendor-protocol-stack.ps1`, re-run the script, and update
+`VENDOR.sha256` (the script's last step regenerates it).

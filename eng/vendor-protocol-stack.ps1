@@ -35,14 +35,21 @@
         -StemDeviceManagerPath C:\Users\veron\Source\Repos\Stem\stem-device-manager `
         -CommitSha 4700c2db65c858f53b4796971a174508b99bce0a
 #>
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Vendor')]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Vendor')]
     [string] $StemDeviceManagerPath,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Vendor')]
     [ValidatePattern('^[0-9a-fA-F]{7,40}$')]
-    [string] $CommitSha
+    [string] $CommitSha,
+
+    # Recompute VENDOR.sha256 over the current vendor tree without
+    # re-copying from upstream. Use after a local modification recorded
+    # in VENDOR.md (manifest "Local modifications" table) — without it
+    # the contract's pre-commit hash check would fail.
+    [Parameter(Mandatory = $true, ParameterSetName = 'RehashOnly')]
+    [switch] $RehashOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,6 +58,35 @@ Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $vendorRoot = Join-Path $repoRoot 'src\ButtonPanelTester.Infrastructure.Protocol'
 $stopgapDoc = Join-Path $repoRoot 'docs\STOPGAP_VENDORED_PROTOCOL_STACK.md'
+
+function Write-VendorSha256 {
+    param([string] $Root)
+
+    $sha256File = Join-Path $Root 'VENDOR.sha256'
+    $entries = Get-ChildItem -Path $Root -Recurse -File |
+        Where-Object {
+            ($_.Name -notin @('VENDOR.md', 'VENDOR.sha256')) -and
+            ($_.FullName -notmatch '\\(bin|obj)\\')
+        } |
+        Sort-Object { $_.FullName.Substring($Root.Length + 1) } |
+        ForEach-Object {
+            $rel = $_.FullName.Substring($Root.Length + 1).Replace('\', '/')
+            $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $rel"
+        }
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    $content = ($entries -join "`n") + "`n"
+    [System.IO.File]::WriteAllText($sha256File, $content, $utf8NoBom)
+    Write-Host "Wrote: $sha256File ($($entries.Count) entries)" -ForegroundColor Green
+}
+
+if ($RehashOnly) {
+    if (-not (Test-Path $vendorRoot)) {
+        throw "Vendor root missing: $vendorRoot"
+    }
+    Write-VendorSha256 -Root $vendorRoot
+    return
+}
 
 if (-not (Test-Path $StemDeviceManagerPath)) {
     throw "StemDeviceManagerPath not found: $StemDeviceManagerPath"
@@ -196,8 +232,8 @@ https://github.com/luca-veronelli-stem/button-panel-tester/issues/111
 
 See ``specs/002-can-link-and-panel-discovery/contracts/vendor-manifest.md``
 section "Re-vendoring procedure". Edit ``$ManifestEntries`` in
-``eng/vendor-protocol-stack.ps1``, re-run the script, update
-``VENDOR.sha256``.
+``eng/vendor-protocol-stack.ps1`` (the ``ManifestEntries`` array),
+re-run the script, then commit the regenerated ``VENDOR.sha256``.
 "@
 
 Set-Content -Path $vendorMd -Value $vendorMdContent -Encoding UTF8 -NoNewline
@@ -207,26 +243,9 @@ Write-Host "Wrote: $vendorMd" -ForegroundColor Green
 #    VENDOR.md / VENDOR.sha256 themselves (per contract rule 4) and the
 #    transient build outputs under bin/ and obj/ (which are regenerated
 #    on every `dotnet build` and would otherwise make the hash bounce
-#    on every developer machine).
-$sha256File = Join-Path $vendorRoot 'VENDOR.sha256'
-
-$hashEntries = Get-ChildItem -Path $vendorRoot -Recurse -File |
-    Where-Object {
-        ($_.Name -notin @('VENDOR.md', 'VENDOR.sha256')) -and
-        ($_.FullName -notmatch '\\(bin|obj)\\')
-    } |
-    Sort-Object { $_.FullName.Substring($vendorRoot.Length + 1) } |
-    ForEach-Object {
-        $rel = $_.FullName.Substring($vendorRoot.Length + 1).Replace('\', '/')
-        $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-        "$hash  $rel"
-    }
-
-# UTF-8 NO BOM + LF line endings so the file hashes deterministically across platforms.
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-$sha256Content = ($hashEntries -join "`n") + "`n"
-[System.IO.File]::WriteAllText($sha256File, $sha256Content, $utf8NoBom)
-Write-Host "Wrote: $sha256File ($($hashEntries.Count) entries)" -ForegroundColor Green
+#    on every developer machine). Shared with -RehashOnly so the same
+#    hashing rules apply after a local modification.
+Write-VendorSha256 -Root $vendorRoot
 
 # 7. Stopgap waiver doc (scaffold once; manual edits preserved).
 if (-not (Test-Path $stopgapDoc)) {
