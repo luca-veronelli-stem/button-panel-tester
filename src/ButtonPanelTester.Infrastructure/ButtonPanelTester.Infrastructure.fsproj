@@ -7,6 +7,7 @@
 
     <ItemGroup>
         <Compile Include="Clock.fs" />
+        <Compile Include="Can/PcanAdapterIdentity.fs" />
         <Compile Include="Persistence/JsonFileDictionaryCache.fs" />
         <Compile Include="Persistence/EmbeddedSeedExtractor.fs" />
         <Compile Include="Persistence/DpapiCredentialStore.fs" />
