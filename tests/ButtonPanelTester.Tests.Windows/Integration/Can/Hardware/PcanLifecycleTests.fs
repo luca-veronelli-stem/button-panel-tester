@@ -37,21 +37,40 @@ let private connectTimeout = TimeSpan.FromSeconds(2.0)
 
 let private unplugObservationTimeout = TimeSpan.FromSeconds(5.0)
 
-/// Builds the full PEAK stack at 250 kbps and returns a disposable
-/// triple (driver, port, link). Each test starts fresh so a leftover
-/// monitor task from a prior test does not contaminate the bus
-/// observation window.
-let private buildLink () =
-    let driver = new PCANManager(TPCANBaudrate.PCAN_BAUD_250K)
-    let port = new CanPort(driver :> IPcanDriver)
+/// Builds a `PcanCanLink` over a factory that constructs the
+/// PEAK stack (`PCANManager` + `CanPort`) at 250 kbps on first
+/// `OpenAsync`. Returns the link + a single `IDisposable` that
+/// tears down the link, the port, and the driver in reverse
+/// construction order — so the test fixture can `use` it and
+/// guarantee the PEAK channel + background tasks shut down
+/// between test cases. The captured driver / port may be `None`
+/// if a test never invokes `OpenAsync`; the cleanup is a no-op
+/// in that case.
+let private buildLink () : PcanCanLink * IDisposable =
+    let mutable createdDriver: PCANManager option = None
+    let mutable createdPort: CanPort option = None
 
-    let link =
-        PcanCanLink(
-            port :> ICommunicationPort,
-            NullLogger<PcanCanLink>.Instance
-        )
+    let portFactory () : ICommunicationPort =
+        let driver = new PCANManager(TPCANBaudrate.PCAN_BAUD_250K)
+        let port = new CanPort(driver :> IPcanDriver)
+        createdDriver <- Some driver
+        createdPort <- Some port
+        port :> ICommunicationPort
 
-    driver, port, link
+    let link = PcanCanLink(portFactory, NullLogger<PcanCanLink>.Instance)
+
+    let cleanup =
+        { new IDisposable with
+            member _.Dispose() =
+                (link :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult()
+
+                createdPort |> Option.iter (fun p -> p.Dispose())
+
+                createdDriver
+                |> Option.iter (fun d ->
+                    (d :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult()) }
+
+    link, cleanup
 
 let private collectStates (link: PcanCanLink) : List<CanLinkState> =
     let collected = List<CanLinkState>()
@@ -99,19 +118,8 @@ let private isMidSessionUnplug (state: CanLinkState) =
 [<Trait("Category", "Hardware")>]
 [<Fact>]
 let OpenAsync_RealAdapter_SurfacesConnectedWithIdentification () =
-    let driver, port, link = buildLink ()
-
-    use _driverGuard =
-        { new IDisposable with
-            member _.Dispose() =
-                (driver :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult() }
-
-    use _portGuard = port
-
-    use _linkGuard =
-        { new IDisposable with
-            member _.Dispose() =
-                (link :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult() }
+    let link, cleanup = buildLink ()
+    use _ = cleanup
 
     let observed = collectStates link
 
@@ -136,19 +144,8 @@ let OpenAsync_RealAdapter_SurfacesConnectedWithIdentification () =
 [<Trait("Category", "Hardware")>]
 [<Fact>]
 let CloseAsyncThenOpenAsync_RealAdapter_SecondOpenReachesConnected () =
-    let driver, port, link = buildLink ()
-
-    use _driverGuard =
-        { new IDisposable with
-            member _.Dispose() =
-                (driver :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult() }
-
-    use _portGuard = port
-
-    use _linkGuard =
-        { new IDisposable with
-            member _.Dispose() =
-                (link :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult() }
+    let link, cleanup = buildLink ()
+    use _ = cleanup
 
     let observed = collectStates link
     let canLink = link :> ICanLink
@@ -201,19 +198,8 @@ let PhysicalUnplug_AfterConnected_SurfacesMidSessionUnplug () =
     //   1. Plug the adapter, run the test, wait for the prompt.
     //   2. Within 5 s, physically unplug the adapter.
     //   3. Assert observes Disconnected(MidSessionUnplug, _).
-    let driver, port, link = buildLink ()
-
-    use _driverGuard =
-        { new IDisposable with
-            member _.Dispose() =
-                (driver :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult() }
-
-    use _portGuard = port
-
-    use _linkGuard =
-        { new IDisposable with
-            member _.Dispose() =
-                (link :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult() }
+    let link, cleanup = buildLink ()
+    use _ = cleanup
 
     let observed = collectStates link
 

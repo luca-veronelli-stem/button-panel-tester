@@ -244,25 +244,37 @@ module CompositionRoot =
             // dictionary InitializeAsync before invoking
             // `ICanLinkService.InitializeAsync`.
             //
-            // `PCANManager` registers as `IPcanDriver` at the
-            // 250 kbps baud spec-002 pins. Its IAsyncDisposable
-            // implementation is wired through the singleton
-            // lifetime; MEDI auto-disposes singletons on container
-            // teardown so the background monitor + read tasks
-            // shutdown cleanly. `CanPort` wraps the driver as the
-            // vendored `ICommunicationPort`; `PcanCanLink` adapts
-            // that to the spec-002 `ICanLink` taxonomy.
+            // `PcanCanLink` takes a port factory rather than a
+            // pre-constructed `ICommunicationPort` so the vendored
+            // `PCANManager`'s P/Invoke into `pcanbasic.dll` does
+            // NOT execute until `OpenAsync` is first called. On
+            // hosts without the PEAK driver installed
+            // (`DllNotFoundException`) the failure surfaces as an
+            // observable `Error(Fatal …)` state on
+            // `LinkStateChanged` — the GUI shows the real cause in
+            // the row headline + tooltip — instead of crashing the
+            // composition root before MainWindow paints. Bench
+            // rigs with the driver get the real lifecycle.
+            //
+            // `IPcanDriver` and `ICommunicationPort` are NOT
+            // registered as separate singletons in PR-C: their
+            // only consumer is the factory below, and a separate
+            // DI binding would re-introduce the
+            // eager-PCANManager-construction problem. PR-D
+            // (T049 wiring of `PcanCanFrameStream`) re-evaluates
+            // when a second consumer of `ICommunicationPort`
+            // appears.
+            //
             // `ICanFrameStream` binds to the no-op placeholder
             // until T049 replaces it with `PcanCanFrameStream`.
-            .AddSingleton<IPcanDriver>(fun _ ->
-                new PCANManager(TPCANBaudrate.PCAN_BAUD_250K) :> IPcanDriver)
-            .AddSingleton<ICommunicationPort>(fun sp ->
-                let driver = sp.GetRequiredService<IPcanDriver>()
-                new CanPort(driver) :> ICommunicationPort)
             .AddSingleton<ICanLink>(fun sp ->
-                let port = sp.GetRequiredService<ICommunicationPort>()
                 let logger = sp.GetRequiredService<ILogger<PcanCanLink>>()
-                PcanCanLink(port, logger) :> ICanLink)
+
+                let portFactory () : ICommunicationPort =
+                    let driver = new PCANManager(TPCANBaudrate.PCAN_BAUD_250K) :> IPcanDriver
+                    new CanPort(driver) :> ICommunicationPort
+
+                PcanCanLink(portFactory, logger) :> ICanLink)
             .AddSingleton<ICanFrameStream>(fun _ ->
                 NoOpCanFrameStream() :> ICanFrameStream)
             .AddSingleton<ICanLinkService>(fun sp ->

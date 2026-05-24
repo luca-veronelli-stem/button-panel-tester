@@ -67,15 +67,31 @@ module CanStatusRow =
         | Recoverable detail
         | Fatal detail -> detail
 
+    /// Returns the first newline-separated line of `s`. Convention
+    /// (see `PcanCanLink.buildFailureState`): adapters that need to
+    /// pair a short headline with technical detail encode both into
+    /// the `ErrorClassification` detail string using `\n` as the
+    /// separator. The headline takes the first line; the tooltip
+    /// (`detailText`) carries the full multi-line text. Keeps the
+    /// data model unchanged while still letting the GUI render a
+    /// compact row + full diagnostics on hover.
+    let private firstLine (s: string) : string =
+        match s.IndexOf('\n') with
+        | -1 -> s
+        | i -> s.Substring(0, i)
+
     /// Headline text shown next to the chip. Format per T038:
     /// `Connected · <channel name>`, `Disconnected · <reason>`,
-    /// `Error · <detail>`.
+    /// `Error · <detail>`. The error detail is truncated at the
+    /// first newline so multi-line technical detail stays in the
+    /// tooltip.
     let headline (state: CanLinkState) : string =
         match state with
         | Initializing -> "Initializing…"
         | Connected(adapter, _) -> sprintf "Connected · %s" adapter.ChannelName
         | Disconnected(reason, _) -> sprintf "Disconnected · %s" (disconnectReasonPhrase reason)
-        | Error(classification, _) -> sprintf "Error · %s" (errorDetail classification)
+        | Error(classification, _) ->
+            sprintf "Error · %s" (firstLine (errorDetail classification))
 
     /// Detail tooltip text. Surfaces `AdapterIdentification` when
     /// Connected (FR-004), the disconnect reason + the `since`
