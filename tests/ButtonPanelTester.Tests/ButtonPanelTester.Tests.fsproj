@@ -19,6 +19,7 @@
         <Compile Include="Property/Can/WhoIAmFrameProperties.fs" />
         <Compile Include="Property/Can/VariantDecoderProperties.fs" />
         <Compile Include="Property/Can/PanelsOnBusProperties.fs" />
+        <Compile Include="Property/Can/PruningProperties.fs" />
         <Compile Include="Integration/DictionaryServiceInitializeTests.fs" />
         <Compile Include="Integration/RegistrationFlowTests.fs" />
         <Compile Include="Integration/ReregisterResetTests.fs" />
