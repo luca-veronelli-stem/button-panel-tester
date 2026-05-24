@@ -10,6 +10,8 @@
 
     <ItemGroup>
         <Compile Include="Fakes/Wiring.fs" />
+        <Compile Include="Fakes/Can/InMemoryCanLink.fs" />
+        <Compile Include="Fakes/Can/InMemoryCanFrameStream.fs" />
         <Compile Include="Property/DictionarySerializationTests.fs" />
         <Compile Include="Property/ContentHashTests.fs" />
         <Compile Include="Property/FetchFailureReasonClosureTests.fs" />
