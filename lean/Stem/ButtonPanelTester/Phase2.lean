@@ -17,6 +17,7 @@
 import Stem.ButtonPanelTester.Phase2.CanLinkState
 import Stem.ButtonPanelTester.Phase2.WhoIAmFrame
 import Stem.ButtonPanelTester.Phase2.PanelObservation
+import Stem.ButtonPanelTester.Phase2.PanelsOnBus
 
 namespace Stem.ButtonPanelTester.Phase2
 end Stem.ButtonPanelTester.Phase2
