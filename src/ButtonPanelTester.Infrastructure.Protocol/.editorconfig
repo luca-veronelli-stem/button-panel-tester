@@ -1,0 +1,22 @@
+# Scoped override for the vendored stack — see ./VENDOR.md and
+# ../ButtonPanelTester.Infrastructure/Can/VENDOR-GUARD.md.
+#
+# Vendoring manifest rule 1 ("Verbatim copy") is at odds with the repo's
+# top-level whitespace and charset rules: upstream stem-device-manager
+# ships trailing whitespace, mixed BOM, and indentation that doesn't match
+# the repo defaults. Letting `dotnet format whitespace --verify-no-changes`
+# (the CI gate) flag those would either force edits to the vendored files
+# (breaks the contract) or break CI (defeats the gate).
+#
+# The override scope is this folder only. New F# adapters in
+# ../ButtonPanelTester.Infrastructure/Can/ pick up the repo's top-level
+# rules as normal.
+
+[*.cs]
+# `dotnet format whitespace` and Roslyn analyzers skip files marked
+# as generated. Verbatim vendored files share the same contract:
+# tooling must not rewrite them. The compiler also flags nullable
+# annotations in generated code (CS8669); CS8669 is suppressed at
+# the csproj level (NoWarn) so the vendored nullable annotations
+# keep working.
+generated_code = true

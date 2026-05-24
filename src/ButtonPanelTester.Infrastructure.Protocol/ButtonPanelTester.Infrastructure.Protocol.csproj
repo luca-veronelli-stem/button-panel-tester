@@ -16,12 +16,20 @@
       Vendored code stays verbatim (manifest rule 1). Local IDE style
       rules (var-vs-explicit, braces, etc.) and the missing-XML-doc
       check would otherwise force edits to the upstream files. Disable
-      both for this project only — the .editorconfig keeps firing in
-      the IDE for new code added here, but the build no longer rejects
-      the vendored set.
+      both for this project only. The scoped .editorconfig sibling
+      keeps firing in the IDE for new code added here, but the build
+      no longer rejects the vendored set.
+
+      CS8669 fires because the scoped .editorconfig marks vendored
+      files as generated_code=true (the lever that makes the CI
+      "dotnet format whitespace" gate and Roslyn analyzers skip them);
+      Roslyn then complains about nullable reference type annotations
+      in "generated" code. Suppress CS8669 here so the vendored
+      nullable annotations keep compiling.
     -->
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS8669</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
