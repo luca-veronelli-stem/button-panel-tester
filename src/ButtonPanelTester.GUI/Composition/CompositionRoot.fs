@@ -11,11 +11,17 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
 open NReco.Logging.File
+open Peak.Can.Basic.BackwardCompatibility
+open Core.Interfaces
+open Infrastructure.Protocol.Hardware
+open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Core.Dictionary
 open Stem.ButtonPanelTester.Infrastructure
 open Stem.ButtonPanelTester.Infrastructure.Auth
+open Stem.ButtonPanelTester.Infrastructure.Can
 open Stem.ButtonPanelTester.Infrastructure.Http
 open Stem.ButtonPanelTester.Infrastructure.Persistence
+open Stem.ButtonPanelTester.Services.Can
 open Stem.ButtonPanelTester.Services.Dictionary
 
 // `OfflineDictionaryProvider` (the Phase 3 / US1 no-op placeholder)
@@ -24,6 +30,21 @@ open Stem.ButtonPanelTester.Services.Dictionary
 // against the named `"Dictionary"` HttpClient, and US1's offline
 // launch path no longer goes through `IDictionaryProvider` (it
 // reads the cache directly).
+
+/// Placeholder `ICanFrameStream` for spec-002 PR-C — emits nothing
+/// and never raises. Bound to the DI graph so the container has a
+/// concrete binding for the port; the real `PcanCanFrameStream`
+/// replaces it in spec-002 PR-D (T044) when WHO_I_AM ingest goes
+/// live (T049 wires it into the composition root). Defined inline
+/// here because it has exactly one consumer (the DI graph itself)
+/// and exactly one use (this slice).
+type private NoOpCanFrameStream() =
+    interface ICanFrameStream with
+        member _.RawFramesReceived =
+            { new IObservable<RawCanFrame> with
+                member _.Subscribe(_: IObserver<RawCanFrame>) =
+                    { new IDisposable with
+                        member _.Dispose() = () } }
 
 /// `Microsoft.Extensions.DependencyInjection` wiring for the
 /// `ButtonPanelTester.GUI` host, per
@@ -215,3 +236,37 @@ module CompositionRoot =
                 HttpDictionaryServiceWarmUp(httpClient, logger) :> IDictionaryServiceWarmUp)
             .AddSingleton<DictionaryWarmUp>()
             .AddSingleton<IDictionaryService, DictionaryService>()
+            // CAN port + service graph, registered AFTER
+            // IDictionaryService so the FR-001 boot order
+            // (dictionary first, CAN second) is observable in the
+            // DI container's enumeration. Functional ordering is
+            // enforced by App.fs's Opened handler awaiting the
+            // dictionary InitializeAsync before invoking
+            // `ICanLinkService.InitializeAsync`.
+            //
+            // `PCANManager` registers as `IPcanDriver` at the
+            // 250 kbps baud spec-002 pins. Its IAsyncDisposable
+            // implementation is wired through the singleton
+            // lifetime; MEDI auto-disposes singletons on container
+            // teardown so the background monitor + read tasks
+            // shutdown cleanly. `CanPort` wraps the driver as the
+            // vendored `ICommunicationPort`; `PcanCanLink` adapts
+            // that to the spec-002 `ICanLink` taxonomy.
+            // `ICanFrameStream` binds to the no-op placeholder
+            // until T049 replaces it with `PcanCanFrameStream`.
+            .AddSingleton<IPcanDriver>(fun _ ->
+                new PCANManager(TPCANBaudrate.PCAN_BAUD_250K) :> IPcanDriver)
+            .AddSingleton<ICommunicationPort>(fun sp ->
+                let driver = sp.GetRequiredService<IPcanDriver>()
+                new CanPort(driver) :> ICommunicationPort)
+            .AddSingleton<ICanLink>(fun sp ->
+                let port = sp.GetRequiredService<ICommunicationPort>()
+                let logger = sp.GetRequiredService<ILogger<PcanCanLink>>()
+                PcanCanLink(port, logger) :> ICanLink)
+            .AddSingleton<ICanFrameStream>(fun _ ->
+                NoOpCanFrameStream() :> ICanFrameStream)
+            .AddSingleton<ICanLinkService>(fun sp ->
+                let link = sp.GetRequiredService<ICanLink>()
+                let clock = sp.GetRequiredService<IClock>()
+                let logger = sp.GetRequiredService<ILogger<CanLinkService>>()
+                CanLinkService(link, clock, logger) :> ICanLinkService)
