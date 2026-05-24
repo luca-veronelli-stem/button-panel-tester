@@ -11,10 +11,10 @@
 --   * Phase2.Pruning            — T031
 --   * Phase2.PassiveObserver    — T032
 --
--- This commit (PR-A, T010) only registers the empty `[[lean_lib]]` in
--- `lakefile.toml` so `lake build` exercises the Phase 2 target shape
--- before any modules exist. The `import`s are added module-by-module as
--- each commit lands the corresponding theorem.
+-- Each sub-module is `import`-ed below as it lands so `lake build` on the
+-- umbrella forces every Phase-2 theorem file to elaborate.
+
+import Stem.ButtonPanelTester.Phase2.CanLinkState
 
 namespace Stem.ButtonPanelTester.Phase2
 end Stem.ButtonPanelTester.Phase2

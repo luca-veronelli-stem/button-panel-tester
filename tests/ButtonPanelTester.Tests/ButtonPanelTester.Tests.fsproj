@@ -15,6 +15,7 @@
         <Compile Include="Property/FetchFailureReasonClosureTests.fs" />
         <Compile Include="Property/DictionaryServiceTransitionsTests.fs" />
         <Compile Include="Property/CacheConsistencyTests.fs" />
+        <Compile Include="Property/Can/CanLinkStateTransitionsProperties.fs" />
         <Compile Include="Integration/DictionaryServiceInitializeTests.fs" />
         <Compile Include="Integration/RegistrationFlowTests.fs" />
         <Compile Include="Integration/ReregisterResetTests.fs" />
