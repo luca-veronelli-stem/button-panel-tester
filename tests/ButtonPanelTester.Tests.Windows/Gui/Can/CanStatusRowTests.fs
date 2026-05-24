@@ -1,0 +1,219 @@
+module Stem.ButtonPanelTester.Tests.Windows.Gui.Can.CanStatusRowTests
+
+open System
+open Avalonia.Controls
+open Avalonia.Controls.Shapes
+open Avalonia.Interactivity
+open Avalonia.Media
+open Avalonia.Headless.XUnit
+open Avalonia.FuncUI.VirtualDom
+open Xunit
+open Stem.ButtonPanelTester.Core.Can
+open Stem.ButtonPanelTester.GUI.Can
+
+/// `Avalonia.Headless.XUnit` tests for `CanStatusRow.view` per
+/// `specs/002-can-link-and-panel-discovery/tasks.md` T042. The
+/// headless harness configured in the project-level `TestApp.fs`
+/// lets `[<AvaloniaFact>]` materialise FuncUI views through
+/// `VirtualDom.create` and inspect the resulting Avalonia control
+/// tree without painting pixels.
+///
+/// Lives in `Tests.Windows` (`net10.0-windows`) per #76 — the GUI
+/// project is `net10.0-windows`.
+
+// --- helpers ---
+
+let private noop () = ()
+
+let private fixedNow =
+    DateTimeOffset(2026, 5, 24, 12, 0, 0, TimeSpan.Zero)
+
+let private renderState (state: CanLinkState) : StackPanel =
+    let materialized =
+        VirtualDom.create (CanStatusRow.view state noop)
+
+    materialized :?> StackPanel
+
+let private renderStateWith
+    (state: CanLinkState)
+    (onReconnect: unit -> unit)
+    : StackPanel =
+    let materialized =
+        VirtualDom.create (CanStatusRow.view state onReconnect)
+
+    materialized :?> StackPanel
+
+let private chipChild (panel: StackPanel) : Ellipse =
+    panel.Children
+    |> Seq.choose (fun c ->
+        match box c with
+        | :? Ellipse as e -> Some e
+        | _ -> None)
+    |> Seq.exactlyOne
+
+let private headlineChild (panel: StackPanel) : TextBlock =
+    panel.Children
+    |> Seq.choose (fun c ->
+        match box c with
+        | :? TextBlock as t when t.Name = "Headline" -> Some t
+        | _ -> None)
+    |> Seq.exactlyOne
+
+let private tryReconnectButton (panel: StackPanel) : Button option =
+    panel.Children
+    |> Seq.choose (fun c ->
+        match box c with
+        | :? Button as b when b.Name = "ReconnectButton" -> Some b
+        | _ -> None)
+    |> Seq.tryHead
+
+let private buttonText (b: Button) : string =
+    match b.Content with
+    | null -> ""
+    | :? string as s -> s
+    | other ->
+        match other.ToString() with
+        | null -> ""
+        | s -> s
+
+let private fixedAdapter: AdapterIdentification =
+    { ChannelName = "PCAN-USB Pro FD (1)"
+      SerialNumber = "00000001"
+      BaudrateBps = 250_000 }
+
+// --- T042.1: Connected → green chip + "Connected · <channel name>" ---
+
+[<AvaloniaFact>]
+let View_Connected_GreenChipAndChannelNameHeadline () =
+    let state = Connected(fixedAdapter, fixedNow)
+
+    let panel = renderState state
+    let chip = chipChild panel
+    let headline = headlineChild panel
+
+    Assert.Same(Brushes.Green, chip.Fill)
+    Assert.Equal(sprintf "Connected · %s" fixedAdapter.ChannelName, headline.Text)
+
+[<AvaloniaFact>]
+let View_Connected_NoReconnectButton () =
+    let state = Connected(fixedAdapter, fixedNow)
+
+    let panel = renderState state
+
+    Assert.Equal(None, tryReconnectButton panel)
+
+[<AvaloniaFact>]
+let View_Connected_DetailTooltipMentionsAdapterIdentification () =
+    let state = Connected(fixedAdapter, fixedNow)
+
+    let panel = renderState state
+    let headline = headlineChild panel
+
+    match ToolTip.GetTip(headline) with
+    | null -> Assert.Fail("expected a tooltip on the headline TextBlock")
+    | tooltip ->
+        let text = tooltip.ToString()
+        Assert.Contains(fixedAdapter.ChannelName, text)
+        Assert.Contains(fixedAdapter.SerialNumber, text)
+        Assert.Contains("250000", text)
+
+// --- T042.2: Disconnected(NoAdapterPresent) → grey chip + "no PEAK adapter found" ---
+
+[<AvaloniaFact>]
+let View_DisconnectedNoAdapter_GreyChipAndRemediationHint () =
+    let state = Disconnected(NoAdapterPresent, fixedNow)
+
+    let panel = renderState state
+    let chip = chipChild panel
+    let headline = headlineChild panel
+
+    Assert.Same(Brushes.Gray, chip.Fill)
+    Assert.Contains("no PEAK adapter found", headline.Text)
+
+[<AvaloniaFact>]
+let View_DisconnectedNoAdapter_HasTryReconnectButton () =
+    let state = Disconnected(NoAdapterPresent, fixedNow)
+
+    let panel = renderState state
+
+    match tryReconnectButton panel with
+    | None -> Assert.Fail("expected a Reconnect button when Disconnected")
+    | Some button ->
+        Assert.Equal("Try reconnect", buttonText button)
+        Assert.True(button.IsEnabled)
+
+// --- T042.3: Error(Recoverable detail) → red chip + headline contains detail ---
+
+[<AvaloniaFact>]
+let View_ErrorRecoverable_RedChipAndHeadlineContainsDetail () =
+    let detail = "Bus-off detected — try reconnect"
+    let state = Error(Recoverable detail, fixedNow)
+
+    let panel = renderState state
+    let chip = chipChild panel
+    let headline = headlineChild panel
+
+    Assert.Same(Brushes.Red, chip.Fill)
+    Assert.Contains(detail, headline.Text)
+
+[<AvaloniaFact>]
+let View_ErrorRecoverable_ReconnectButtonReadsTryReconnect () =
+    let state = Error(Recoverable "Bus-off detected — try reconnect", fixedNow)
+
+    let panel = renderState state
+
+    match tryReconnectButton panel with
+    | None -> Assert.Fail("expected a Reconnect button on Error(Recoverable)")
+    | Some button -> Assert.Equal("Try reconnect", buttonText button)
+
+[<AvaloniaFact>]
+let View_ErrorFatal_ReconnectButtonReadsUnlikelyToHelp () =
+    let state =
+        Error(Fatal "PEAK status 0x40000 persists across reconnect — file bug", fixedNow)
+
+    let panel = renderState state
+
+    match tryReconnectButton panel with
+    | None -> Assert.Fail("expected a Reconnect button on Error(Fatal)")
+    | Some button -> Assert.Equal("Reconnect (unlikely to help)", buttonText button)
+
+[<AvaloniaFact>]
+let View_ErrorFatal_DetailTooltipSurfacesFatalSubClassification () =
+    let detail = "PEAK status 0x40000 persists across reconnect — file bug"
+    let state = Error(Fatal detail, fixedNow)
+
+    let panel = renderState state
+    let headline = headlineChild panel
+
+    match ToolTip.GetTip(headline) with
+    | null -> Assert.Fail("expected a tooltip on the headline TextBlock")
+    | tooltip ->
+        let text = tooltip.ToString()
+        Assert.Contains("Fatal", text)
+        Assert.Contains(detail, text)
+
+// --- T042.4: Reconnect click raises the supplied callback ---
+
+[<AvaloniaFact>]
+let ReconnectClick_RaisesCallback () =
+    // The view is pure — it does not know about ICanLinkService. The
+    // App-side wiring binds the callback to the service's
+    // ReconnectAsync (commit 6 of PR-C). Verifying the callback
+    // fires here is sufficient to lock the contract the host wires
+    // around.
+    let mutable reconnectCount = 0
+
+    let onReconnect () = reconnectCount <- reconnectCount + 1
+
+    let panel =
+        renderStateWith (Disconnected(NoAdapterPresent, fixedNow)) onReconnect
+
+    let button =
+        tryReconnectButton panel
+        |> Option.defaultWith (fun () ->
+            Assert.Fail("missing ReconnectButton")
+            Unchecked.defaultof<_>)
+
+    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))
+
+    Assert.Equal(1, reconnectCount)

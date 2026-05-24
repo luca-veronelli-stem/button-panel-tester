@@ -24,6 +24,7 @@
         <Compile Include="Gui/DictionaryStatusRowTests.fs" />
         <Compile Include="Gui/DictionaryStatusRowRefreshTests.fs" />
         <Compile Include="Gui/RegistrationDialogTests.fs" />
+        <Compile Include="Gui/Can/CanStatusRowTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
