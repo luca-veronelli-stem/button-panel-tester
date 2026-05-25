@@ -16,10 +16,12 @@ Entry point for any developer picking up spec-002 work. Assumes spec-001's quick
 ## Repo setup
 
 ```powershell
-# 1. Fetch / verify the worktree
-cd C:\Users\veron\Source\Repos\Stem
-# (worktree already exists at .\button-panel-tester-002-can-link)
-cd .\button-panel-tester-002-can-link
+# 1. Set up a worktree on the feature branch (the main repo stays on `main`).
+#    Substitute <repo-root> with wherever the repo sits on your machine --
+#    e.g. C:\Users\<you>\Source\Repos\button-panel-tester.
+cd <repo-root>
+git worktree add ..\button-panel-tester-002-can-link feat/002-can-link-and-panel-discovery
+cd ..\button-panel-tester-002-can-link
 
 # 2. Vendor the protocol stack (one-time per stem-device-manager SHA)
 .\eng\vendor-protocol-stack.ps1 -StemDeviceManagerPath ..\stem-device-manager -CommitSha <SHA>
