@@ -184,8 +184,25 @@ eng/
 
 ## Status
 
-- [x] Phase 0 — research.md (decisions: vendor file set, port shape split, IObservable surface, Lean Phase 2 style; see [research.md](./research.md))
-- [x] Phase 1 — data-model.md, contracts/, quickstart.md
-- [x] Constitution Check (post-design re-evaluation): still PASS, single stopgap unchanged
-- [ ] `/speckit.tasks` — break this plan into dependency-ordered work units
-- [ ] `/speckit.implement`
+*Last refreshed: 2026-05-25 (post-PR-C fix queue). Living Plan per the speckit RPI overlay — `Completed` / `Current` / `Blockers`.*
+
+### Completed
+
+- Phase 0 — `research.md` (vendor file set, port shape split, `IObservable` surface, Lean Phase 2 style).
+- Phase 1 — `data-model.md`, `contracts/`, `quickstart.md`; Constitution Check (post-design re-eval) PASS, single stopgap unchanged.
+- `/speckit.tasks` — `tasks.md` landed on `main` via PR [#119](https://github.com/luca-veronelli-stem/button-panel-tester/pull/119).
+- Phase 1 Setup (T001–T011) — vendor stack + scaffolding via PR-A [#120](https://github.com/luca-veronelli-stem/button-panel-tester/pull/120). Boot-sequence extract added by PR [#133](https://github.com/luca-veronelli-stem/button-panel-tester/pull/133) closes the T040b deferral with `src/ButtonPanelTester.Services/BootSequence.fs` + FR-001 ordering test (issue [#125](https://github.com/luca-veronelli-stem/button-panel-tester/issues/125)).
+- Phase 2 Foundational (T012–T033) — Core types + ports + virtual fakes + 5 FsCheck suites + 6 Lean Phase 2 theorems + WHO_I_AM fixtures via PR-B [#121](https://github.com/luca-veronelli-stem/button-panel-tester/pull/121).
+- Phase 3 US1 — MVP (T034–T043) — `PcanCanLink` + `CanLinkService` lifecycle slice + `CanStatusRow` + composition root wiring + integration/GUI/hardware tests via PR-C [#122](https://github.com/luca-veronelli-stem/button-panel-tester/pull/122).
+- Phase 3.5 post-PR-C fix queue — 5 of 9 amendments shipped (full task table in `tasks.md` §Phase 3.5): PR [#133](https://github.com/luca-veronelli-stem/button-panel-tester/pull/133), [#134](https://github.com/luca-veronelli-stem/button-panel-tester/pull/134), [#135](https://github.com/luca-veronelli-stem/button-panel-tester/pull/135), [#138](https://github.com/luca-veronelli-stem/button-panel-tester/pull/138), [#141](https://github.com/luca-veronelli-stem/button-panel-tester/pull/141).
+
+### Current
+
+- Closing out the Phase 3.5 fix queue before PR-D (`/speckit.implement` Phase 4, US2 panel discovery, tracked by [#116](https://github.com/luca-veronelli-stem/button-panel-tester/issues/116)).
+- PR-D, PR-E ([#117](https://github.com/luca-veronelli-stem/button-panel-tester/issues/117), US3 mid-session unplug), and PR-F ([#118](https://github.com/luca-veronelli-stem/button-panel-tester/issues/118), Phase N polish) remain ahead — none started.
+
+### Blockers
+
+- Open Phase 3.5 amendments gating PR-D (each a one-PR slice; full task body in `tasks.md` §Phase 3.5): [#128](https://github.com/luca-veronelli-stem/button-panel-tester/issues/128), [#129](https://github.com/luca-veronelli-stem/button-panel-tester/issues/129), [#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136), [#139](https://github.com/luca-veronelli-stem/button-panel-tester/issues/139), [#142](https://github.com/luca-veronelli-stem/button-panel-tester/issues/142). [#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136) widens `Disconnected` arity, so it forces a Lean Phase 2 re-parametrisation alongside the F# change.
+- Non-blocking carry-overs tracked for visibility, NOT gating PR-D: [#132](https://github.com/luca-veronelli-stem/button-panel-tester/issues/132) (hot-plug regression test, depends on [#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)), [#140](https://github.com/luca-veronelli-stem/button-panel-tester/issues/140) (GUI tooltip test).
+- C4 follow-up (driver-download link in Fatal-driver-missing) — its own follow-up issue per the PR-C handoff plan; requires a spec amendment to FR-002a / FR-004 plus a new FR for the remediation hyperlink affordance. Not gating PR-D.
