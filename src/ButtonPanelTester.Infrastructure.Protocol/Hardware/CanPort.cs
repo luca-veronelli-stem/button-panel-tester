@@ -44,9 +44,7 @@ public sealed class CanPort : ICommunicationPort
     {
         ArgumentNullException.ThrowIfNull(driver);
         _driver = driver;
-        _state = (int)(driver.IsConnected
-            ? ConnectionState.Connected
-            : ConnectionState.Disconnected);
+        _state = (int)ConnectionState.Disconnected;
         _driver.PacketReceived += OnDriverPacketReceived;
         _driver.ConnectionStatusChanged += OnDriverConnectionChanged;
     }

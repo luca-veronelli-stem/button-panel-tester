@@ -41,6 +41,7 @@
 | File | Lines | Why | Upstream PR |
 |------|-------|-----|-------------|
 | Hardware/PCANManager.cs | +78, -9 | Add `IAsyncDisposable` + `CancellationTokenSource` so the background connection-monitor and read loops stop cleanly on dispose. `IPcanDriver` is unchanged; the new lifecycle is exposed only on the concrete class. Required by spec-002 `PcanCanLink` (issue #113). | https://github.com/luca-veronelli-stem/stem-device-manager/pull/117 |
+| Hardware/CanPort.cs | +1, -3 | Drop the constructor-time `driver.IsConnected` snapshot so `_state` always starts at `Disconnected`. With the snapshot, `ConnectAsync` early-returned at `:73` when the driver was already connected at ctor time (e.g. after `PCANManager`'s eager `PCANBasic.Initialize`), leaving any subscriber attached after construction without a `StateChanged(Connected)` emission and stranding `PcanCanLink` in `Initializing`. Restoring the unconditional `Disconnected` initial value routes the cold-start path through the existing `ConnectAsync` poll loop, which fires `Transition(Connected)` on the first iteration. Required by spec-002 `PcanCanLink` (issue #127, F6/FR-001). | https://github.com/luca-veronelli-stem/stem-device-manager/pull/118 |
 
 ## Removal path
 
