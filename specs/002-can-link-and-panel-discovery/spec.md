@@ -4,7 +4,7 @@
 
 **Created**: 2026-05-24
 
-**Status**: Draft
+**Status**: Implementing — Phase 3 (US1, MVP) shipped via PR [#122](https://github.com/luca-veronelli-stem/button-panel-tester/pull/122); Phase 4 (US2, panel discovery) blocked on the Phase 3.5 fix queue documented in [`tasks.md`](./tasks.md).
 
 **Input**: User description: "Open the configured PEAK PCAN-USB adapter at 250 kbps as soon as the application has finished its dictionary-fetch boot sequence, and keep a persistent CAN-bus status row on the main window with the same shape and behaviour as the dictionary status row from feat-001 (colour-coded headline, human-readable detail, manual reconnect control). While connected, listen for STEM auto-address WHO_I_AM broadcasts on the bus and present any panels seen in a passive Panels-on-bus list: UUID, current MachineType decoded to a marketing variant name where known, and the timestamp of the most recent broadcast from that panel. No commands are sent; this slice is pure observation. Virgin panels self-announce in their AAS_STARTUP state on a UUID-derived ~2–6 s timer, so the supplier QA bench scenario (12 pristine panels) populates without transmit. Claimed panels in AAS_STAND_BY are silent. If no PEAK adapter is present, the status row shows a friendly Disconnected state and the rest of the UI stays usable so the dictionary status from feat-001 remains visible."
 
