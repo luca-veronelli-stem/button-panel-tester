@@ -82,6 +82,7 @@ The CAN status row reflects the loss within a small handful of seconds, the Pane
 2. **Given** the link has been lost, **When** the technician observes the Panels-on-bus list, **Then** the list is empty — no stale rows remain from the previous Connected window.
 3. **Given** the link has been lost, **When** the technician observes the dictionary status row from feat-001, **Then** it is unchanged — the dictionary state from feat-001 is independent of the CAN link state.
 4. **Given** the link has been lost and the technician has re-seated the adapter, **When** they click the reconnect control, **Then** the status row transitions back to Connected and the Panels-on-bus list resumes populating from fresh broadcasts.
+5. **Given** the link has been lost via `MidSessionUnplug`, **When** the technician re-seats the adapter without clicking the reconnect control, **Then** the status row returns to Connected within 5 seconds and the Panels-on-bus list resumes populating from fresh broadcasts. (Hot-plug auto-reconnect is provided implicitly by the vendored protocol stack — see §Dependencies and [#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111) for the regression risk.)
 
 ---
 
