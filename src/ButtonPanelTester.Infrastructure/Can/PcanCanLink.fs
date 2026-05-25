@@ -182,8 +182,20 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
                 // First observation of an unexpected PEAK status is
                 // Recoverable; CanLinkService escalates to Fatal on the
                 // second observation across a reconnect per
-                // `research.md` R8.
-                let state = Error(Recoverable "PEAK adapter reported Error", now)
+                // `research.md` R8. The detail string follows the
+                // headline\ntechnical convention `buildFailureState`
+                // uses (see comment on that helper). `PeakErrorText`
+                // queries the actual PEAK status text (issue #124,
+                // FR-004); the fallback fires when `PCANBasic.dll` is
+                // unreachable on the host — the technical line is
+                // still non-empty so `CanStatusRow`'s tooltip stays
+                // informative.
+                let detail =
+                    PeakErrorText.tryReadCurrentErrorDetail ()
+                    |> Option.defaultValue
+                        "PEAK adapter reported Error\nPEAK status query unavailable"
+
+                let state = Error(Recoverable detail, now)
                 currentState <- state
                 Some state
             | ConnectionState.Connecting
