@@ -18,6 +18,7 @@
         <Compile Include="Unit/InstallationDescriptorProviderTests.fs" />
         <Compile Include="Unit/Can/CanPortCtorTests.fs" />
         <Compile Include="Unit/Can/PcanCanLinkColdStartTests.fs" />
+        <Compile Include="Unit/Can/PcanCanLinkErrorTextTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTimeoutTests.fs" />
         <Compile Include="Integration/HttpDictionaryProviderTests.fs" />
