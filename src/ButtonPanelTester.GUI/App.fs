@@ -21,6 +21,7 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Core.Dictionary
+open Stem.ButtonPanelTester.Services
 open Stem.ButtonPanelTester.Services.Can
 open Stem.ButtonPanelTester.Services.Dictionary
 open Stem.ButtonPanelTester.Services.Registration
@@ -408,24 +409,21 @@ type MainWindow(services: IServiceProvider) as this =
                         credentialStore
                         runDialog
                         CancellationToken.None
-                let! _ = initTask
 
                 // FR-001 / SC-001: open the CAN link only AFTER
-                // dictionary boot has completed. Failures surface via
-                // `LinkStateChanged` (the row chip flips to red /
-                // grey) so the technician sees the same observable
-                // state path as a mid-session unplug; this `try`
-                // exists only to keep an unexpected runtime exception
-                // from tearing down the Opened handler.
-                try
-                    do! canLinkService.InitializeAsync(CancellationToken.None)
-                with
-                | :? OperationCanceledException -> ()
-                | ex ->
-                    mainLogger.LogWarning(
-                        ex,
-                        "ICanLinkService.InitializeAsync raised; CAN row will reflect via LinkStateChanged"
-                    )
+                // dictionary boot has completed. The ordering is a
+                // domain invariant, so it lives in
+                // `Services/BootSequence.fs` and the GUI delegates.
+                // Failures surface via `LinkStateChanged` (the row
+                // chip flips to red / grey); `BootSequence`
+                // swallows the exception so this `Opened` handler
+                // is not torn down on a transient adapter problem.
+                let! _ =
+                    BootSequence.runBootSequence
+                        initTask
+                        canLinkService
+                        mainLogger
+                        CancellationToken.None
 
                 ()
             }) |> ignore)
