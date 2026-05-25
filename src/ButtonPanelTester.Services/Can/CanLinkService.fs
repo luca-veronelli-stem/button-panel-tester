@@ -89,10 +89,15 @@ type CanLinkService(link: ICanLink, _clock: IClock, logger: ILogger<CanLinkServi
     /// across an `await`.
     let stateLock = obj ()
 
-    /// Most-recent Recoverable cause string observed. Cleared on any
-    /// successful `Connected` per R8 ("counter resets to zero on any
-    /// successful Open").
-    let mutable lastRecoverableCause: string option = None
+    /// First Recoverable observation (cause + `since`) of the current
+    /// error cycle. Anchored at the first observation so subsequent
+    /// emissions of the SAME cause carry the original `since` — both
+    /// the escalation to `Fatal` and any further `Recoverable`
+    /// re-emission preserve the timestamp per FR-002b (#130). Cleared
+    /// on any successful `Connected` per R8 ("counter resets to zero
+    /// on any successful Open"); replaced whenever a DIFFERENT cause
+    /// arrives.
+    let mutable lastRecoverableObservation: (string * DateTimeOffset) option = None
 
     /// `true` once `ReconnectAsync` has been invoked while a
     /// Recoverable cause was being tracked. Re-armed to `false` on
@@ -117,20 +122,25 @@ type CanLinkService(link: ICanLink, _clock: IClock, logger: ILogger<CanLinkServi
             let effective, escalated =
                 match rawState with
                 | Error(Recoverable cause, since) ->
-                    match lastRecoverableCause with
-                    | Some prevCause when
-                        prevCause = cause && reconnectSinceLastRecoverable
-                        ->
-                        let detail =
-                            sprintf "%s persists across reconnect — file bug" cause
+                    match lastRecoverableObservation with
+                    | Some(prevCause, originalSince) when prevCause = cause ->
+                        // Same root cause re-observed — anchor `since`
+                        // at the first observation (FR-002b). Escalate
+                        // to Fatal iff the user has explicitly
+                        // reconnected since the prior emission.
+                        if reconnectSinceLastRecoverable then
+                            let detail =
+                                sprintf "%s persists across reconnect — file bug" cause
 
-                        Error(Fatal detail, since), true
+                            Error(Fatal detail, originalSince), true
+                        else
+                            Error(Recoverable cause, originalSince), false
                     | _ ->
-                        lastRecoverableCause <- Some cause
+                        lastRecoverableObservation <- Some(cause, since)
                         reconnectSinceLastRecoverable <- false
                         rawState, false
                 | Connected _ ->
-                    lastRecoverableCause <- None
+                    lastRecoverableObservation <- None
                     reconnectSinceLastRecoverable <- false
                     rawState, false
                 | _ -> rawState, false
@@ -188,7 +198,7 @@ type CanLinkService(link: ICanLink, _clock: IClock, logger: ILogger<CanLinkServi
             // leave the tracker armed and falsely escalate the first
             // ever Recoverable.
             lock stateLock (fun () ->
-                if lastRecoverableCause.IsSome then
+                if lastRecoverableObservation.IsSome then
                     reconnectSinceLastRecoverable <- true)
 
             logger.LogInformation("CanLinkService.ReconnectAsync requested by user")
