@@ -81,6 +81,77 @@ let private fixedAdapter: AdapterIdentification =
       SerialNumber = "00000001"
       BaudrateBps = 250_000 }
 
+// --- FR-003 visibility matrix (issue #128 / analyze finding F5) ---
+//
+// Single source of truth for the Reconnect-button visibility table
+// amended in PR #126. Rows map 1:1 to FR-003's enumeration in
+// `specs/002-can-link-and-panel-discovery/spec.md` so a future change
+// to the rules surfaces here as a single edit + a failing assertion
+// rather than scattered ad-hoc facts.
+//
+// Asserts on the pure `shouldShowReconnectButton` predicate. The
+// renderer (`view`) consults exactly this predicate to decide whether
+// to splice the button child into the panel, so covering the matrix
+// here is equivalent to covering it on the rendered tree, without
+// pulling the headless Avalonia harness in 8 times. The existing
+// `[<AvaloniaFact>]` cases below already pin the render-time wiring
+// for the four representative states they cover.
+let buttonVisibilityCases () : objnull[] seq =
+    seq {
+        yield [| box "Initializing"; box Initializing; box false |]
+
+        yield
+            [| box "Connected"
+               box (Connected(fixedAdapter, fixedNow))
+               box false |]
+
+        yield
+            [| box "Disconnected · NoAdapterPresent"
+               box (Disconnected(NoAdapterPresent, fixedNow))
+               box true |]
+
+        yield
+            [| box "Disconnected · LinkNotYetOpened"
+               box (Disconnected(LinkNotYetOpened, fixedNow))
+               box true |]
+
+        yield
+            [| box "Disconnected · MidSessionUnplug"
+               box (Disconnected(MidSessionUnplug, fixedNow))
+               box true |]
+
+        yield
+            [| box "Disconnected · ReconnectPending"
+               box (Disconnected(ReconnectPending, fixedNow))
+               box false |]
+
+        yield
+            [| box "Error · Recoverable"
+               box (Error(Recoverable "Bus-off detected", fixedNow))
+               box true |]
+
+        yield
+            [| box "Error · Fatal"
+               box (Error(Fatal "PEAK status 0x40000 persists", fixedNow))
+               box true |]
+    }
+
+[<Theory>]
+[<MemberData(nameof buttonVisibilityCases)>]
+let ShouldShowReconnectButton_MatchesFR003Table
+    (label: string, state: CanLinkState, expectedVisible: bool)
+    =
+    let actualVisible = CanStatusRow.shouldShowReconnectButton state
+
+    Assert.True(
+        (expectedVisible = actualVisible),
+        sprintf
+            "FR-003 row '%s': expected button visible=%b but got %b"
+            label
+            expectedVisible
+            actualVisible
+    )
+
 // --- T042.1: Connected → green chip + "Connected · <channel name>" ---
 
 [<AvaloniaFact>]
