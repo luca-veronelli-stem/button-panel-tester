@@ -126,13 +126,21 @@ module CanStatusRow =
             sprintf "Fatal: %s · since %02d:%02d" detail local.Hour local.Minute
 
     /// `true` iff the row should render the Reconnect button. Per
-    /// T038: visible whenever the state is NOT `Connected` — so the
-    /// technician can always force a fresh attempt unless the link
-    /// is already up.
+    /// FR-003's visibility table (amended in PR #126):
+    /// hidden in `Initializing` and `Disconnected · ReconnectPending`
+    /// because both represent in-flight work where a click races the
+    /// existing call; hidden in `Connected` because the link is
+    /// already up; shown in every other Disconnected sub-case and in
+    /// both Error sub-classifications. The full matrix is exercised
+    /// by `ShouldShowReconnectButton_MatchesFR003Table` in
+    /// `tests/.../CanStatusRowTests.fs`.
     let shouldShowReconnectButton (state: CanLinkState) : bool =
         match state with
+        | Initializing -> false
         | Connected _ -> false
-        | _ -> true
+        | Disconnected(ReconnectPending, _) -> false
+        | Disconnected _ -> true
+        | Error _ -> true
 
     /// Reconnect button caption per T038. Switches to the
     /// "unlikely to help" wording on `Error.Fatal` so the
