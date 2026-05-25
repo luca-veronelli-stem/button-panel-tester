@@ -132,6 +132,7 @@ Archetype A, two-TFM split (see `plan.md` §Project Structure):
 
 - [ ] T-amend-10 [P] — hot-plug auto-reconnect regression test for FR-005 / Dependencies note (depends on the `Stem.Communication` migration in [#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)). Issue [#132](https://github.com/luca-veronelli-stem/button-panel-tester/issues/132).
 - [ ] T-amend-11 [P] — GUI tooltip test asserting `CanStatusRow` detail renders the `since` / opened timestamp per FR-004 + FR-002b. Issue [#140](https://github.com/luca-veronelli-stem/button-panel-tester/issues/140).
+- [ ] T-amend-12 (C4 from PR-C audit) — render a driver-download remediation link inside the `Error · Fatal · "PEAK PCANBasic native DLL not found …"` chip; requires spec amendments to FR-002a / FR-004 plus a new FR for the remediation hyperlink affordance. Issue [#143](https://github.com/luca-veronelli-stem/button-panel-tester/issues/143).
 
 **Checkpoint (Phase 3.5)**: open amendments above are closed; `dotnet test --filter "Category!=Hardware"` green; `lake build` re-greens (T-amend-8 invalidates Phase 2 proofs that must be re-proven). At this point PR-D / Phase 4 may start.
 
