@@ -61,17 +61,19 @@ type private SubjectFanOut<'T>() =
 /// Constructor parameters:
 ///   - `link`   — `ICanLink` port; `PcanCanLink` in production
 ///                (T035), `InMemoryCanLink` in tests.
-///   - `clock`  — `IClock` port; carried so future slices can stamp
-///                service-synthesised transitions without a
-///                constructor signature change. Today the escalated
+///   - `clock`  — `IClock` port; stamps service-synthesised
+///                transitions. Today `ReconnectAsync` stamps the
+///                `Disconnected(ReconnectPending, clock.UtcNow())`
+///                emission it synthesises before delegating to the
+///                link (#131 / FR-003 click-feedback). The escalated
 ///                `Fatal` state reuses the originating Recoverable's
-///                timestamp so the visible "since" field tracks the
-///                ROOT cause, not the moment the escalation rule
-///                fired.
+///                timestamp instead so the visible "since" field
+///                tracks the ROOT cause, not the moment the
+///                escalation rule fired.
 ///   - `logger` — `ILogger<CanLinkService>`. Lifecycle events log at
 ///                `Information`; each Recoverable→Fatal escalation
 ///                logs at `Warning`.
-type CanLinkService(link: ICanLink, _clock: IClock, logger: ILogger<CanLinkService>) =
+type CanLinkService(link: ICanLink, clock: IClock, logger: ILogger<CanLinkService>) =
 
     let stateSubject = SubjectFanOut<CanLinkState>()
     let panelsSubject = SubjectFanOut<PanelsOnBus>()
@@ -200,6 +202,22 @@ type CanLinkService(link: ICanLink, _clock: IClock, logger: ILogger<CanLinkServi
             lock stateLock (fun () ->
                 if lastRecoverableObservation.IsSome then
                     reconnectSinceLastRecoverable <- true)
+
+            // FR-003 click-feedback contract (#131). Paint
+            // `Disconnected(ReconnectPending, clock.UtcNow())` from
+            // the moment the user clicks Reconnect, regardless of
+            // source state. From `Disconnected(MidSessionUnplug, _)`
+            // the adapter is already gone — `PcanCanLink`'s close
+            // step is a no-op and the link never emits
+            // `ReconnectPending` on its own, so without this the chip
+            // would jump straight from the prior state to whatever
+            // the next Open attempt surfaces. `translate` leaves
+            // Disconnected observations untouched (no tracker
+            // mutation, no escalation), so the synthesised emission
+            // is a pure GUI signal.
+            let pending = Disconnected(ReconnectPending, clock.UtcNow())
+            let effective, _ = translate pending
+            stateSubject.OnNext effective
 
             logger.LogInformation("CanLinkService.ReconnectAsync requested by user")
             link.ReconnectAsync(cancellationToken)

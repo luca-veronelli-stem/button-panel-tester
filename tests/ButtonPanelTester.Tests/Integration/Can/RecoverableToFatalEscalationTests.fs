@@ -34,6 +34,15 @@ open Stem.ButtonPanelTester.Tests.Fakes.Can
 ///     tracker (next same-cause Recoverable gets fresh `since`),
 ///     `Disconnected` preserves it (re-entering the same cause keeps
 ///     the original `since` and can still escalate).
+///
+/// Note on FR-003 click-feedback (#131): every `service.ReconnectAsync`
+/// call synthesises a `Disconnected(ReconnectPending, clock.UtcNow())`
+/// emission BEFORE delegating to the link. The escalation tracker is
+/// untouched by Disconnected observations (R8 only mutates the
+/// tracker on Recoverable / Connected / explicit reconnect arming),
+/// so the synthesised emission is invisible to escalation semantics
+/// but shows up at the observable surface. Assertions below include
+/// it explicitly between the prior state and the link's next emission.
 
 // --- fixtures ---
 
@@ -83,15 +92,18 @@ let SameRecoverableAfterReconnect_EscalatesToFatalWithPersistsDetail () =
     service.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
     service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    Assert.Equal(2, observed.Count)
+    Assert.Equal(3, observed.Count)
     Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t1), observed.[0])
+    // FR-003 click-feedback (#131): synthesised between Recoverable
+    // and the next link emission.
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
 
     let expectedDetail =
         sprintf "%s persists across reconnect — file bug" peakStatusCause
 
     // FR-002b: the escalated `Fatal` carries the FIRST Recoverable
     // observation's timestamp, not the re-observation's timestamp.
-    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[1])
+    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[2])
     Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), service.CurrentState)
 
 // --- reset-on-success ---
@@ -115,10 +127,15 @@ let RecoverableThenConnectedThenSameRecoverable_StaysRecoverable () =
     service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
     service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    Assert.Equal(3, observed.Count)
+    // Two ReconnectAsync calls each insert a synthesised
+    // Disconnected(ReconnectPending, fixedNow) per FR-003 (#131)
+    // BEFORE the link's next emission.
+    Assert.Equal(5, observed.Count)
     Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t1), observed.[0])
-    Assert.Equal<CanLinkState>(Connected(fixedAdapter, openedAt), observed.[1])
-    Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t3), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Connected(fixedAdapter, openedAt), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[3])
+    Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t3), observed.[4])
 
     Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t3), service.CurrentState)
 
@@ -143,9 +160,14 @@ let ReconnectThenFirstRecoverable_StaysRecoverable () =
     service.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
     service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    Assert.Equal(2, observed.Count)
+    Assert.Equal(3, observed.Count)
     Assert.Equal<CanLinkState>(Disconnected(NoAdapterPresent, fixedNow), observed.[0])
-    Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t1), observed.[1])
+    // FR-003 click-feedback (#131): synthesised before the link's
+    // next emission. ReconnectAsync without a prior Recoverable
+    // does not arm the tracker, so the Recoverable observed next
+    // starts a fresh cycle (no escalation).
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t1), observed.[2])
 
 // --- since stickiness across N reconnect cycles (FR-002b, #130) ---
 
@@ -180,11 +202,18 @@ let MultipleEscalationCycles_FatalSinceStaysAtFirstObservation () =
     let expectedDetail =
         sprintf "%s persists across reconnect — file bug" peakStatusCause
 
-    Assert.Equal(4, observed.Count)
+    // Three ReconnectAsync calls each insert a synthesised
+    // Disconnected(ReconnectPending, fixedNow) per FR-003 (#131)
+    // BEFORE the link's next Recoverable emission, which then
+    // escalates to Fatal@t1 by the FR-002b stickiness rule.
+    Assert.Equal(7, observed.Count)
     Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t1), observed.[0])
-    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[1])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
     Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[2])
-    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[3])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[3])
+    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[4])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[5])
+    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[6])
     Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), service.CurrentState)
 
 // --- root cause change resets the since anchor (FR-002b, #130) ---
@@ -212,9 +241,10 @@ let DifferentRecoverableCauseAfterReconnect_NewCauseGetsNewSinceWithoutEscalatio
     service.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
     service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    Assert.Equal(2, observed.Count)
+    Assert.Equal(3, observed.Count)
     Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t1), observed.[0])
-    Assert.Equal<CanLinkState>(Error(Recoverable otherPeakStatusCause, t2), observed.[1])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Error(Recoverable otherPeakStatusCause, t2), observed.[2])
     Assert.Equal<CanLinkState>(Error(Recoverable otherPeakStatusCause, t2), service.CurrentState)
 
 // --- leaving Error via Disconnected (not Connected) preserves the tracker (FR-002b) ---
@@ -248,10 +278,12 @@ let RecoverableThenDisconnectedThenSameRecoverable_PreservesOriginalSince () =
     let expectedDetail =
         sprintf "%s persists across reconnect — file bug" peakStatusCause
 
-    Assert.Equal(3, observed.Count)
+    Assert.Equal(5, observed.Count)
     Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t1), observed.[0])
-    Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), observed.[1])
-    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[3])
+    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[4])
     Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), service.CurrentState)
 
 [<Fact>]
@@ -277,8 +309,10 @@ let RecoverableThenDisconnectedThenDifferentRecoverable_DistinctCauseGetsNewSinc
     service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
     service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    Assert.Equal(3, observed.Count)
+    Assert.Equal(5, observed.Count)
     Assert.Equal<CanLinkState>(Error(Recoverable peakStatusCause, t1), observed.[0])
-    Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), observed.[1])
-    Assert.Equal<CanLinkState>(Error(Recoverable otherPeakStatusCause, t3), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[3])
+    Assert.Equal<CanLinkState>(Error(Recoverable otherPeakStatusCause, t3), observed.[4])
     Assert.Equal<CanLinkState>(Error(Recoverable otherPeakStatusCause, t3), service.CurrentState)
