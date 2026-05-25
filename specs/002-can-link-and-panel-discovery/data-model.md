@@ -36,6 +36,17 @@ type CanLinkState =
 | `Error.Recoverable` | FR-002a; edges "bus-off" / "unexpected status (first time)" | Reconnect click can clear (FR-003). |
 | `Error.Fatal` | FR-002a; edges "driver not installed" / "unexpected status (repeated)" | Reconnect click is unlikely to help (FR-003). |
 
+**Detail-string convention.** Adapters that need to pair a short headline
+with technical detail encode both into the `Recoverable`/`Fatal` `detail`
+string using `\n` as the separator. First line = headline shown in the
+status row chip (`CanStatusRow.headline` splits on the first `\n`);
+subsequent lines = technical detail rendered in the GUI detail
+affordance (`CanStatusRow.detailText`). The data model stays unchanged.
+Consumers: `PcanCanLink.buildFailureState` (producer comment block);
+`CanStatusRow.firstLine` (consumer). A structured
+`technicalDetail: string option` refactor would touch Lean theorems and
+is deferred to a later spec.
+
 ### 1.2 State-machine diagram
 
 ```mermaid
@@ -170,7 +181,7 @@ For spec-002, `ttl = TimeSpan.FromSeconds 15.0` (FR-011, locked by clarify).
 
 ## 6. Adapter identification
 
-### 6.1 `AdapterIdentification` (record, `src/ButtonPanelTester.Infrastructure/Can/PcanAdapterIdentity.fs`)
+### 6.1 `AdapterIdentification` (record, `src/ButtonPanelTester.Core/Can/CanLinkState.fs`)
 
 ```fsharp
 type AdapterIdentification = {
@@ -179,6 +190,8 @@ type AdapterIdentification = {
     BaudrateBps : int          // always 250000 in spec-002
 }
 ```
+
+The record lives in `Core` because it is part of `CanLinkState.Connected`'s payload and the `ICanLink` port surface — Principle III requires port-shape types to live alongside the port. The construction helper that queries the PEAK driver for the live channel name + serial sits at `src/ButtonPanelTester.Infrastructure/Can/PcanAdapterIdentity.fs` (Infrastructure side of the boundary).
 
 Rendered in the CAN status row's detail affordance (FR-004). Never leaves the supplier's machine — Principle V is satisfied by construction because the field is GUI-only and there is no telemetry path from this struct.
 
