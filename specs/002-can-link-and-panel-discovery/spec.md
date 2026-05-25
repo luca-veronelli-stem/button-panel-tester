@@ -15,6 +15,10 @@
 - Q: Pruning threshold for the Panels-on-bus list — value? → A: **15 s** (≈ 2.5× the worst-case ~6 s WHO_I_AM broadcast cadence). Plus the bench convention: the tool is connected to **at most one button panel at a time** (the supplier validates panels one-by-one).
 - Q: What triggers the CAN status row's `Error` state vs `Disconnected`, and how granular should the Error state be? → A: **Three top-level chip states (Connected / Disconnected / Error), with the Error state internally sub-typed.** `Disconnected` = anything a reconnect click is the expected resolution for (no adapter, link down, mid-session unplug). `Error` = anything beyond a routine link-down — the chip colour signals "something's wrong" at a glance; the detail affordance labels the case as either **Recoverable** (a reconnect click may clear it: bus-off detected, transient unexpected PEAK driver status) or **Fatal** (the technician must take external action: driver not installed, hardware failure, persistent unrecognised PEAK status). Mirrors the way FR-005 already splits Disconnected sub-cases internally — same pattern, applied to Error.
 
+### Session 2026-05-25 (bench feedback on PR #122 build)
+
+- Q: Should the Recoverable/Fatal classification appear only in the detail affordance, or also in the chip headline? → A: **Also in the chip headline.** Bench feedback showed the severity is high-signal at a glance — the technician should see `Error · Fatal · "<detail>"` or `Error · Recoverable · "<detail>"` in the headline without having to hover. The detail affordance still carries the full multi-line context (technical reason, `since` timestamp) but no longer holds the severity exclusively.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Inspecting CAN link state at start of shift (Priority: P1)
@@ -102,7 +106,7 @@ The CAN status row reflects the loss within a small handful of seconds, the Pane
   - **Connected** — the adapter is open and the bus is operational.
   - **Disconnected** — link is down, and a reconnect click is the expected resolution (no adapter present, mid-session unplug, link not yet established at boot, reconnect attempt pending).
   - **Error** — something beyond a routine link-down; the technician must read the detail affordance for remediation.
-- **FR-002a**: When the state is Error, the detail affordance MUST classify the underlying cause as one of:
+- **FR-002a**: When the state is Error, the classification MUST be surfaced **both in the chip headline and in the detail affordance**. The chip headline takes the form `Error · Recoverable · "<short detail>"` or `Error · Fatal · "<short detail>"`; the detail affordance carries the full multi-line context. The two sub-classifications:
   - **Recoverable** — a reconnect click may clear it (e.g., bus-off detected by the CAN controller, transient unexpected PEAK driver status code). The detail text MUST recommend "Try reconnect; escalate if it doesn't clear."
   - **Fatal** — the technician must take external action (e.g., PEAK driver not installed, hardware failure, persistent unrecognised PEAK status). The detail text MUST recommend the concrete external step (install driver, restart tool, file bug with the status code).
   This split mirrors how FR-005 internally splits Disconnected sub-cases.
