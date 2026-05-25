@@ -47,6 +47,18 @@ Consumers: `PcanCanLink.buildFailureState` (producer comment block);
 `technicalDetail: string option` refactor would touch Lean theorems and
 is deferred to a later spec.
 
+**`since` semantics (FR-002b).** The `since: DateTimeOffset` carried by
+`Error(_, since)` reflects the moment the underlying root cause was
+**first observed**. Producers (link adapters, `CanLinkService`'s
+Recoverable→Fatal escalation) MUST preserve the original `since` when
+the same root cause is re-observed across reconnect attempts. Updates
+are correct only when the cause itself changes — for example, the chip
+transitions out of Error (Connected or Disconnected) and a later
+distinct fault re-enters Error. The same rule applies to the
+`openedAt` field of `Connected` and the `since` of `Disconnected` for
+internal consistency, though the bench-driven case is FR-002b's Error
+path.
+
 ### 1.2 State-machine diagram
 
 ```mermaid
