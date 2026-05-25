@@ -26,6 +26,12 @@ open Stem.ButtonPanelTester.Tests.Fakes.Can
 ///   - (c) `Disconnected(NoAdapterPresent) → Connected →
 ///         Disconnected(MidSessionUnplug)` round-trip preserves the
 ///         observable state at each transition.
+///   - (d) `ReconnectAsync` from `Disconnected(MidSessionUnplug, _)`
+///         synthesises a `Disconnected(ReconnectPending, clock.UtcNow())`
+///         emission BEFORE delegating to the link — FR-003 click
+///         feedback contract (#131). Source-state timestamp is
+///         picked distinct from `fixedNow` so the synthesised
+///         emission's `clock.UtcNow()` value is distinguishable.
 
 // --- fixtures ---
 
@@ -130,7 +136,53 @@ let Lifecycle_DisconnectedConnectedDisconnected_PreservesObservableStateAtEachTr
     canService.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
     Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), canService.CurrentState)
 
-    Assert.Equal(3, observed.Count)
+    // Each `ReconnectAsync` call adds a service-synthesised
+    // `Disconnected(ReconnectPending, clock.UtcNow())` emission BEFORE
+    // the link's next scripted state, per FR-003 (#131). So the
+    // 3-step script produces 5 observations: scripted, synth,
+    // scripted, synth, scripted.
+    Assert.Equal(5, observed.Count)
     Assert.Equal<CanLinkState>(Disconnected(NoAdapterPresent, fixedNow), observed.[0])
-    Assert.Equal<CanLinkState>(Connected(fixedAdapter, openedAt), observed.[1])
-    Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Connected(fixedAdapter, openedAt), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[3])
+    Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), observed.[4])
+
+// --- (d) ReconnectAsync paints ReconnectPending from MidSessionUnplug ---
+
+[<Fact>]
+let ReconnectAsync_FromMidSessionUnplug_SynthesisesDisconnectedReconnectPendingBeforeLink () =
+    // Source-state timestamp distinct from `fixedNow` so observed[1]'s
+    // `since = fixedNow` proves it carries the clock's value, not the
+    // scripted state's.
+    let unpluggedAt = fixedNow.AddSeconds(-5.0)
+
+    let script =
+        seq {
+            (Disconnected(MidSessionUnplug, unpluggedAt), TimeSpan.Zero)
+        }
+
+    let link = InMemoryCanLink(script)
+    let clock = fixedClock ()
+
+    let service =
+        CanLinkService(link, clock, NullLogger<CanLinkService>.Instance)
+
+    let observed = collectStates service
+    let canService = service :> ICanLinkService
+
+    canService.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
+    Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), canService.CurrentState)
+
+    canService.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
+
+    // FR-003 click-feedback contract (#131). The chip must paint
+    // `ReconnectPending` from the moment the user clicks Reconnect,
+    // regardless of source state. From `Disconnected(MidSessionUnplug, _)`
+    // the port is already gone, so `PcanCanLink`'s close step is a no-op
+    // and the link never emits `ReconnectPending` on its own — the
+    // service synthesises it.
+    Assert.Equal(2, observed.Count)
+    Assert.Equal<CanLinkState>(Disconnected(MidSessionUnplug, unpluggedAt), observed.[0])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), canService.CurrentState)
