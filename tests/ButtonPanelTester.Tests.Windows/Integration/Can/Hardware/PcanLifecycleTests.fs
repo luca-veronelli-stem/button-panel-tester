@@ -14,12 +14,19 @@ open Stem.ButtonPanelTester.Infrastructure.Can
 
 /// Hardware-marked integration tests for `PcanCanLink` per
 /// `specs/002-can-link-and-panel-discovery/tasks.md` T043. All
-/// cases require a real PEAK PCAN-USB adapter on the host —
-/// excluded from CI via `[<Trait("Category", "Hardware")>]`.
+/// cases require a real PEAK PCAN-USB adapter on the host.
 /// Tracked by [#112](https://github.com/luca-veronelli-stem/button-panel-tester/issues/112).
+///
+/// Carry both `[<Trait("Category", "Hardware")>]` AND `Skip` because the
+/// upstream standards v1.9.0 reusable workflow runs `dotnet test` without
+/// a `--filter` argument, so the Trait alone does not exclude these from
+/// default CI (the local pre-push gate applies the filter, the CI gate
+/// does not — drift tracked for a standards-repo PR).
 ///
 /// Run locally with:
 ///   dotnet test tests/ButtonPanelTester.Tests.Windows --filter "Category=Hardware"
+/// — and remove the `Skip` arguments on the relevant `[<Fact>]`s for the
+/// run, since `xunit` honours `Skip` ahead of the filter.
 ///
 /// Coverage:
 ///   - `OpenAsync 250000` succeeds within 2 s and surfaces
@@ -116,7 +123,7 @@ let private isMidSessionUnplug (state: CanLinkState) =
 // --- T043.1: open succeeds + Connected with non-empty identification ---
 
 [<Trait("Category", "Hardware")>]
-[<Fact>]
+[<Fact(Skip = "Hardware required; runs locally only — tracked by #112. CI runs dotnet test without a Category filter at standards v1.9.0, so the [<Trait>] alone does not exclude this case.")>]
 let OpenAsync_RealAdapter_SurfacesConnectedWithIdentification () =
     let link, cleanup = buildLink ()
     use _ = cleanup
@@ -142,7 +149,7 @@ let OpenAsync_RealAdapter_SurfacesConnectedWithIdentification () =
 // --- T043.2: CloseAsync followed by OpenAsync succeeds ---
 
 [<Trait("Category", "Hardware")>]
-[<Fact>]
+[<Fact(Skip = "Hardware required; runs locally only — tracked by #112. CI runs dotnet test without a Category filter at standards v1.9.0, so the [<Trait>] alone does not exclude this case.")>]
 let CloseAsyncThenOpenAsync_RealAdapter_SecondOpenReachesConnected () =
     let link, cleanup = buildLink ()
     use _ = cleanup
