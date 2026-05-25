@@ -13,6 +13,7 @@
         <Compile Include="Dictionary/WarmUp.fs" />
         <Compile Include="Registration/RegistrationOutcome.fs" />
         <Compile Include="Registration/App.fs" />
+        <Compile Include="BootSequence.fs" />
     </ItemGroup>
 
     <ItemGroup>
