@@ -53,7 +53,7 @@ let private peakStatusCause = "PEAK status 0x40000"
 
 let private fixedAdapter: AdapterIdentification =
     { ChannelName = "PCAN-USB (1)"
-      SerialNumber = "00000001"
+      DeviceId = "0x01"
       BaudrateBps = 250_000 }
 
 let private collectStates (service: ICanLinkService) : List<CanLinkState> =

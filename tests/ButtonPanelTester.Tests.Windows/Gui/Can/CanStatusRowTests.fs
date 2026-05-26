@@ -78,7 +78,7 @@ let private buttonText (b: Button) : string =
 
 let private fixedAdapter: AdapterIdentification =
     { ChannelName = "PCAN-USB Pro FD (1)"
-      SerialNumber = "00000001"
+      DeviceId = "0x01"
       BaudrateBps = 250_000 }
 
 // --- FR-003 visibility matrix (issue #128 / analyze finding F5) ---
@@ -185,7 +185,7 @@ let View_Connected_DetailTooltipMentionsAdapterIdentification () =
     | tooltip ->
         let text = tooltip.ToString()
         Assert.Contains(fixedAdapter.ChannelName, text)
-        Assert.Contains(fixedAdapter.SerialNumber, text)
+        Assert.Contains(fixedAdapter.DeviceId, text)
         Assert.Contains("250000", text)
 
 // --- T042.2: Disconnected(NoAdapterPresent) → grey chip + "no PEAK adapter found" ---

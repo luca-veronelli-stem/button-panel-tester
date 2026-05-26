@@ -87,18 +87,26 @@ module PcanAdapterIdentity =
     /// — the caller (PcanCanLink) treats this as "channel is up but
     /// identity not available" and proceeds with the state transition.
     ///
-    /// **Serial format.** Rendered as `0x<HEX>` with 4-digit zero
-    /// padding — PEAK adapter labels print the serial in hex (typically
-    /// 4 digits for current USB hardware), so the tooltip can be
-    /// compared 1:1 against the sticker. The `0x` prefix disambiguates
-    /// the value from a decimal (a serial like `0042` is hex but reads
-    /// as decimal without a marker). Larger device IDs (>0xFFFF) emit
-    /// extra digits — the `04` is a minimum width, not a truncation.
+    /// **Device ID format.** Rendered as `0x<HEX>` with 2-digit zero
+    /// padding. The PEAK PCAN_DEVICE_ID is a user-settable byte (0x00
+    /// to 0xFF, configurable via PCAN-View → Hardware → Device ID), so
+    /// the natural width is 2 hex digits. The `0x` prefix disambiguates
+    /// from decimal (a value like `0A` reads as either without a
+    /// marker). The PEAK convention on the device sticker is the
+    /// suffix-`h` style (`0Ah`), but we use `0x` to stay consistent
+    /// with the rest of the tooltip vocabulary.
+    ///
+    /// **Robustness.** `%02X` is a *minimum-width* specifier, not a
+    /// truncation — a future PEAK SDK that widened the device ID
+    /// beyond a byte would emit additional hex digits, not crash or
+    /// silently drop high bits. The underlying `tryReadDeviceId` query
+    /// surfaces a `uint32`, so the format is safe across the full
+    /// `0x00000000`–`0xFFFFFFFF` range without changes here.
     let tryRead () : AdapterIdentification option =
         match tryReadHardwareName (), tryReadDeviceId () with
         | Some name, Some deviceId ->
             Some
                 { ChannelName = name
-                  SerialNumber = sprintf "0x%04X" deviceId
+                  DeviceId = sprintf "0x%02X" deviceId
                   BaudrateBps = baudrateBps }
         | _ -> None

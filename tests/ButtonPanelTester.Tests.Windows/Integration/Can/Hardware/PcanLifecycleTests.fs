@@ -136,7 +136,7 @@ let OpenAsync_RealAdapter_SurfacesConnectedWithIdentification () =
     match waitForState observed isConnected connectTimeout with
     | Some(Connected(adapter, _)) ->
         Assert.False(String.IsNullOrWhiteSpace adapter.ChannelName)
-        Assert.False(String.IsNullOrWhiteSpace adapter.SerialNumber)
+        Assert.False(String.IsNullOrWhiteSpace adapter.DeviceId)
         Assert.Equal(baudrateBps, adapter.BaudrateBps)
     | Some other -> Assert.Fail(sprintf "expected Connected, observed %A" other)
     | None ->

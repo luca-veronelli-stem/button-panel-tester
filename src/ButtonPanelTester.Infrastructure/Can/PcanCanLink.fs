@@ -149,7 +149,7 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
     /// chip; the detail affordance shows the placeholder text.
     let placeholderAdapter: AdapterIdentification =
         { ChannelName = "PCAN adapter"
-          SerialNumber = "unknown"
+          DeviceId = "unknown"
           BaudrateBps = 250_000 }
 
     let translateState (newState: ConnectionState) : CanLinkState option =

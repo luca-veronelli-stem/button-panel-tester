@@ -18,7 +18,7 @@ open System
 /// the T012 note in `tasks.md`.
 type AdapterIdentification =
     { ChannelName: string
-      SerialNumber: string
+      DeviceId: string
       BaudrateBps: int }
 
 /// Closed taxonomy of reasons a `CanLinkState.Disconnected` may carry,

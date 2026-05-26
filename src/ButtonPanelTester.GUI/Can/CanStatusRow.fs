@@ -106,9 +106,9 @@ module CanStatusRow =
             let local = openedAt.LocalDateTime
 
             sprintf
-                "%s · serial %s · %d bps · opened %02d:%02d"
+                "%s · device id %s · %d bps · opened %02d:%02d"
                 adapter.ChannelName
-                adapter.SerialNumber
+                adapter.DeviceId
                 adapter.BaudrateBps
                 local.Hour
                 local.Minute
