@@ -37,6 +37,17 @@ module internal PeakErrorText =
     /// established. Returns `None` when either P/Invoke throws (the
     /// most likely cause is a missing `PCANBasic.dll` on the host) so
     /// the caller can emit a non-legacy fallback.
+    ///
+    /// **Vendor-tag convention.** The row is the dedicated CAN status
+    /// row and PEAK is the only supported adapter family, so the
+    /// short headlines below intentionally omit a `PEAK ·` vendor-tag
+    /// prefix — it would produce an ambiguous double-`·` on the row
+    /// (`Recoverable · PEAK · status 0x40000`). The technical second
+    /// line keeps the `PEAK status 0x…` qualifier because that's the
+    /// substantive label PEAK's own SDK uses for the diagnostic.
+    /// If a second adapter family lands, the disambiguator should be
+    /// a structured `Vendor` field on the data model, not a tag
+    /// re-baked into the cause string.
     let tryReadCurrentErrorDetail () : string option =
         try
             let status = PCANBasic.GetStatus channel
@@ -49,13 +60,13 @@ module internal PeakErrorText =
                 let text = buffer.ToString().Trim()
 
                 if System.String.IsNullOrWhiteSpace text then
-                    Some(sprintf "PEAK · status 0x%X\nPEAK status 0x%X (no description)" statusCode statusCode)
+                    Some(sprintf "status 0x%X\nPEAK status 0x%X (no description)" statusCode statusCode)
                 else
-                    Some(sprintf "PEAK · %s\nPEAK status 0x%X" text statusCode)
+                    Some(sprintf "%s\nPEAK status 0x%X" text statusCode)
             else
                 Some(
                     sprintf
-                        "PEAK · status 0x%X\nPEAK GetErrorText failed: 0x%X"
+                        "status 0x%X\nPEAK GetErrorText failed: 0x%X"
                         statusCode
                         (uint32 lookupStatus)
                 )

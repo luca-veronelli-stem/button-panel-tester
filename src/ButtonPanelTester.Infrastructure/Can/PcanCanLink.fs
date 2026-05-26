@@ -193,7 +193,7 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
                 let detail =
                     PeakErrorText.tryReadCurrentErrorDetail ()
                     |> Option.defaultValue
-                        "PEAK adapter reported Error\nPEAK status query unavailable"
+                        "adapter reported error\nPEAK status query unavailable"
 
                 let state = Error(Recoverable detail, now)
                 currentState <- state
@@ -238,7 +238,7 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
                 ),
                 now
             )
-        | _ -> Error(Recoverable(detailFor "PEAK stack failed to initialise"), now)
+        | _ -> Error(Recoverable(detailFor "CAN stack failed to initialise"), now)
 
     /// Build the underlying port on first use, or return the
     /// previously-captured failure state. Mutates `portBuild` under
