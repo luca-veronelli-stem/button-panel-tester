@@ -12,7 +12,7 @@ open Stem.ButtonPanelTester.Core.Dictionary
 /// `IObservable` subject below. Matches the contract of
 /// `Tests.Fakes.Can.InMemoryCanLink`'s subject so production and
 /// virtual adapters expose identical observable semantics
-/// (`specs/002-can-link-and-panel-discovery/research.md` R4).
+/// (`specs/002-can-link-lifecycle/research.md` R4).
 type private Subscription(remove: unit -> unit) =
     interface IDisposable with
         member _.Dispose() = remove ()
@@ -39,7 +39,7 @@ type private SubjectFanOut<'T>() =
 /// `LinkStateChanged` events out to the service-level subject the
 /// GUI subscribes to, and applies the per-cause Recoverable→Fatal
 /// escalation logic from
-/// `specs/002-can-link-and-panel-discovery/research.md` R8.
+/// `specs/002-can-link-lifecycle/research.md` R8.
 ///
 /// **Escalation rule (R8)** — the first observation of an
 /// unexpected PEAK status surfaces as `Error.Recoverable`. If the

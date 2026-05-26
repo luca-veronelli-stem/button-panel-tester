@@ -150,7 +150,7 @@ regenerate. Out-of-band: one upstream PR against
 ### Documentation (this fix)
 
 ```text
-specs/002-can-link-and-panel-discovery/bugs/
+specs/002-can-link-lifecycle/bugs/
 ├── 127-cold-start-hang.md          # spec (unchanged this slice)
 └── 127-cold-start-hang-plan.md     # THIS FILE
 ```

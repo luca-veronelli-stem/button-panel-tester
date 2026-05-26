@@ -13,7 +13,7 @@ open Stem.ButtonPanelTester.Services.Can
 open Stem.ButtonPanelTester.Services.Dictionary
 
 /// Integration tests for `BootSequence.runBootSequence` per
-/// `specs/002-can-link-and-panel-discovery/tasks.md` T040b. Covers
+/// `specs/002-can-link-lifecycle/tasks.md` T040b. Covers
 /// FR-001: the CAN adapter open MUST follow `IDictionaryService`
 /// boot completion, never before. Wired through an in-process spy
 /// `ICanLinkService` and a `TaskCompletionSource` standing in for

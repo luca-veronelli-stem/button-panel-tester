@@ -3,7 +3,7 @@ namespace Stem.ButtonPanelTester.Core.Can
 open System
 
 /// Identifies the PEAK adapter underlying a `Connected` `CanLinkState`,
-/// per `specs/002-can-link-and-panel-discovery/data-model.md` §6.
+/// per `specs/002-can-link-lifecycle/data-model.md` §6.
 ///
 /// Rendered in the CAN status row's detail affordance (FR-004). Carries
 /// the channel name (e.g. `PCAN-USB Pro FD (1)`), the PEAK-reported

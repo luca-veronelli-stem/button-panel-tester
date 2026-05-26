@@ -9,7 +9,7 @@ open Avalonia.FuncUI.Types
 open Stem.ButtonPanelTester.Core.Can
 
 /// FuncUI view for the CAN status row, per
-/// `specs/002-can-link-and-panel-discovery/spec.md` §US1 and
+/// `specs/002-can-link-lifecycle/spec.md` §US1 and
 /// `tasks.md` T038. Renders three observable parts of the
 /// `CanLinkState`:
 ///
@@ -76,7 +76,7 @@ module CanStatusRow =
         | i -> s.Substring(0, i)
 
     /// Headline text shown next to the chip. Format per the amended
-    /// FR-002a (`specs/002-can-link-and-panel-discovery/spec.md`,
+    /// FR-002a (`specs/002-can-link-lifecycle/spec.md`,
     /// clarification session 2026-05-26):
     /// `Connected · <channel name>`, `Disconnected · <reason>`,
     /// `Recoverable · <detail>`, or `Fatal · <detail>`. The "Error"

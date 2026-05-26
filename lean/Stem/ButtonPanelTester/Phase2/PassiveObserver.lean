@@ -1,7 +1,7 @@
 /-
 T032 — Lean Phase-2 module for the passive-observer invariant.
 
-Mechanises SC-007 + FR-014 of `specs/002-can-link-and-panel-discovery/spec.md`:
+Mechanises SC-007 + FR-014 of `specs/002-can-link-lifecycle/spec.md`:
 the tool listens to the CAN bus but never transmits a frame. The
 observation pipeline that lives in `CanLinkService.observe` (T045 / PR-D)
 is purely receive-side; the Lean theorem here models that pipeline with

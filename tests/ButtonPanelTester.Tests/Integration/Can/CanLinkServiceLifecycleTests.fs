@@ -11,7 +11,7 @@ open Stem.ButtonPanelTester.Tests.Fakes
 open Stem.ButtonPanelTester.Tests.Fakes.Can
 
 /// Integration tests for `CanLinkService` per
-/// `specs/002-can-link-and-panel-discovery/tasks.md` T040. Wires the
+/// `specs/002-can-link-lifecycle/tasks.md` T040. Wires the
 /// service through `InMemoryCanLink` (scripted state sequences) +
 /// `FrozenClock` (reused from feat-001's `Fakes/Wiring.fs`) so the
 /// lifecycle observable surface is exercised without a real PEAK

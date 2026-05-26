@@ -3,7 +3,7 @@ namespace Stem.ButtonPanelTester.Core.Can
 open System
 
 /// UUID-keyed map of every panel currently observed on the bus, per
-/// `specs/002-can-link-and-panel-discovery/data-model.md` §5.1. Keying
+/// `specs/003-panel-discovery/data-model.md` §5.1. Keying
 /// by `PanelUuid` is what guarantees coalescing (FR-008): re-broadcasts
 /// of the same panel update the existing row in place rather than
 /// adding a duplicate. The map's value carries the most recent

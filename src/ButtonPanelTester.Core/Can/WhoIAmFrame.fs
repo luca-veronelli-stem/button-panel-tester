@@ -4,7 +4,7 @@ open System
 open System.Buffers.Binary
 
 /// Three-word UUID identifying a button panel, per
-/// `specs/002-can-link-and-panel-discovery/contracts/who-i-am-wire-format.md`
+/// `specs/003-panel-discovery/contracts/who-i-am-wire-format.md`
 /// §Payload table (offsets 2/6/10, each a big-endian `UInt32`). The DU
 /// is a single-case wrapper so call sites cannot accidentally pass an
 /// arbitrary `(uint32, uint32, uint32)` tuple where a `PanelUuid` is

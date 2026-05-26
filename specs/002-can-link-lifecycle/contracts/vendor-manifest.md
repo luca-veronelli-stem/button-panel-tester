@@ -3,7 +3,9 @@
 **Phase 1 output for**: [../plan.md](../plan.md)
 **Concerns**: Constitution Principle VI (Stopgap Discipline) — the vendored `Infrastructure.Protocol` C# stack
 
-Defines the discipline for the spec-002 vendor copy of `stem-device-manager` into `src/ButtonPanelTester.Infrastructure.Protocol/`. The vendoring rules below are derived from the discipline originally documented in `docs/Context/bpt-rollout/02-vendoring-plan.md` and adapted to the source-switch decision in CORRECTIONS.md §C4.
+Defines the discipline for the spec-002/spec-003 shared vendor copy of `stem-device-manager` into `src/ButtonPanelTester.Infrastructure.Protocol/`. The vendoring rules below are derived from the discipline originally documented in `docs/Context/bpt-rollout/02-vendoring-plan.md` and adapted to the source-switch decision in CORRECTIONS.md §C4.
+
+**Cohabitation note (#151)**: the vendored stack is consumed by both spec-002 lifecycle and spec-003 panel-discovery. The discipline applies regardless of which spec a contributor is working on; this contract is canonical for both.
 
 ## `VENDOR.md`
 

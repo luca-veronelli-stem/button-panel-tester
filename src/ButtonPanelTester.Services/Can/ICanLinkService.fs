@@ -6,7 +6,7 @@ open System.Threading.Tasks
 open Stem.ButtonPanelTester.Core.Can
 
 /// Service-level facade over the `ICanLink` + `ICanFrameStream` ports,
-/// per `specs/002-can-link-and-panel-discovery/plan.md` and
+/// per `specs/002-can-link-lifecycle/plan.md` and
 /// `data-model.md` §1 / §5. Concrete implementation `CanLinkService`
 /// lands in T036 (US1 / PR-C, lifecycle slice) with the observation
 /// pipeline extension in T045–T047 (US2 / PR-D). The interface itself
