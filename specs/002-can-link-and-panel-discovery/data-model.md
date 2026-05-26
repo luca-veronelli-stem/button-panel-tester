@@ -198,12 +198,15 @@ For spec-002, `ttl = TimeSpan.FromSeconds 15.0` (FR-011, locked by clarify).
 ```fsharp
 type AdapterIdentification = {
     ChannelName : string       // e.g. "PCAN-USB Pro FD (1)"
-    SerialNumber : string      // PEAK serial; local-only (Principle V)
+    DeviceId    : string       // PEAK `PCAN_DEVICE_ID` rendered as `0x<HEX>`,
+                               // 2-digit minimum width (PEAK device ID is a
+                               // user-settable byte, configurable via PCAN-View);
+                               // local-only (Principle V)
     BaudrateBps : int          // always 250000 in spec-002
 }
 ```
 
-The record lives in `Core` because it is part of `CanLinkState.Connected`'s payload and the `ICanLink` port surface — Principle III requires port-shape types to live alongside the port. The construction helper that queries the PEAK driver for the live channel name + serial sits at `src/ButtonPanelTester.Infrastructure/Can/PcanAdapterIdentity.fs` (Infrastructure side of the boundary).
+The record lives in `Core` because it is part of `CanLinkState.Connected`'s payload and the `ICanLink` port surface — Principle III requires port-shape types to live alongside the port. The construction helper that queries the PEAK driver for the live channel name + device ID sits at `src/ButtonPanelTester.Infrastructure/Can/PcanAdapterIdentity.fs` (Infrastructure side of the boundary).
 
 Rendered in the CAN status row's detail affordance (FR-004). Never leaves the supplier's machine — Principle V is satisfied by construction because the field is GUI-only and there is no telemetry path from this struct.
 
