@@ -237,6 +237,38 @@ let View_ErrorRecoverable_ReconnectButtonReadsTryReconnect () =
     | None -> Assert.Fail("expected a Reconnect button on Error(Recoverable)")
     | Some button -> Assert.Equal("Try reconnect", buttonText button)
 
+// --- T042.5: Error headline encodes severity (issue #129 / analyze finding F4) ---
+//
+// Example-based tests under Principle II's "no reasonable property"
+// exception — the FR-002a chip headline format (`<Severity> · <cause>
+// — <imperative suggestion>`, clarification 2026-05-26) is a
+// presentation choice, not an algebraic property, so the right tool
+// is two explicit cases pinning the exact string. T042 (closed in
+// PR-C) only covered severity in the detail affordance; this
+// complements it by locking the headline contract too. The "Error"
+// prefix is intentionally absent — the red chip already encodes the
+// state family, see the Presentation surfaces section of spec.md.
+
+[<AvaloniaFact>]
+let View_ErrorRecoverable_HeadlineEncodesSeverityAndDetail () =
+    let detail = "Bus-off detected — try reconnect"
+    let state = Error(Recoverable detail, fixedNow)
+
+    let panel = renderState state
+    let headline = headlineChild panel
+
+    Assert.Equal(sprintf "Recoverable · %s" detail, headline.Text)
+
+[<AvaloniaFact>]
+let View_ErrorFatal_HeadlineEncodesSeverityAndDetail () =
+    let detail = "PEAK PCANBasic native DLL not found — install the PEAK driver"
+    let state = Error(Fatal detail, fixedNow)
+
+    let panel = renderState state
+    let headline = headlineChild panel
+
+    Assert.Equal(sprintf "Fatal · %s" detail, headline.Text)
+
 [<AvaloniaFact>]
 let View_ErrorFatal_ReconnectButtonReadsUnlikelyToHelp () =
     let state =

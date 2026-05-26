@@ -19,9 +19,12 @@ open Stem.ButtonPanelTester.Core.Can
 ///      cue from the spec's "answers 'is my CAN link up?' at a
 ///      glance" goal.
 ///   2. **Headline** — `Connected · <channel name>`,
-///      `Disconnected · <reason>`, or `Error · <detail>`. Each
-///      `DisconnectReason` and `ErrorClassification` carries a
-///      human-readable phrase mapped here.
+///      `Disconnected · <reason>`, `Recoverable · <detail>`, or
+///      `Fatal · <detail>` per the amended FR-002a (clarification
+///      2026-05-26). The "Error" prefix is omitted because the red
+///      chip already encodes the Error state family; detail strings
+///      follow `<cause> — <imperative suggestion>` so the suggested
+///      action appears on the row for free.
 ///   3. **Detail affordance** — `ToolTip` on the headline surfacing
 ///      the full `AdapterIdentification` (FR-004) when Connected,
 ///      the disconnect reason + `since` timestamp when Disconnected,
@@ -59,14 +62,6 @@ module CanStatusRow =
         | MidSessionUnplug -> "adapter unplugged mid-session"
         | ReconnectPending -> "reconnect pending"
 
-    /// Detail string carried by an `Error _` classification. The
-    /// underlying string is whatever the port / service surfaced;
-    /// this is just a uniform unwrap so the headline can splice it.
-    let errorDetail (classification: ErrorClassification) : string =
-        match classification with
-        | Recoverable detail
-        | Fatal detail -> detail
-
     /// Returns the first newline-separated line of `s`. Convention
     /// (see `PcanCanLink.buildFailureState`): adapters that need to
     /// pair a short headline with technical detail encode both into
@@ -80,18 +75,25 @@ module CanStatusRow =
         | -1 -> s
         | i -> s.Substring(0, i)
 
-    /// Headline text shown next to the chip. Format per T038:
+    /// Headline text shown next to the chip. Format per the amended
+    /// FR-002a (`specs/002-can-link-and-panel-discovery/spec.md`,
+    /// clarification session 2026-05-26):
     /// `Connected · <channel name>`, `Disconnected · <reason>`,
-    /// `Error · <detail>`. The error detail is truncated at the
-    /// first newline so multi-line technical detail stays in the
-    /// tooltip.
+    /// `Recoverable · <detail>`, or `Fatal · <detail>`. The "Error"
+    /// prefix is omitted because the red chip already encodes the
+    /// state family. Detail strings are mandated to follow
+    /// `<cause> — <imperative suggestion>` joined by em-dash, so the
+    /// suggested action appears on the row verbatim without per-state
+    /// renderer logic. Multi-line technical context (if any) is
+    /// truncated at the first newline; the full text stays in
+    /// `detailText`.
     let headline (state: CanLinkState) : string =
         match state with
         | Initializing -> "Initializing…"
         | Connected(adapter, _) -> sprintf "Connected · %s" adapter.ChannelName
         | Disconnected(reason, _) -> sprintf "Disconnected · %s" (disconnectReasonPhrase reason)
-        | Error(classification, _) ->
-            sprintf "Error · %s" (firstLine (errorDetail classification))
+        | Error(Recoverable detail, _) -> sprintf "Recoverable · %s" (firstLine detail)
+        | Error(Fatal detail, _) -> sprintf "Fatal · %s" (firstLine detail)
 
     /// Detail tooltip text. Surfaces `AdapterIdentification` when
     /// Connected (FR-004), the disconnect reason + the `since`
