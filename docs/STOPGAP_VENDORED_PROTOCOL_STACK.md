@@ -26,3 +26,14 @@ https://github.com/luca-veronelli-stem/button-panel-tester/issues/111
 ## Vendor manifest
 
 See `src/ButtonPanelTester.Infrastructure.Protocol/VENDOR.md`.
+
+## See also
+
+[`stem-communication` — CAN connection state model](https://github.com/luca-veronelli-stem/stem-communication/blob/main/Docs/CAN-CONNECTION-STATE-MODEL.md):
+living design note covering the layered CAN connection model used
+across STEM apps, the current divergence between this repo's
+`CanLinkState` (presentation layer) and `stem-communication`'s
+`ConnectionState` (session layer), and the open questions to resolve
+before the migration tracked in
+[#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)
+starts.
