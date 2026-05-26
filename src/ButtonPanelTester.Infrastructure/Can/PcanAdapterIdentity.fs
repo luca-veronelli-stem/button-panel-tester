@@ -86,11 +86,19 @@ module PcanAdapterIdentity =
     /// `AdapterIdentification`. Returns `None` if either query fails
     /// — the caller (PcanCanLink) treats this as "channel is up but
     /// identity not available" and proceeds with the state transition.
+    ///
+    /// **Serial format.** Rendered as `0x<HEX>` with 4-digit zero
+    /// padding — PEAK adapter labels print the serial in hex (typically
+    /// 4 digits for current USB hardware), so the tooltip can be
+    /// compared 1:1 against the sticker. The `0x` prefix disambiguates
+    /// the value from a decimal (a serial like `0042` is hex but reads
+    /// as decimal without a marker). Larger device IDs (>0xFFFF) emit
+    /// extra digits — the `04` is a minimum width, not a truncation.
     let tryRead () : AdapterIdentification option =
         match tryReadHardwareName (), tryReadDeviceId () with
         | Some name, Some deviceId ->
             Some
                 { ChannelName = name
-                  SerialNumber = sprintf "%08X" deviceId
+                  SerialNumber = sprintf "0x%04X" deviceId
                   BaudrateBps = baudrateBps }
         | _ -> None
