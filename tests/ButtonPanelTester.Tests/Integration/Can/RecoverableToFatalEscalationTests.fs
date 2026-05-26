@@ -12,7 +12,7 @@ open Stem.ButtonPanelTester.Tests.Fakes.Can
 
 /// Integration tests for the Recoverable→Fatal escalation logic in
 /// `CanLinkService` per
-/// `specs/002-can-link-and-panel-discovery/research.md` R8 (T041)
+/// `specs/002-can-link-lifecycle/research.md` R8 (T041)
 /// and the `since`-stickiness rule from FR-002b (issue #130).
 ///
 /// Coverage:

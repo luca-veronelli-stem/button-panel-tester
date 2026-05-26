@@ -12,7 +12,7 @@ open Stem.ButtonPanelTester.Core.Can
 /// Hand-rolled subject subscription handle. Mirrors the contract of
 /// `Tests.Fakes.Can.InMemoryCanLink`'s subject so production and
 /// virtual adapters expose identical observable semantics
-/// (`specs/002-can-link-and-panel-discovery/research.md` R4).
+/// (`specs/002-can-link-lifecycle/research.md` R4).
 type private Subscription(remove: unit -> unit) =
     interface IDisposable with
         member _.Dispose() = remove ()
@@ -61,7 +61,7 @@ type private PortAccess =
     | PortFailure of state: CanLinkState
 
 /// Production adapter for `ICanLink` per
-/// `specs/002-can-link-and-panel-discovery/contracts/can-link-port.md`
+/// `specs/002-can-link-lifecycle/contracts/can-link-port.md`
 /// §Adapter contract. Wraps the vendored `ICommunicationPort` (a
 /// `CanPort` over `PCANManager`, both frozen in
 /// `Infrastructure.Protocol/`) and translates its

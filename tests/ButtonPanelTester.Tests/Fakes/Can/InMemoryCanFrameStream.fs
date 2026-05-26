@@ -8,7 +8,7 @@ open System.Threading.Tasks
 open Stem.ButtonPanelTester.Core.Can
 
 /// Test adapter for `ICanFrameStream` per
-/// `specs/002-can-link-and-panel-discovery/contracts/can-frame-stream-port.md`
+/// `specs/003-panel-discovery/contracts/can-frame-stream-port.md`
 /// §Adapter contract (virtual). Driven by a scripted sequence of
 /// `(RawCanFrame, TimeSpan)` events: `Start` walks the script on a
 /// thread-pool worker, emitting each frame through

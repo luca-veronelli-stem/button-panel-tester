@@ -2,7 +2,7 @@
 -- panel discovery).
 --
 -- Sub-modules will land starting at task T027 of
--- `specs/002-can-link-and-panel-discovery/tasks.md`:
+-- `specs/002-can-link-lifecycle/tasks.md`:
 --
 --   * Phase2.CanLinkState       — T027
 --   * Phase2.WhoIAmFrame        — T028

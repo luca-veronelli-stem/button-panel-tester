@@ -22,7 +22,7 @@
     needs new files): edit `$ManifestEntries` below, re-run the
     script, regenerate VENDOR.sha256.
 
-    Contract: specs/002-can-link-and-panel-discovery/contracts/vendor-manifest.md
+    Contract: specs/002-can-link-lifecycle/contracts/vendor-manifest.md
 
 .PARAMETER StemDeviceManagerPath
     Absolute path to a local clone of luca-veronelli-stem/stem-device-manager.
@@ -230,7 +230,7 @@ https://github.com/luca-veronelli-stem/button-panel-tester/issues/111
 
 ## Re-vendoring procedure
 
-See ``specs/002-can-link-and-panel-discovery/contracts/vendor-manifest.md``
+See ``specs/002-can-link-lifecycle/contracts/vendor-manifest.md``
 section "Re-vendoring procedure". Edit ``$ManifestEntries`` in
 ``eng/vendor-protocol-stack.ps1`` (the ``ManifestEntries`` array),
 re-run the script, then commit the regenerated ``VENDOR.sha256``.

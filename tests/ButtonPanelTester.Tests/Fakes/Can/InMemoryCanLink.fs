@@ -16,7 +16,7 @@ type private Subscription<'T>(remove: unit -> unit) =
 
 /// Hand-rolled hot `IObservable<'T>` subject backed by a
 /// `ConcurrentBag` of observers per
-/// `specs/002-can-link-and-panel-discovery/research.md` R4. Used by
+/// `specs/002-can-link-lifecycle/research.md` R4. Used by
 /// both fakes in this file so the tests do not need to take a
 /// dependency on `System.Reactive`. Hot — observers added after a
 /// fan-out do NOT replay it (matches the production `PcanCanLink`
@@ -34,7 +34,7 @@ type private SubjectFanOut<'T>() =
             new Subscription<'T>(fun () -> ()) :> IDisposable
 
 /// Test adapter for `ICanLink` per
-/// `specs/002-can-link-and-panel-discovery/contracts/can-link-port.md`
+/// `specs/002-can-link-lifecycle/contracts/can-link-port.md`
 /// §Adapter contract (virtual). Driven by a scripted sequence of
 /// `(CanLinkState, TimeSpan)` events: each `OpenAsync` /
 /// `CloseAsync` / `ReconnectAsync` call advances the script by one

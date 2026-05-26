@@ -12,7 +12,7 @@ open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.GUI.Can
 
 /// `Avalonia.Headless.XUnit` tests for `CanStatusRow.view` per
-/// `specs/002-can-link-and-panel-discovery/tasks.md` T042. The
+/// `specs/002-can-link-lifecycle/tasks.md` T042. The
 /// headless harness configured in the project-level `TestApp.fs`
 /// lets `[<AvaloniaFact>]` materialise FuncUI views through
 /// `VirtualDom.create` and inspect the resulting Avalonia control
@@ -85,7 +85,7 @@ let private fixedAdapter: AdapterIdentification =
 //
 // Single source of truth for the Reconnect-button visibility table
 // amended in PR #126. Rows map 1:1 to FR-003's enumeration in
-// `specs/002-can-link-and-panel-discovery/spec.md` so a future change
+// `specs/002-can-link-lifecycle/spec.md` so a future change
 // to the rules surfaces here as a single edit + a failing assertion
 // rather than scattered ad-hoc facts.
 //

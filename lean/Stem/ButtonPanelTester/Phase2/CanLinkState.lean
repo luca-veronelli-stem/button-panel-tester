@@ -1,7 +1,7 @@
 /-
 T027 — Lean Phase-2 module for `CanLinkState`.
 
-Mechanises Invariant #1 of `specs/002-can-link-and-panel-discovery/data-model.md`
+Mechanises Invariant #1 of `specs/002-can-link-lifecycle/data-model.md`
 §1.3 (classification totality): every `CanLinkState` value falls into exactly one
 of the five top-level classifications
 `{Initializing, Connected, Disconnected, Error.Recoverable, Error.Fatal}`. A
@@ -17,7 +17,7 @@ the FsCheck classifier test lives at
 "Scope (9 vertical commits)" decomposition in issue #114.
 
 Constitution Principle I (no `sorry`, no custom axioms;
-`specs/002-can-link-and-panel-discovery/plan.md` Constitution Check §I): the
+`specs/002-can-link-lifecycle/plan.md` Constitution Check §I): the
 proof is `cases s <;> simp`. Each of the five sub-goals reduces to one of the
 five disjuncts and `simp` discharges it by reducing the matching equality
 to `True`. No `propext`, no `Classical.choice`, no `Quot.sound` beyond what

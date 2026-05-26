@@ -1,7 +1,7 @@
 /-
 T028 — Lean Phase-2 module for `WhoIAmFrame`.
 
-Mechanises the round-trip invariant from `specs/002-can-link-and-panel-discovery/
+Mechanises the round-trip invariant from `specs/003-panel-discovery/
 data-model.md` §2.3: `parse (encode f) = some f` for every well-formed
 `WhoIAmFrame`. "Well-formed" mirrors the F# wire contract (FR-013 silent drop) —
 `fwType = 0x04` is the only path through `parse`, so the theorem statement

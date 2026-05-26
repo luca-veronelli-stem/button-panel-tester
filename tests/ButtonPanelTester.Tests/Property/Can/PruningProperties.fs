@@ -14,7 +14,7 @@ let private positiveMillis (raw: int) : float = float (max 1 (abs raw))
 
 let private positiveSeconds (raw: int) : float = float (max 1 (abs raw % 86400))
 
-/// FsCheck property covering `specs/002-can-link-and-panel-discovery/
+/// FsCheck property covering `specs/003-panel-discovery/
 /// data-model.md` §5.4 (pruning correctness) / FR-011: post-prune
 /// membership iff `now - lastSeen ≤ ttl`. Mechanises the kept-iff-
 /// within-window invariant at the value level; the Lean theorem

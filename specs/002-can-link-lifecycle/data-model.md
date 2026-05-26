@@ -1,8 +1,10 @@
-# Data Model: CAN Link and Panel Discovery
+# Data Model: CAN Link Lifecycle
 
 **Phase 1 output for**: [plan.md](./plan.md)
 
 F# types, operations over them, invariants, and cross-references to the Lean Phase 2 modules that mechanise the invariants. The Lean files prove the algebraic invariants by construction; the F# types are the surface implementation.
+
+**Scope note (#151)**: this document covers lifecycle types only. Panel-discovery types (WhoIAmFrame, VariantIdentity, PanelObservation, PanelsOnBus, Pruning) moved to [`specs/003-panel-discovery/data-model.md`](../003-panel-discovery/data-model.md). They cohabit the same `src/ButtonPanelTester.Core/Can/` folder.
 
 ---
 
@@ -83,117 +85,9 @@ stateDiagram-v2
 
 ---
 
-## 2. WHO_I_AM frame
+## 2. Adapter identification
 
-### 2.1 Wire layout (`src/ButtonPanelTester.Core/Can/WhoIAmFrame.fs`)
-
-Authoritative source: panel firmware `stem-fw-pac5524-tastiera-can-app-*/AutoAddressSlave.c:175–181` (broadcast payload construction), confirmed by the audit recorded in [`docs/Context/bpt-rollout/CORRECTIONS.md`](../../docs/Context/bpt-rollout/CORRECTIONS.md) §C1, §C2. The canonical wire-format contract lives in [contracts/who-i-am-wire-format.md](./contracts/who-i-am-wire-format.md); this section reflects the F# representation only.
-
-### 2.2 F# types
-
-```fsharp
-type PanelUuid = PanelUuid of uuid0: uint32 * uuid1: uint32 * uuid2: uint32
-type FwType = FwType of byte
-type MachineTypeByte = MachineTypeByte of byte
-
-type WhoIAmFrame = {
-    MachineType : MachineTypeByte
-    FwType : FwType
-    Uuid : PanelUuid
-}
-
-val parse : ReadOnlyMemory<byte> -> WhoIAmFrame option   // None on malformed (FR-013)
-val encode : WhoIAmFrame -> byte[]                       // 15-byte buffer
-```
-
-### 2.3 Invariant
-
-- **Round-trip**: `parse (encode f) = Some f` for every well-formed `WhoIAmFrame`. **Lean**: `Phase2/WhoIAmFrame.lean` — `parse_encode_roundtrip`.
-
----
-
-## 3. Variant identity
-
-### 3.1 `VariantIdentity` (closed DU, `src/ButtonPanelTester.Core/Can/PanelObservation.fs`)
-
-```fsharp
-type MarketingVariant =
-    | EdenXp     // machineType = 0x03
-    | OptimusXp  // machineType = 0x0A
-    | R3LXp      // machineType = 0x0B
-    | EdenBs8    // machineType = 0x0C
-
-type VariantIdentity =
-    | Marketing of MarketingVariant
-    | Virgin                  // machineType = 0xFF
-    | Unknown of raw: byte    // any other value
-
-val decodeVariant : MachineTypeByte -> VariantIdentity   // total
-```
-
-### 3.2 Invariant
-
-- **Totality**: `decodeVariant` is defined on every `byte`. **Lean**: `Phase2/PanelObservation.lean` — `variant_decoding_total`.
-
-The four marketing variants and their `machineType` bytes come from CORRECTIONS.md §"Items unchanged" — confirmed against each motherboard's `ID_MACHINE_TYPE` constant.
-
----
-
-## 4. Panel observation
-
-### 4.1 `PanelObservation` (record, `src/ButtonPanelTester.Core/Can/PanelObservation.fs`)
-
-```fsharp
-type PanelObservation = {
-    Uuid : PanelUuid
-    VariantByte : MachineTypeByte         // raw byte (FR-009 detail affordance)
-    VariantIdentity : VariantIdentity     // decoded (FR-009 row label)
-    LastSeen : DateTimeOffset             // FR-010 timestamp
-}
-```
-
-### 4.2 Mapping rule
-
-A `WhoIAmFrame f` arriving at `now` produces a `PanelObservation` with `Uuid = f.Uuid`, `VariantByte = f.MachineType`, `VariantIdentity = decodeVariant f.MachineType`, `LastSeen = now`.
-
----
-
-## 5. Panels-on-bus list
-
-### 5.1 `PanelsOnBus` (UUID-keyed map, `src/ButtonPanelTester.Core/Can/PanelsOnBus.fs`)
-
-```fsharp
-type PanelsOnBus = Map<PanelUuid, PanelObservation>
-
-val empty : PanelsOnBus
-val observe : DateTimeOffset -> WhoIAmFrame -> PanelsOnBus -> PanelsOnBus
-val clear : PanelsOnBus -> PanelsOnBus   // for FR-015 link-loss
-```
-
-### 5.2 Pruning (`src/ButtonPanelTester.Core/Can/Pruning.fs`)
-
-```fsharp
-val prune : ttl: TimeSpan -> now: DateTimeOffset -> PanelsOnBus -> PanelsOnBus
-```
-
-For spec-002, `ttl = TimeSpan.FromSeconds 15.0` (FR-011, locked by clarify).
-
-### 5.3 Operational semantics
-
-- `observe now f m` inserts-or-updates `m[f.Uuid]` with a fresh `PanelObservation`. Existing rows have their `LastSeen` advanced; the `VariantByte` and `VariantIdentity` are also re-derived from the latest frame (handles the edge "panel power-cycled out of `AAS_STAND_BY` mid-session" cleanly).
-- `prune ttl now m` returns `m` with every row whose `now - lastSeen > ttl` removed.
-- `clear m` returns `empty`. Used by `CanLinkService` on Connected → Disconnected (FR-015).
-
-### 5.4 Invariants
-
-- **Coalescing**: `(observe now f m).Count ≤ m.Count + 1`, and the equality case holds iff `f.Uuid ∉ m.Keys`. Same-UUID observations never produce duplicate rows. **Lean**: `Phase2/PanelsOnBus.lean` — `observe_coalesces_by_uuid`.
-- **Pruning correctness**: post-prune membership iff `now - lastSeen ≤ ttl`. **Lean**: `Phase2/Pruning.lean` — `prune_partitions_by_threshold`.
-
----
-
-## 6. Adapter identification
-
-### 6.1 `AdapterIdentification` (record, `src/ButtonPanelTester.Core/Can/CanLinkState.fs`)
+### 2.1 `AdapterIdentification` (record, `src/ButtonPanelTester.Core/Can/CanLinkState.fs`)
 
 ```fsharp
 type AdapterIdentification = {
@@ -212,13 +106,11 @@ Rendered in the CAN status row's detail affordance (FR-004). Never leaves the su
 
 ---
 
-## 7. Cross-reference to Lean Phase 2
+## 3. Cross-reference to Lean Phase 2
 
 | Lean module | Mechanises | F# source |
 |---|---|---|
 | `Phase2/CanLinkState.lean` | §1.3 Invariant #1 | `Core/Can/CanLinkState.fs` |
-| `Phase2/WhoIAmFrame.lean` | §2.3 Round-trip | `Core/Can/WhoIAmFrame.fs` |
-| `Phase2/PanelObservation.lean` | §3.2 Totality | `Core/Can/PanelObservation.fs` |
-| `Phase2/PanelsOnBus.lean` | §5.4 Coalescing | `Core/Can/PanelsOnBus.fs` |
-| `Phase2/Pruning.lean` | §5.4 Pruning correctness | `Core/Can/Pruning.fs` |
 | `Phase2/PassiveObserver.lean` | §1.3 Invariant #3 (SC-007) | `Services/Can/CanLinkService.fs` |
+
+Panel-discovery cross-references (`WhoIAmFrame.lean`, `PanelObservation.lean`, `PanelsOnBus.lean`, `Pruning.lean`) live in [`specs/003-panel-discovery/data-model.md`](../003-panel-discovery/data-model.md) §7.

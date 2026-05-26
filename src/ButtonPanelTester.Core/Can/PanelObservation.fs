@@ -3,7 +3,7 @@ namespace Stem.ButtonPanelTester.Core.Can
 open System
 
 /// Closed taxonomy of the four marketing variants spec-002 must
-/// distinguish, per `specs/002-can-link-and-panel-discovery/data-model.md`
+/// distinguish, per `specs/003-panel-discovery/data-model.md`
 /// §3.1. Each variant corresponds to one `machineType` byte:
 ///   * `EdenXp`     — `0x03`
 ///   * `OptimusXp`  — `0x0A`

@@ -8,7 +8,7 @@ specific upstream SHA.
 
 **Do not edit the vendored files in place.** If you need an upstream fix or a
 new type from the upstream stack, follow the re-vendoring procedure in
-[`specs/002-can-link-and-panel-discovery/contracts/vendor-manifest.md`](../../../specs/002-can-link-and-panel-discovery/contracts/vendor-manifest.md)
+[`specs/002-can-link-lifecycle/contracts/vendor-manifest.md`](../../../specs/002-can-link-lifecycle/contracts/vendor-manifest.md)
 section "Re-vendoring procedure":
 
 1. Update the pinned SHA in

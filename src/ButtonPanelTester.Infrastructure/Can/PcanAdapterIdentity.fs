@@ -7,7 +7,7 @@ open Stem.ButtonPanelTester.Core.Can
 
 /// Best-effort reader for the local PEAK adapter's identifying
 /// properties, per
-/// `specs/002-can-link-and-panel-discovery/data-model.md` §6 and
+/// `specs/002-can-link-lifecycle/data-model.md` §6 and
 /// FR-004. Surfaces an `AdapterIdentification` consumed by
 /// `PcanCanLink` (T035) to populate the `Connected adapter, openedAt`
 /// state the GUI's `CanStatusRow` detail affordance renders.

@@ -1,5 +1,5 @@
 {
-    "$schema-description": "WHO_I_AM fixture set per specs/002-can-link-and-panel-discovery/contracts/who-i-am-wire-format.md §Fixtures. Each entry: name, hex-string payload, expected parse outcome, expected VariantIdentity (when parse succeeds). Loaded by Tests/Unit/Can/WhoIAmFrameFixtureTests.fs (T033). Payload is 15 bytes for well-formed entries; the two malformed entries are intentionally off-spec.",
+    "$schema-description": "WHO_I_AM fixture set per specs/003-panel-discovery/contracts/who-i-am-wire-format.md §Fixtures. Each entry: name, hex-string payload, expected parse outcome, expected VariantIdentity (when parse succeeds). Loaded by Tests/Unit/Can/WhoIAmFrameFixtureTests.fs (T033). Payload is 15 bytes for well-formed entries; the two malformed entries are intentionally off-spec.",
     "fixtures": [
         {
             "name": "virgin_panel_uuid_AABBCC",

@@ -51,7 +51,7 @@ https://github.com/luca-veronelli-stem/button-panel-tester/issues/111
 
 ## Re-vendoring procedure
 
-See `specs/002-can-link-and-panel-discovery/contracts/vendor-manifest.md`
+See `specs/002-can-link-lifecycle/contracts/vendor-manifest.md`
 section "Re-vendoring procedure". Edit the `ManifestEntries` array
 in `eng/vendor-protocol-stack.ps1`, re-run the script, and update
 `VENDOR.sha256` (the script's last step regenerates it).

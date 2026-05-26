@@ -1,7 +1,7 @@
 # #127 — PcanCanLink cold-start hang (F6, FR-001 violation)
 
 - Issue: <https://github.com/luca-veronelli-stem/button-panel-tester/issues/127>
-- Parent spec: `specs/002-can-link-and-panel-discovery/spec.md`
+- Parent spec: `specs/002-can-link-lifecycle/spec.md`
 - Parent requirements: **FR-001** (CAN open follows dictionary boot) +
   **SC-001** (Connected within 2 s of dictionary boot completion).
 - PR: <https://github.com/luca-veronelli-stem/button-panel-tester/pull/134>

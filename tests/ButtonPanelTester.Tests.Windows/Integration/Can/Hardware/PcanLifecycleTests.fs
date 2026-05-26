@@ -13,7 +13,7 @@ open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Infrastructure.Can
 
 /// Hardware-marked integration tests for `PcanCanLink` per
-/// `specs/002-can-link-and-panel-discovery/tasks.md` T043. All
+/// `specs/002-can-link-lifecycle/tasks.md` T043. All
 /// cases require a real PEAK PCAN-USB adapter on the host.
 /// Tracked by [#112](https://github.com/luca-veronelli-stem/button-panel-tester/issues/112).
 ///

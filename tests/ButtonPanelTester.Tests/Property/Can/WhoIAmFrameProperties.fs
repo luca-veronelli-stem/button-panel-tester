@@ -6,7 +6,7 @@ open FsCheck.Xunit
 open Stem.ButtonPanelTester.Core.Can
 
 /// FsCheck property covering the WHO_I_AM round-trip contract in
-/// `specs/002-can-link-and-panel-discovery/contracts/who-i-am-wire-format.md`
+/// `specs/003-panel-discovery/contracts/who-i-am-wire-format.md`
 /// §Parse contract: `parse (encode f) = Some f` for every well-formed
 /// `WhoIAmFrame`. "Well-formed" here means `fwType = 0x04` — the wire
 /// rule that distinguishes button-panel announcements from other
