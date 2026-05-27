@@ -27,9 +27,9 @@ Cross off resolved items as they land. Delete this file in the cleanup commit.
 
 ## Accepted gaps that might silently widen
 
-6. **U1 — spec-001 seed link.** spec.md Assumption §3 references spec-001's seed-fallback for "dictionary always usable at runtime". No artefact explicitly says spec-002 relies on that guarantee. research.md decisions log (PROMPT-DATA-MODEL.md §2 item 10 — "Boot order decoupled from dictionary") is the natural home.
+6. ~~**U1 — spec-001 seed link.**~~ **RESOLVED by research.md R10** (links back to spec-001 §138's seed-fallback as the upstream guarantee that makes the dictionary/CAN decoupling safe; spec.md §Assumptions L201 already carries the cross-reference).
 
-7. **U2 — FR-012 iteration cap.** spec.md does not bound how many candidates `Opening` will iterate before falling to `Searching(NoCandidateAvailable)`. data-model.md §1.2 is loose on this too. plan.md or a data-model.md amendment should pin: "iterate every candidate the vendored stack enumerates; no internal cap."
+7. ~~**U2 — FR-012 iteration cap.**~~ **RESOLVED by research.md R5** ("every candidate the vendored stack enumerates is tried; no internal cap" — pinned as a sub-bullet of the multi-adapter iteration decision).
 
 8. **O1 — "active state" definition (CHK010).** spec.md FR-006 uses "active state" = `Searching ∪ Opening ∪ Open ∪ Faulted`. Not explicitly pinned anywhere; CHK010 deferred to `/speckit-analyze`. One-line addition to data-model.md §1.3 (or §1.1 table footer) would close it. Currently open.
 
@@ -45,5 +45,5 @@ Cross off resolved items as they land. Delete this file in the cleanup commit.
 
 1. Read at the start of each Phase B `/speckit-analyze` cycle.
 2. Cross off resolved items as artefacts land.
-3. The final `/speckit-analyze` before the PR opens should leave only items 6 / 7 / 10 / 11 (accepted), or note the rest in `migration-map.md` for Phase C.
+3. The final `/speckit-analyze` before the PR opens should leave only items 10 / 11 (accepted style/wording), or note the rest in `migration-map.md` for Phase C. Items 6 + 7 closed by research.md (`0518686` + research.md commit).
 4. Delete this file in the cleanup commit (same step as the `HANDOFF*` / `PROMPT*` files).
