@@ -75,4 +75,4 @@
 
 ---
 
-**Resolution summary**: 19 of 30 items resolved by amendment `f04318e`. 5 items deferred to later artefacts (4 to plan.md, 1 to data-model.md). 6 items open — five are cross-artefact consistency checks to be re-evaluated via `/speckit-analyze` once the queue is written; one is an accepted scope-narrowing assumption (CHK027).
+**Resolution summary**: 18 of 30 items resolved by amendment `f04318e`. 4 items deferred to later artefacts (3 to plan.md — CHK018, CHK024, CHK028; 1 to data-model.md — CHK019). 8 items open — six are cross-artefact consistency / measurability checks to be re-evaluated via `/speckit-analyze` once the queue is written (CHK010, CHK011, CHK012, CHK013, CHK014, CHK025); one is the FR-004 round-trip case (CHK023) deferred to `/speckit-analyze` after data-model.md formalises the transition; one is an accepted scope-narrowing assumption (CHK027).
