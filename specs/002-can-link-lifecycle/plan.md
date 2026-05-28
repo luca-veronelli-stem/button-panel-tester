@@ -214,6 +214,7 @@ The Phase B doc-only refresh has the following queue items, each a single vertic
 5. **plan.md rewrite** — this commit.
 6. **contracts/can-link-port.md refresh** — next. Reshapes the contract payload from substrate four-family to Phase B five-family `CanLinkState`; port signature unchanged. Resolves OPEN-FINDINGS item 1.
 7. tasks.md rewrite — re-authors the task list against the Phase B shape (renumbered; old substrate tasks T001..T033 are not retained as forward-looking — they're already merged on `main`). Includes the Lean `Phase2/CanLinkState.lean` re-author task that retires `transition_reachability_closed` and adds the four post-Phase-B theorems (OPEN-FINDINGS item 4 / F3).
+7b. spec-001 [#156](https://github.com/luca-veronelli-stem/button-panel-tester/issues/156) harmonisation — fix-up commit reshaping Live/Cached precedent citations in landed `spec.md` (Session 2026-05-27 §Framing; Dependencies) and `research.md` (R8 Rationale) to point at spec-001 #156 Option γ. Substantive two-layer truth-and-acknowledge precedent unchanged. Landed `431c5db`.
 8. quickstart.md refresh — bench walkthrough for the five-family shape.
 9. migration-map.md — old substrate → Phase B FR/state table; load-bearing for Phase C.
 10. cleanup — `git rm` Phase B session handoff artefacts (`HANDOFF*.md`, `PROMPT*.md`, `OPEN-FINDINGS.md`).
@@ -317,7 +318,7 @@ _logger.LogInformation(
 
 ### Current
 
-- Phase B docs queue items 5–11 — this plan.md rewrite (item 5), contracts/can-link-port.md refresh (item 6), tasks.md rewrite (item 7), quickstart.md refresh (item 8), migration-map.md (item 9), cleanup commit (item 10), PR (item 11).
+- Phase B docs queue items 5–11 — this plan.md rewrite (item 5, landed `ce2c901`), contracts/can-link-port.md refresh (item 6, landed `c5b72fb`), tasks.md rewrite (item 7, landed `7e8be55`), spec-001 #156 harmonisation (item 7b, landed `431c5db`), quickstart.md refresh (item 8, this commit), migration-map.md (item 9), cleanup commit (item 10), PR (item 11).
 
 ### Blockers
 
