@@ -127,11 +127,23 @@ type private PortAccess =
 ///   - `currentState` reads / writes are guarded by `stateLock`; the
 ///     `SubjectFanOut.OnNext` fan-out happens outside the lock so an
 ///     observer that blocks does not block the state-machine itself.
-type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCanLink>) =
+type PcanCanLink
+    (
+        portFactory: unit -> ICommunicationPort,
+        logger: ILogger<PcanCanLink>,
+        ?readCondition: unit -> PeakStatusTranslation.ChannelCondition option
+    ) =
 
     let subject = SubjectFanOut<CanLinkState>()
     let gate = new SemaphoreSlim(1, 1)
     let lifecycleCts = new CancellationTokenSource()
+
+    /// Cold-start channel-condition probe (#168). Defaults to the live
+    /// PEAK reader; tests inject a deterministic stub so the cold-start
+    /// classification is exercised without hardware. Optional so the
+    /// composition root keeps the two-argument construction unchanged.
+    let readCondition =
+        defaultArg readCondition PeakStatusTranslation.tryReadChannelCondition
 
     /// State the state-machine transitions need to coordinate. Kept
     /// under `stateLock` since the `StateChanged` event handler may
@@ -152,6 +164,44 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
           DeviceId = "unknown"
           BaudrateBps = 250_000 }
 
+    /// Cold-start (`haveBeenConnected = false`) classifier shared by the
+    /// `Error` and `Disconnected` arms of `translateState` — i.e. it runs
+    /// ONLY when the open attempt FAILED. Probes the PEAK channel
+    /// *condition* (#168) to tell adapter-busy from adapter-absent at
+    /// boot, and logs the raw read at Information so the bench can confirm
+    /// the value in `app.log`:
+    ///   - `ChannelOccupied` → an adapter is present but claimed
+    ///     *exclusively* by another app (StemDeviceManager is the
+    ///     canonical holder, #150) → busy.
+    ///   - `ChannelPCanView` (`0x03` = `Available | Occupied`) → busy
+    ///     too, but for a subtler reason: PCAN-View *shares* the channel
+    ///     only at a MATCHING bitrate — at a matching bitrate our
+    ///     `Initialize` succeeds and we reach the `Connected` arm, never
+    ///     this one. Reaching this (open-FAILED) arm while PCAN-View is
+    ///     present therefore means PCAN-View holds the channel at an
+    ///     INCOMPATIBLE bitrate (#168 bench finding, same class as #166)
+    ///     → effectively occupied. The discriminator is
+    ///     connect-success-vs-failure, NOT the condition value (which is
+    ///     `0x03` in both the shareable and the conflicting case).
+    ///   - `ChannelAvailable` / `ChannelUnavailable` / unreadable (`None`)
+    ///     → preserve the #136 derivation,
+    ///     `Disconnected(NoAdapterPresent, _)`.
+    let coldStartState (now: DateTimeOffset) : CanLinkState =
+        let cond = readCondition ()
+
+        logger.LogInformation(
+            "CAN cold-start: PEAK channel condition = {Condition}",
+            (match cond with
+             | Some c -> sprintf "%A (0x%X)" c (LanguagePrimitives.EnumToValue c)
+             | None -> "unreadable")
+        )
+
+        match cond with
+        | Some PeakStatusTranslation.ChannelCondition.ChannelOccupied
+        | Some PeakStatusTranslation.ChannelCondition.ChannelPCanView ->
+            Error(PeakStatusTranslation.busyClassification (), now)
+        | _ -> Disconnected(NoAdapterPresent, now)
+
     let translateState (newState: ConnectionState) : CanLinkState option =
         lock stateLock (fun () ->
             let now = DateTimeOffset.UtcNow
@@ -166,30 +216,39 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
                 currentState <- state
                 Some state
             | ConnectionState.Disconnected ->
-                let reason =
+                let state =
                     if closeRequested then
                         closeRequested <- false
-                        ReconnectPending
+                        Disconnected(ReconnectPending, now)
                     elif haveBeenConnected then
-                        MidSessionUnplug
+                        Disconnected(MidSessionUnplug, now)
                     else
-                        NoAdapterPresent
+                        // #168: a `Disconnected` transition before we have
+                        // ever connected is also a cold start (e.g. the
+                        // poll loop exhausted without a link). Route it
+                        // through the same channel-condition probe so an
+                        // `Occupied` adapter surfaces busy rather than
+                        // `Disconnected(NoAdapterPresent, _)`.
+                        coldStartState now
 
-                let state = Disconnected(reason, now)
                 currentState <- state
                 Some state
             | ConnectionState.Error ->
                 let state =
                     if not haveBeenConnected then
-                        // #136: an `Error` transition before we have ever
-                        // been `Connected` is the adapter-absent cold
-                        // start, not a runtime fault — the PEAK stack
-                        // reports `Error` when no adapter answers on the
-                        // channel. Reclassify it as
-                        // `Disconnected(NoAdapterPresent, _)` so the
-                        // status row shows the boot-time-absence headline
-                        // (FR-002/FR-005) rather than a generic error.
-                        Disconnected(NoAdapterPresent, now)
+                        // #136/#168: an `Error` transition before we have
+                        // ever been `Connected` is a cold start, not a
+                        // runtime fault — the PEAK stack reports `Error`
+                        // when no adapter answers on the channel. Probe
+                        // the channel CONDITION to tell "adapter present
+                        // but busy" (held exclusively by another app, e.g.
+                        // StemDeviceManager, #150) from "no adapter
+                        // present" (#136):
+                        // `coldStartState` returns `Error(busy, _)` only
+                        // for an `Occupied` channel, otherwise the
+                        // boot-time-absence `Disconnected(NoAdapterPresent,
+                        // _)` headline (FR-002/FR-005).
+                        coldStartState now
                     else
                         // Mid-session fault on a link that *was* connected
                         // (#150/#139). Translate the live PEAK status into
@@ -256,8 +315,9 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
         | _ ->
             // The DLL loaded but construction threw. Consult the live
             // PEAK status: a *recognised* code (e.g. the channel is busy
-            // because PCAN-View has it open, #150) yields a translated
-            // cause + remediation hint. For an unreadable status, or one
+            // because another app holds it exclusively — StemDeviceManager,
+            // #150) yields a translated cause + remediation hint. For an
+            // unreadable status, or one
             // we have not curated a hint for, the construction exception
             // is the more informative signal — keep today's generic
             // Recoverable fallback carrying it. A curated entry is
