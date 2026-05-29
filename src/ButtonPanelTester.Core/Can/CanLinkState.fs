@@ -7,7 +7,7 @@ open System
 ///
 /// Rendered in the CAN status row's detail affordance (FR-004). Carries
 /// the channel name (e.g. `PCAN-USB Pro FD (1)`), the PEAK-reported
-/// serial number, and the negotiated bitrate (always `250000` in
+/// device id, and the negotiated bitrate (always `250000` in
 /// spec-002 per `quickstart.md`). All three fields are local-only by
 /// construction — the type lives in the GUI render path and has no
 /// telemetry / serialisation surface (Principle V).

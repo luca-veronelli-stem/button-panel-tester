@@ -2,6 +2,19 @@
 
 All notable changes to ButtonPanelTester follow [Semantic Versioning](https://semver.org/) and are recorded here in [Keep a Changelog](https://keepachangelog.com/) format.
 
+## [Unreleased]
+
+### Added
+
+- **CAN-link lifecycle** ([spec 002](specs/002-can-link-lifecycle/spec.md)): a persistent CAN status row on the main window reporting the live link state over a four-family FSM (`Initializing | Connected | Disconnected | Error`) — colour-coded chip, human-readable headline, detail tooltip, and a manual **Reconnect** control. Opens the configured PEAK PCAN-USB adapter at 250 kbps and surfaces bench realities: no adapter present, mid-session unplug, driver missing, bus-off, transient PEAK faults. Runs over a vendored `ButtonPanelTester.Infrastructure.Protocol` C# stack (frozen copy of `stem-device-manager`'s CAN + raw-frame layer; documented stopgap per Constitution Principle VI).
+- Per-transition structured logging in `CanLinkService`: one `ILogger` entry per `CanLinkState` transition carrying `State` / `Severity` / `Detail` / `Since` fields ([#148](https://github.com/luca-veronelli-stem/button-panel-tester/issues/148)).
+- User-friendly PEAK status translation: adapter-busy and bus-off statuses render a jargon-free cause + remediation suggestion instead of the raw PEAK `GetErrorText`; cold-start poll-exhaust is classified as `Disconnected(NoAdapterPresent)` rather than a runtime `Error` ([#150](https://github.com/luca-veronelli-stem/button-panel-tester/issues/150), [#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136), [#139](https://github.com/luca-veronelli-stem/button-panel-tester/issues/139)).
+- Driver-download link on the missing-PEAK-driver `Error · Fatal` status, pointing at the PEAK downloads page ([#143](https://github.com/luca-veronelli-stem/button-panel-tester/issues/143)).
+
+### Notes
+
+- Mid-session unplug (`Disconnected · adapter unplugged mid-session`, distinct from `no PEAK adapter found`) and implicit hot-plug recovery are pinned by regression and bench tests ([#117](https://github.com/luca-veronelli-stem/button-panel-tester/issues/117), [#132](https://github.com/luca-veronelli-stem/button-panel-tester/issues/132)).
+
 ## [0.1.0] - 2026-05-22
 
 First tagged release. Ships spec 001 (dictionary fetch + status row + registration ceremony + manual refresh) plus the post-spec hardening that landed before the cut: standards `v1.5.3 → v1.9.0` bumps, APP_DATA path relocation for the greenfield STEM-wide layout, Stem brand-mark library, and the Re-Register fix for admin-revoked installations.
