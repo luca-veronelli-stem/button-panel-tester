@@ -150,6 +150,26 @@ type CanLinkService(link: ICanLink, clock: IClock, logger: ILogger<CanLinkServic
             currentState <- effective
             effective, escalated)
 
+    /// Single chokepoint for every transition the service surfaces
+    /// (#148). Emits exactly one structured log entry — level + named
+    /// fields derived from `CanLinkLogging` — then fans the state out
+    /// to the subject. Both emission sites (the link-side subscription
+    /// and the synthesised `ReconnectPending`) route through here so
+    /// the log and the observable surface never diverge.
+    let emit (s: CanLinkState) =
+        logger.Log(
+            CanLinkLogging.levelFor s,
+            "CAN link transitioned to {State} (severity={Severity}, detail={Detail}, since={Since})",
+            CanLinkLogging.stateName s,
+            CanLinkLogging.severityName s,
+            CanLinkLogging.detailString s,
+            (match CanLinkLogging.sinceOf s with
+             | Some t -> t.ToString("o")
+             | None -> "-")
+        )
+
+        stateSubject.OnNext s
+
     /// Forward every link-side transition through the service's own
     /// subject after running it through the escalation translator.
     /// Kept as a `let`-bound subscription so the reference outlives
@@ -170,7 +190,7 @@ type CanLinkService(link: ICanLink, clock: IClock, logger: ILogger<CanLinkServic
                     )
                 | _ -> ()
 
-            stateSubject.OnNext effective)
+            emit effective)
 
     interface ICanLinkService with
 
@@ -217,7 +237,7 @@ type CanLinkService(link: ICanLink, clock: IClock, logger: ILogger<CanLinkServic
             // is a pure GUI signal.
             let pending = Disconnected(ReconnectPending, clock.UtcNow())
             let effective, _ = translate pending
-            stateSubject.OnNext effective
+            emit effective
 
             logger.LogInformation("CanLinkService.ReconnectAsync requested by user")
             link.ReconnectAsync(cancellationToken)
