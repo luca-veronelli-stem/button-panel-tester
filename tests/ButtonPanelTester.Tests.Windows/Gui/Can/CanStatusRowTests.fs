@@ -134,6 +134,16 @@ let buttonVisibilityCases () : objnull[] seq =
             [| box "Error · Fatal"
                box (Error(Fatal "PEAK status 0x40000 persists", fixedNow))
                box true |]
+
+        yield
+            [| box "Error · Fatal driver-missing"
+               box (
+                   Error(
+                       Fatal "PEAK PCANBasic native DLL not found — install the PEAK driver",
+                       fixedNow
+                   )
+               )
+               box false |]
     }
 
 [<Theory>]
@@ -409,12 +419,19 @@ let IsDriverMissing_Connected_False () =
     Assert.False(CanStatusRow.isDriverMissing (Connected(fixedAdapter, fixedNow)))
 
 [<AvaloniaFact>]
-let View_DriverMissingFatal_RendersDownloadLinkWithUrl () =
+let View_DriverMissingFatal_RendersCompactLinkWithUrlTooltip () =
+    // #166: the caption is compact ("Download PEAK driver") and the full
+    // URL rides on the button's tooltip rather than the content.
     let panel = renderState driverMissingFatal
 
     match tryDriverDownloadLink panel with
     | None -> Assert.Fail("expected a DriverDownloadLink on Fatal driver-missing")
-    | Some link -> Assert.Contains(pinnedDriverUrl, buttonText link)
+    | Some link ->
+        Assert.Equal<string>("Download PEAK driver", buttonText link)
+
+        match ToolTip.GetTip(link) with
+        | null -> Assert.Fail("expected the driver URL on the download link's tooltip")
+        | tip -> Assert.Contains(pinnedDriverUrl, tip.ToString())
 
 [<AvaloniaFact>]
 let View_NonDriverFatal_NoDownloadLink () =
@@ -430,3 +447,24 @@ let View_Connected_NoDownloadLink () =
     let panel = renderState (Connected(fixedAdapter, fixedNow))
 
     Assert.Equal(None, tryDriverDownloadLink panel)
+
+// #166: on the missing-driver Fatal the Reconnect button is hidden — a
+// reconnect cannot conjure the driver, so the row offers only the
+// download link. A non-driver Fatal still shows Reconnect.
+
+[<AvaloniaFact>]
+let View_DriverMissingFatal_NoReconnectButton () =
+    let panel = renderState driverMissingFatal
+
+    Assert.Equal(None, tryReconnectButton panel)
+
+[<AvaloniaFact>]
+let View_NonDriverFatal_HasReconnectButton () =
+    let state =
+        Error(Fatal "bus-off persists across reconnect — file bug", fixedNow)
+
+    let panel = renderState state
+
+    match tryReconnectButton panel with
+    | None -> Assert.Fail("expected a Reconnect button on a non-driver Fatal")
+    | Some _ -> ()
