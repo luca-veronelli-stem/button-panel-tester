@@ -156,6 +156,25 @@ module CanStatusRow =
         | Error(Fatal _, _) -> "Reconnect (unlikely to help)"
         | _ -> "Try reconnect"
 
+    /// PEAK driver downloads page. The ad-tracking query string PEAK
+    /// appends in marketing links (`gclid`, `gad_*`) is intentionally
+    /// omitted — the bare path resolves to the same page.
+    let private peakDriverUrl =
+        System.Uri("https://www.peak-system.com/support/downloads/drivers/")
+
+    /// `true` iff `state` is the missing-PEAK-driver `Error.Fatal` —
+    /// the only state that should offer the driver-download affordance
+    /// (#143). INTERIM string-match against a stable substring of the
+    /// shipped Fatal headline (`PcanCanLink.buildFailureState`,
+    /// "PEAK PCANBasic native DLL not found — install the PEAK driver").
+    /// A structured cause carried on the DU would be cleaner and would
+    /// not couple the GUI to headline wording, but that needs a Core DU
+    /// + Lean change — the descoped full-fidelity #143, deferred.
+    let isDriverMissing (state: CanLinkState) : bool =
+        match state with
+        | Error(Fatal detail, _) -> detail.Contains "PCANBasic native DLL not found"
+        | _ -> false
+
     /// Pure rendering function. The host subscribes to the link
     /// service's `LinkStateChanged` observable, marshals onto the UI
     /// thread, and calls `view` with the latest state + the
@@ -175,7 +194,7 @@ module CanStatusRow =
                   ToolTip.tip (detailText state)
               ] ]
 
-        let allChildren =
+        let withReconnect =
             if shouldShowReconnectButton state then
                 baseChildren
                 @ [ Button.create [
@@ -185,6 +204,30 @@ module CanStatusRow =
                     ] ]
             else
                 baseChildren
+
+        // On the missing-driver Fatal, offer a one-click route to the
+        // PEAK downloads page (#143). FuncUI 1.5.1 has no HyperlinkButton
+        // DSL, so this is a Button whose click opens the system browser
+        // via the shell. The URL is rendered verbatim in the content so
+        // it stays readable headless / for accessibility (the launch
+        // itself isn't observable in a headless harness).
+        let allChildren =
+            if isDriverMissing state then
+                withReconnect
+                @ [ Button.create [
+                        Button.name "DriverDownloadLink"
+                        Button.content ("Download PEAK driver: " + string peakDriverUrl)
+                        Button.onClick (fun _ ->
+                            System.Diagnostics.Process.Start(
+                                System.Diagnostics.ProcessStartInfo(
+                                    string peakDriverUrl,
+                                    UseShellExecute = true
+                                )
+                            )
+                            |> ignore)
+                    ] ]
+            else
+                withReconnect
 
         StackPanel.create [
             StackPanel.orientation Orientation.Horizontal
