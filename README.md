@@ -13,6 +13,8 @@
 
 ButtonPanelTester is a bench tool that exercises STEM button-panel hardware over CAN. The user-visible surface today is a single window whose **dictionary status row** reports the provenance, age, and health of the loaded variable dictionary (live, cached, or extracted from an embedded seed) and offers a one-click **Refresh** against a remote `stem-dictionaries-manager`. A first-launch **registration ceremony** swaps a short-lived bootstrap token for a long-lived per-installation API credential stored under DPAPI, so the operator authenticates the tool once per machine and the credential is rotated atomically server-side on any subsequent Re-register. See [`specs/001-fetch-dictionary/quickstart.md`](specs/001-fetch-dictionary/quickstart.md) for the end-to-end operator walkthrough.
 
+A second **CAN status row** reports the live state of the PEAK CAN link over a four-family lifecycle (initializing, connected, disconnected — no adapter found or mid-session unplug — or faulted), with a colour-coded chip, a remediation-oriented headline, a detail tooltip, and a manual **Reconnect** control. It opens the configured PEAK PCAN-USB adapter at 250 kbps and surfaces bench realities: no adapter present, mid-session unplug, driver missing, bus-off, and transient PEAK faults (including a one-click driver-download link when the PEAK driver is absent). See [`specs/002-can-link-lifecycle/quickstart.md`](specs/002-can-link-lifecycle/quickstart.md) for the lifecycle walkthrough.
+
 ## Quick Start
 
 ```powershell
@@ -25,10 +27,11 @@ dotnet run --project src/ButtonPanelTester.GUI
 
 ```
 src/
-├── ButtonPanelTester.Core/                domain types + ports
-├── ButtonPanelTester.Services/            use cases
-├── ButtonPanelTester.Infrastructure/      adapters (EF Core, drivers, IO)
-└── ButtonPanelTester.GUI/                 Avalonia + FuncUI
+├── ButtonPanelTester.Core/                    domain types + ports
+├── ButtonPanelTester.Services/                use cases
+├── ButtonPanelTester.Infrastructure/          adapters (EF Core, drivers, IO)
+├── ButtonPanelTester.Infrastructure.Protocol/ vendored CAN + raw-frame stack (frozen C#)
+└── ButtonPanelTester.GUI/                     Avalonia + FuncUI
 tests/
 └── ButtonPanelTester.Tests/               xUnit + FsCheck + Avalonia.Headless
 specs/                           Spec-Driven Development (spec-kit) feature folders (optional)
@@ -40,6 +43,7 @@ eng/                             build / release scripts
 ## Documentation
 
 - Dictionary fetch & registration walkthrough: [`specs/001-fetch-dictionary/quickstart.md`](./specs/001-fetch-dictionary/quickstart.md).
+- CAN-link lifecycle walkthrough: [`specs/002-can-link-lifecycle/quickstart.md`](./specs/002-can-link-lifecycle/quickstart.md).
 - Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.9.0`.
 - Changelog: [`CHANGELOG.md`](./CHANGELOG.md).
 - Repo-specific notes: [`CLAUDE.md`](./CLAUDE.md).

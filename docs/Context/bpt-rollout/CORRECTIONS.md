@@ -265,6 +265,8 @@ change — only the composition root swaps the source.
 the fetch migration (estimated ~450 LOC + Lean module + docs ≈ one
 working day, deferred for schedule).
 
+**Scope update (2026-05-29, spec-002 lifecycle capstone [#154](https://github.com/luca-veronelli-stem/button-panel-tester/issues/154)):** the hardcoded-metadata stopgap (`KnownStemCommands` / `KnownProtocolAddresses`) is confirmed load-bearing through spec-002 (CAN-link lifecycle) and spec-003 (passive WHO_I_AM discovery — the decode path consumes the hardcoded command codes). The fetch migration is therefore scoped to **spec-004+** (button-press testing), where fetched-vs-hardcoded protocol metadata first materially affects behaviour. `PacketDecoder`'s constructor signature is unchanged, so the eventual swap stays a composition-root change only.
+
 **What this means for the specs:**
 
 - Spec-002 introduces the two `Known*` F# modules and references the
