@@ -21,7 +21,7 @@ let ``translate_BusyCode_YieldsRecoverableAdapterBusyWithCloseAppSuggestion`` ()
 
     Assert.False(t.Fatal)
     Assert.Equal("adapter busy", t.Cause)
-    Assert.Equal(Some "close PCAN-View or the competing app, then reconnect", t.Suggestion)
+    Assert.Equal(Some "close the app holding the channel", t.Suggestion)
     Assert.Equal(busyCode, t.RawCode)
     Assert.Equal<string>("raw busy text", t.RawText)
 
@@ -52,7 +52,7 @@ let ``detailText_WithSuggestion_AppendsSuggestionToHeadlineAndKeepsTechnicalLine
 
     let lines = detail.Split('\n')
     Assert.Equal(2, lines.Length)
-    Assert.Equal<string>("adapter busy -- close PCAN-View or the competing app, then reconnect", lines.[0])
+    Assert.Equal<string>("adapter busy -- close the app holding the channel", lines.[0])
     Assert.Contains("PEAK status 0x", lines.[1])
     Assert.Contains("channel claimed", lines.[1])
 

@@ -15,10 +15,14 @@ open Stem.ButtonPanelTester.Infrastructure.Can
 /// return normally. AC3 exercises the fail-fast path: fire
 /// `StateChanged(Error)` then throw `InvalidOperationException`,
 /// mirroring `CanPort.cs:85-87`'s contract where the port surfaces an
-/// error transition before raising.
+/// error transition before raising. `EmitDisconnectedThenReturn` (#168)
+/// models the cold-start poll loop exhausting: fire
+/// `StateChanged(Disconnected)` and return normally, exercising the
+/// `Disconnected` cold-start arm rather than the `Error` one.
 type private ConnectBehavior =
     | EmitConnectedThenReturn
     | EmitErrorThenThrow
+    | EmitDisconnectedThenReturn
 
 /// File-private fake `ICommunicationPort` for the Slice-2 regression.
 /// Models the post-fix `CanPort` shape: `_state` starts at
@@ -52,6 +56,10 @@ type private FakeCommunicationPort(behavior: ConnectBehavior) =
                 state <- ConnectionState.Error
                 stateChanged.Trigger(null, ConnectionState.Error)
                 raise (InvalidOperationException("fake: cold-start failure"))
+            | EmitDisconnectedThenReturn ->
+                state <- ConnectionState.Disconnected
+                stateChanged.Trigger(null, ConnectionState.Disconnected)
+                Task.CompletedTask
 
         member _.DisconnectAsync(_ct: CancellationToken) = Task.CompletedTask
 
@@ -118,6 +126,12 @@ let ``coldStart_FirstOpenAsync_EmitsConnectedOnce`` () =
 /// `PcanCanLink.openInternal` catches it so no exception escapes
 /// `OpenAsync`. Exactly one emission must be observed — no `Connected`
 /// smearing — and `CurrentState` must reflect it.
+///
+/// #168: the cold-start `Error` arm now consults a channel-condition
+/// probe. An unreadable probe (`readCondition () = None`, e.g. a
+/// driver-less host) must preserve the #136 derivation, so this test
+/// injects `(fun () -> None)` — both pinning that fallback and keeping
+/// the test hermetic regardless of the bench host's PEAK state.
 [<Fact>]
 let ``coldStart_FirstOpenAsync_FakePortThrows_EmitsNoAdapterPresentOnce`` () =
     task {
@@ -126,7 +140,8 @@ let ``coldStart_FirstOpenAsync_FakePortThrows_EmitsNoAdapterPresentOnce`` () =
         let link =
             new PcanCanLink(
                 (fun () -> fakePort :> ICommunicationPort),
-                NullLogger<PcanCanLink>.Instance
+                NullLogger<PcanCanLink>.Instance,
+                (fun () -> None)
             )
 
         try
@@ -154,6 +169,190 @@ let ``coldStart_FirstOpenAsync_FakePortThrows_EmitsNoAdapterPresentOnce`` () =
             match iLink.CurrentState with
             | Disconnected(NoAdapterPresent, _) -> ()
             | other -> Assert.Fail(sprintf "expected Disconnected(NoAdapterPresent, _), got %A" other)
+        finally
+            (link :> IAsyncDisposable).DisposeAsync().AsTask().Wait()
+    }
+
+/// #168 cold-start (via the `Error` arm): when the PEAK channel
+/// *condition* reports `ChannelOccupied` — an adapter is physically
+/// present but held *exclusively* by another app (StemDeviceManager is
+/// the canonical holder, #150) — a first-open `Error` transition must
+/// surface the reused busy classification
+/// (`Error(Recoverable "...adapter busy...", _)`), NOT the
+/// adapter-absent `Disconnected(NoAdapterPresent, _)`. The injected
+/// `readCondition` stub stands in for the live PEAK probe so the
+/// classification is exercised without hardware.
+[<Fact>]
+let ``coldStart_ErrorWhenChannelOccupied_SurfacesBusyNotNoAdapter`` () =
+    task {
+        let fakePort = new FakeCommunicationPort(EmitErrorThenThrow)
+
+        let link =
+            new PcanCanLink(
+                (fun () -> fakePort :> ICommunicationPort),
+                NullLogger<PcanCanLink>.Instance,
+                (fun () -> Some PeakStatusTranslation.ChannelCondition.ChannelOccupied)
+            )
+
+        try
+            let iLink = link :> ICanLink
+            let emissions = ResizeArray<CanLinkState>()
+
+            use _subscription =
+                iLink.LinkStateChanged |> Observable.subscribe (fun state -> emissions.Add state)
+
+            do! iLink.OpenAsync(250_000, CancellationToken.None)
+
+            Assert.Equal(1, emissions.Count)
+
+            match iLink.CurrentState with
+            | Error(Recoverable detail, _) -> Assert.Contains("adapter busy", detail)
+            | other -> Assert.Fail(sprintf "expected Error(Recoverable busy, _), got %A" other)
+        finally
+            (link :> IAsyncDisposable).DisposeAsync().AsTask().Wait()
+    }
+
+/// #168 cold-start (via the `Disconnected` arm): the poll loop can
+/// exhaust and fire `Disconnected` (rather than `Error`) before we have
+/// ever connected. That path must route through the same
+/// channel-condition probe, so an `Occupied` channel still surfaces
+/// busy rather than `NoAdapterPresent`.
+[<Fact>]
+let ``coldStart_DisconnectWhenChannelOccupied_SurfacesBusyNotNoAdapter`` () =
+    task {
+        let fakePort = new FakeCommunicationPort(EmitDisconnectedThenReturn)
+
+        let link =
+            new PcanCanLink(
+                (fun () -> fakePort :> ICommunicationPort),
+                NullLogger<PcanCanLink>.Instance,
+                (fun () -> Some PeakStatusTranslation.ChannelCondition.ChannelOccupied)
+            )
+
+        try
+            let iLink = link :> ICanLink
+            let emissions = ResizeArray<CanLinkState>()
+
+            use _subscription =
+                iLink.LinkStateChanged |> Observable.subscribe (fun state -> emissions.Add state)
+
+            do! iLink.OpenAsync(250_000, CancellationToken.None)
+
+            Assert.Equal(1, emissions.Count)
+
+            match iLink.CurrentState with
+            | Error(Recoverable detail, _) -> Assert.Contains("adapter busy", detail)
+            | other -> Assert.Fail(sprintf "expected Error(Recoverable busy, _), got %A" other)
+        finally
+            (link :> IAsyncDisposable).DisposeAsync().AsTask().Wait()
+    }
+
+/// #168 / #136 preservation: when the channel condition reports
+/// `ChannelUnavailable` (no hardware on the channel), a first-open
+/// `Error` must keep the adapter-absent `Disconnected(NoAdapterPresent,
+/// _)` headline — the busy reclassification is scoped to `Occupied`
+/// only.
+[<Fact>]
+let ``coldStart_ErrorWhenChannelUnavailable_PreservesNoAdapterPresent`` () =
+    task {
+        let fakePort = new FakeCommunicationPort(EmitErrorThenThrow)
+
+        let link =
+            new PcanCanLink(
+                (fun () -> fakePort :> ICommunicationPort),
+                NullLogger<PcanCanLink>.Instance,
+                (fun () -> Some PeakStatusTranslation.ChannelCondition.ChannelUnavailable)
+            )
+
+        try
+            let iLink = link :> ICanLink
+            let emissions = ResizeArray<CanLinkState>()
+
+            use _subscription =
+                iLink.LinkStateChanged |> Observable.subscribe (fun state -> emissions.Add state)
+
+            do! iLink.OpenAsync(250_000, CancellationToken.None)
+
+            Assert.Equal(1, emissions.Count)
+
+            match iLink.CurrentState with
+            | Disconnected(NoAdapterPresent, _) -> ()
+            | other -> Assert.Fail(sprintf "expected Disconnected(NoAdapterPresent, _), got %A" other)
+        finally
+            (link :> IAsyncDisposable).DisposeAsync().AsTask().Wait()
+    }
+
+/// #168 bench finding: reaching the cold-start (open-FAILED) arm with a
+/// `ChannelPCanView` (`0x03` = `Available | Occupied`) probe means
+/// PCAN-View holds the channel at an INCOMPATIBLE bitrate — PCAN-View
+/// shares the channel only at a MATCHING bitrate, in which case our
+/// `Initialize` succeeds and we reach the `Connected` arm instead (see
+/// `coldStart_PcanViewButOpenSucceeds_Connects`). So a first-open
+/// `Error` with `ChannelPCanView` present must surface the busy
+/// classification (`Error(Recoverable "...adapter busy...", _)`), NOT
+/// `Disconnected(NoAdapterPresent, _)`.
+[<Fact>]
+let ``coldStart_ChannelPcanView_SurfacesBusy`` () =
+    task {
+        let fakePort = new FakeCommunicationPort(EmitErrorThenThrow)
+
+        let link =
+            new PcanCanLink(
+                (fun () -> fakePort :> ICommunicationPort),
+                NullLogger<PcanCanLink>.Instance,
+                (fun () -> Some PeakStatusTranslation.ChannelCondition.ChannelPCanView)
+            )
+
+        try
+            let iLink = link :> ICanLink
+            let emissions = ResizeArray<CanLinkState>()
+
+            use _subscription =
+                iLink.LinkStateChanged |> Observable.subscribe (fun state -> emissions.Add state)
+
+            do! iLink.OpenAsync(250_000, CancellationToken.None)
+
+            Assert.Equal(1, emissions.Count)
+
+            match iLink.CurrentState with
+            | Error(Recoverable detail, _) -> Assert.Contains("adapter busy", detail)
+            | other -> Assert.Fail(sprintf "expected Error(Recoverable busy, _) (PcanView at mismatched bitrate), got %A" other)
+        finally
+            (link :> IAsyncDisposable).DisposeAsync().AsTask().Wait()
+    }
+
+/// #168 invariant guard (GREEN on write): the `ChannelPCanView` → busy
+/// branch fires ONLY when the open FAILED. A *matching-bitrate*
+/// PCAN-View shares the channel, so our `Initialize` succeeds, the
+/// `Connected` arm runs (which never reads the condition), and
+/// `coldStartState` is never reached. With the open succeeding, a
+/// `ChannelPCanView` probe must therefore still yield `Connected _`,
+/// NOT busy — the discriminator is connect-success-vs-failure, not the
+/// `0x03` condition value.
+[<Fact>]
+let ``coldStart_PcanViewButOpenSucceeds_Connects`` () =
+    task {
+        let fakePort = new FakeCommunicationPort(EmitConnectedThenReturn)
+
+        let link =
+            new PcanCanLink(
+                (fun () -> fakePort :> ICommunicationPort),
+                NullLogger<PcanCanLink>.Instance,
+                (fun () -> Some PeakStatusTranslation.ChannelCondition.ChannelPCanView)
+            )
+
+        try
+            let iLink = link :> ICanLink
+            let emissions = ResizeArray<CanLinkState>()
+
+            use _subscription =
+                iLink.LinkStateChanged |> Observable.subscribe (fun state -> emissions.Add state)
+
+            do! iLink.OpenAsync(250_000, CancellationToken.None)
+
+            match iLink.CurrentState with
+            | Connected _ -> ()
+            | other -> Assert.Fail(sprintf "expected Connected _ (matching-bitrate PcanView shares), got %A" other)
         finally
             (link :> IAsyncDisposable).DisposeAsync().AsTask().Wait()
     }

@@ -14,8 +14,9 @@ open Stem.ButtonPanelTester.Core.Can
 /// literal and the bare status-text passthrough (`PeakErrorText`) with a
 /// small curated table that recognises the statuses worth giving the
 /// operator an actionable hint for — adapter-busy (#150: the channel is
-/// claimed by PCAN-View or another process) and bus-off (#139) — while
-/// falling back to the raw PEAK description for everything else.
+/// claimed *exclusively* by another app, e.g. StemDeviceManager) and
+/// bus-off (#139) — while falling back to the raw PEAK description for
+/// everything else.
 ///
 /// **Why match SDK constants, not hex literals.** Issues #150 and #139
 /// quote conflicting hex values for the same statuses (`0x4000000` vs
@@ -69,11 +70,20 @@ module PeakStatusTranslation =
         let busOff = uint32 TPCANStatus.PCAN_ERROR_BUSOFF
 
         if code = busy then
-            // Channel already initialised/claimed — typically PCAN-View
-            // or another tester instance holding the adapter (#150).
+            // Channel already initialised/claimed by an app that took it
+            // *exclusively* — StemDeviceManager is the canonical holder
+            // (#150). NOT PCAN-View: PCAN-View shares the channel, so it
+            // leaves the channel connectable rather than busy.
+            //
+            // No "then reconnect" instruction: the vendored
+            // `PCANManager` hot-plug monitor re-`Initialize`s the channel
+            // every ~1 s (`Hardware/PCANManager.cs` StartConnectionMonitoring),
+            // so the link reconnects on its own ~1-2 s after the holder
+            // frees it. The status row's Reconnect button is a manual
+            // nudge, not a required step.
             { Fatal = false
               Cause = "adapter busy"
-              Suggestion = Some "close PCAN-View or the competing app, then reconnect"
+              Suggestion = Some "close the app holding the channel"
               RawCode = code
               RawText = rawText }
         elif code = busOff then
@@ -132,3 +142,62 @@ module PeakStatusTranslation =
             Some(statusCode, rawText)
         with _ ->
             None
+
+    /// The PEAK SDK's channel-condition enum
+    /// (`Peak.Can.Basic.ChannelCondition`, `UInt32`-backed:
+    /// `ChannelUnavailable = 0` / `ChannelAvailable = 1` /
+    /// `ChannelOccupied = 2` / `ChannelPCanView = 3`). The
+    /// `BackwardCompatibility` surface this module otherwise uses exposes
+    /// the condition only as loose `PCAN_CHANNEL_*` int constants read
+    /// back through `GetValue(..., PCAN_CHANNEL_CONDITION, out uint, ...)`
+    /// — there is no `TPCANChannelCondition` type in this package — so we
+    /// re-export the matching named enum for a typed reader (#168).
+    type ChannelCondition = Peak.Can.Basic.ChannelCondition
+
+    /// Cold-start probe of the PEAK channel *condition* for the hardcoded
+    /// channel — the one query that distinguishes "an adapter is present
+    /// but busy (held *exclusively* by another app, e.g.
+    /// StemDeviceManager)" from "no adapter present" WITHOUT opening the
+    /// channel (#168).
+    ///
+    /// `GetStatus` (used by `tryReadCurrentStatus`) cannot make that
+    /// distinction: it reports *this* process's channel-handle state, so
+    /// a never-opened channel always reads `PCAN_ERROR_INITIALIZE`
+    /// whether or not hardware is attached.
+    /// `GetValue(PCAN_CHANNEL_CONDITION)` reads the driver's global view
+    /// of the channel instead.
+    ///
+    /// Returns `Some condition` on a successful read; `None` when the
+    /// query fails — most likely a missing `PCANBasic.dll` on the host —
+    /// mirroring `PeakErrorText` / `tryReadCurrentStatus` try/catch
+    /// discipline so a driver-less host never bubbles a P/Invoke out of
+    /// the state machine. A `None` result preserves the #136 cold-start
+    /// derivation (`Disconnected(NoAdapterPresent, _)`).
+    let tryReadChannelCondition () : ChannelCondition option =
+        try
+            let mutable raw = 0u
+
+            let status =
+                PCANBasic.GetValue(
+                    channel,
+                    TPCANParameter.PCAN_CHANNEL_CONDITION,
+                    &raw,
+                    uint32 sizeof<uint32>
+                )
+
+            if status = TPCANStatus.PCAN_ERROR_OK then
+                Some(LanguagePrimitives.EnumOfValue raw)
+            else
+                None
+        with _ ->
+            None
+
+    /// The #150 adapter-busy classification — `Recoverable` with the
+    /// "adapter busy -- close the app holding the channel" headline —
+    /// reused verbatim so a *cold-start* busy channel (#168) surfaces the
+    /// same message and severity as a mid-session `PCAN_ERROR_INITIALIZE`.
+    /// The empty raw text yields the headline only; the technical second
+    /// line carries just the status code (no live `GetErrorText` lookup is
+    /// needed for a synthesised classification).
+    let busyClassification () : ErrorClassification =
+        toErrorClassification (translate (uint32 TPCANStatus.PCAN_ERROR_INITIALIZE) "")
