@@ -31,6 +31,7 @@
         <Compile Include="Integration/DictionaryServiceRefreshTests.fs" />
         <Compile Include="Unit/WarmUpTests.fs" />
         <Compile Include="Unit/Can/WhoIAmFrameFixtureTests.fs" />
+        <Compile Include="Unit/Can/CanLinkLoggingTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
