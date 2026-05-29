@@ -17,6 +17,7 @@
         <Compile Include="Unit/EmbeddedResourceTests.fs" />
         <Compile Include="Unit/InstallationDescriptorProviderTests.fs" />
         <Compile Include="Unit/Can/CanPortCtorTests.fs" />
+        <Compile Include="Unit/Can/PeakStatusTranslationTests.fs" />
         <Compile Include="Unit/Can/PcanCanLinkColdStartTests.fs" />
         <Compile Include="Unit/Can/PcanCanLinkErrorTextTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTests.fs" />
