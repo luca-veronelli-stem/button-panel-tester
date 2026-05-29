@@ -348,3 +348,85 @@ let Headline_MidSessionUnplug_DistinctFromNoAdapterPresent () =
         CanStatusRow.headline (Disconnected(NoAdapterPresent, fixedNow))
 
     Assert.NotEqual<string>(noAdapter, midSession)
+
+// --- #143 (GUI): driver-download link on Fatal driver-missing ---
+//
+// On `Error(Fatal driver-missing, _)` the row offers a "Download PEAK
+// driver" affordance pointing at the pinned PEAK downloads page. The URL
+// is rendered as text on the control so it stays readable headless / for
+// accessibility (the click opens the system browser, which a headless
+// harness can't follow). The DU-level cause (a structured remediation)
+// is the descoped full-fidelity #143; this slice is GUI-only and keys off
+// a stable substring of the shipped Fatal headline.
+
+let private pinnedDriverUrl =
+    "https://www.peak-system.com/support/downloads/drivers/"
+
+// Mirrors the shipped `PcanCanLink.buildFailureState` shape: short
+// headline first line + a `\nTechnical detail: …` line (em-dash as in
+// production).
+let private driverMissingFatal =
+    Error(
+        Fatal
+            "PEAK PCANBasic native DLL not found — install the PEAK driver\nTechnical detail: DllNotFoundException: Unable to load DLL 'PCANBasic'",
+        fixedNow
+    )
+
+let private tryDriverDownloadLink (panel: StackPanel) : Button option =
+    panel.Children
+    |> Seq.choose (fun c ->
+        match box c with
+        | :? Button as b when b.Name = "DriverDownloadLink" -> Some b
+        | _ -> None)
+    |> Seq.tryHead
+
+[<Fact>]
+let IsDriverMissing_DriverMissingFatal_True () =
+    Assert.True(CanStatusRow.isDriverMissing driverMissingFatal)
+
+[<Fact>]
+let IsDriverMissing_NonDriverFatal_False () =
+    let state =
+        Error(Fatal "bus-off persists across reconnect — file bug", fixedNow)
+
+    Assert.False(CanStatusRow.isDriverMissing state)
+
+[<Fact>]
+let IsDriverMissing_Recoverable_False () =
+    let state =
+        Error(Recoverable "Bus-off detected — try reconnect", fixedNow)
+
+    Assert.False(CanStatusRow.isDriverMissing state)
+
+[<Fact>]
+let IsDriverMissing_Disconnected_False () =
+    Assert.False(
+        CanStatusRow.isDriverMissing (Disconnected(NoAdapterPresent, fixedNow))
+    )
+
+[<Fact>]
+let IsDriverMissing_Connected_False () =
+    Assert.False(CanStatusRow.isDriverMissing (Connected(fixedAdapter, fixedNow)))
+
+[<AvaloniaFact>]
+let View_DriverMissingFatal_RendersDownloadLinkWithUrl () =
+    let panel = renderState driverMissingFatal
+
+    match tryDriverDownloadLink panel with
+    | None -> Assert.Fail("expected a DriverDownloadLink on Fatal driver-missing")
+    | Some link -> Assert.Contains(pinnedDriverUrl, buttonText link)
+
+[<AvaloniaFact>]
+let View_NonDriverFatal_NoDownloadLink () =
+    let state =
+        Error(Fatal "bus-off persists across reconnect — file bug", fixedNow)
+
+    let panel = renderState state
+
+    Assert.Equal(None, tryDriverDownloadLink panel)
+
+[<AvaloniaFact>]
+let View_Connected_NoDownloadLink () =
+    let panel = renderState (Connected(fixedAdapter, fixedNow))
+
+    Assert.Equal(None, tryDriverDownloadLink panel)
