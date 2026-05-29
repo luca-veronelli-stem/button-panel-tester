@@ -320,3 +320,31 @@ let ReconnectClick_RaisesCallback () =
     button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))
 
     Assert.Equal(1, reconnectCount)
+
+// --- #117 (US3): MidSessionUnplug headline distinct from NoAdapterPresent ---
+//
+// US3 (survive mid-session unplug): when an adapter that WAS connected
+// is physically removed, the row must read "adapter unplugged
+// mid-session" — visibly distinct from the boot-time "no PEAK adapter
+// found" (NoAdapterPresent) so the technician can tell a yanked cable
+// from an adapter that was never there. The button-visibility matrix
+// above already covers MidSessionUnplug; this pins the headline string.
+// Asserts on the pure `CanStatusRow.headline` (no headless harness
+// needed), mirroring `ShouldShowReconnectButton_MatchesFR003Table`.
+
+[<Fact>]
+let Headline_DisconnectedMidSessionUnplug_RendersMidSessionPhrase () =
+    Assert.Equal(
+        "Disconnected · adapter unplugged mid-session",
+        CanStatusRow.headline (Disconnected(MidSessionUnplug, fixedNow))
+    )
+
+[<Fact>]
+let Headline_MidSessionUnplug_DistinctFromNoAdapterPresent () =
+    let midSession =
+        CanStatusRow.headline (Disconnected(MidSessionUnplug, fixedNow))
+
+    let noAdapter =
+        CanStatusRow.headline (Disconnected(NoAdapterPresent, fixedNow))
+
+    Assert.NotEqual<string>(noAdapter, midSession)

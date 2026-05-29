@@ -35,6 +35,10 @@ open Stem.ButtonPanelTester.Infrastructure.Can
 ///   - Physical unplug surfaces `Disconnected(MidSessionUnplug, _)`
 ///     within 5 s — manual: the runner must unplug the adapter when
 ///     the test prompts.
+///   - #132 hot-plug: after a mid-session unplug, a physical replug
+///     (with NO Reconnect click) re-surfaces `Connected` within 10 s —
+///     manual: the runner unplugs then replugs the adapter when
+///     prompted.
 
 // --- fixtures ---
 
@@ -43,6 +47,8 @@ let private baudrateBps = 250_000
 let private connectTimeout = TimeSpan.FromSeconds(2.0)
 
 let private unplugObservationTimeout = TimeSpan.FromSeconds(5.0)
+
+let private replugObservationTimeout = TimeSpan.FromSeconds(10.0)
 
 /// Builds a `PcanCanLink` over a factory that constructs the
 /// PEAK stack (`PCANManager` + `CanPort`) at 250 kbps on first
@@ -227,4 +233,80 @@ let PhysicalUnplug_AfterConnected_SurfacesMidSessionUnplug () =
             sprintf
                 "no Disconnected(MidSessionUnplug, _) within %.1f s of the prompt"
                 unplugObservationTimeout.TotalSeconds
+        )
+
+// --- #132: hot-plug — replug without a Reconnect click re-Connects ---
+
+[<Trait("Category", "Hardware")>]
+[<Fact(Skip = "manual bench; see #112 — operator unplugs then replugs the adapter when prompted")>]
+let PhysicalReplug_AfterMidSessionUnplug_ReConnectsWithoutClickWithin10s () =
+    // #132 hot-plug — documents the FULL US3 mid-session survival cycle
+    // on a bench rig: Connected → unplug → MidSessionUnplug → replug
+    // (NO Reconnect click) → Connected. There is no way to script a
+    // physical USB unplug/replug inside the test process, so this is
+    // skipped by default and run interactively:
+    //   1. Plug the adapter, run the test, wait for the first prompt.
+    //   2. Within 5 s, physically UNPLUG the adapter → MidSessionUnplug.
+    //   3. At the second prompt, physically REPLUG the adapter. Do NOT
+    //      click any Reconnect affordance — the link must recover on its
+    //      own (the vendored stack's monitor task re-detects the channel).
+    //   4. Assert a FRESH Connected lands within 10 s of the replug.
+    let link, cleanup = buildLink ()
+    use _ = cleanup
+
+    let observed = collectStates link
+
+    (link :> ICanLink).OpenAsync(baudrateBps, CancellationToken.None)
+        .GetAwaiter().GetResult()
+
+    Assert.NotNull(waitForState observed isConnected connectTimeout |> Option.toObj)
+
+    // Operator unplugs HERE.
+    Console.WriteLine(
+        sprintf "Unplug the PEAK adapter within %.1f s…" unplugObservationTimeout.TotalSeconds
+    )
+
+    Assert.NotNull(
+        waitForState observed isMidSessionUnplug unplugObservationTimeout |> Option.toObj
+    )
+
+    // Snapshot the count BEFORE the replug so we verify a FRESH
+    // Connected lands rather than the pre-unplug one still in the list.
+    let preReplugCount = lock observed (fun () -> observed.Count)
+
+    // Operator replugs HERE — WITHOUT clicking Reconnect.
+    Console.WriteLine(
+        sprintf
+            "Replug the PEAK adapter (do NOT click Reconnect) within %.1f s…"
+            replugObservationTimeout.TotalSeconds
+    )
+
+    let reConnected =
+        let deadline = DateTime.UtcNow + replugObservationTimeout
+
+        let rec spin () =
+            let found =
+                lock observed (fun () ->
+                    observed
+                    |> Seq.skip preReplugCount
+                    |> Seq.tryFind isConnected)
+
+            match found with
+            | Some _ -> found
+            | None when DateTime.UtcNow >= deadline -> None
+            | None ->
+                Thread.Sleep(50)
+                spin ()
+
+        spin ()
+
+    match reConnected with
+    | Some(Connected _) -> ()
+    | Some other ->
+        Assert.Fail(sprintf "expected a fresh Connected after replug, observed %A" other)
+    | None ->
+        Assert.Fail(
+            sprintf
+                "no Connected within %.1f s of the replug — the link did not recover on its own"
+                replugObservationTimeout.TotalSeconds
         )
