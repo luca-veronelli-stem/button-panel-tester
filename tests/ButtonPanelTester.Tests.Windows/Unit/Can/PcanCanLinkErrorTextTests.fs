@@ -10,11 +10,18 @@ open Core.Models
 open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Infrastructure.Can
 
-/// File-private fake `ICommunicationPort` that fires
-/// `StateChanged(Error)` from inside `ConnectAsync`, mirroring the
-/// shape used by `PcanCanLinkColdStartTests.FakeCommunicationPort` so
-/// the test exercises exactly the path
-/// `CanPort.cs:83 → PcanCanLink.translateState(ConnectionState.Error)`.
+/// File-private fake `ICommunicationPort` that first fires
+/// `StateChanged(Connected)` and then `StateChanged(Error)` from inside
+/// `ConnectAsync`, mirroring the shape used by
+/// `PcanCanLinkColdStartTests.FakeCommunicationPort`.
+///
+/// The leading `Connected` matters post-#136: `translateState` only
+/// runs the PEAK status-text translation on the `Error` branch once the
+/// link *has been* connected (`haveBeenConnected = true`); a cold-start
+/// `Error` with no prior `Connected` is reclassified as
+/// `Disconnected(NoAdapterPresent, _)`. So to exercise the #124
+/// translated-error-text path the fake establishes a session first,
+/// then drops to `Error`, mirroring a mid-session fault.
 type private FakeErrorPort() =
     let mutable state = ConnectionState.Disconnected
     let packetReceived = Event<EventHandler<RawPacket>, RawPacket>()
@@ -23,7 +30,7 @@ type private FakeErrorPort() =
     interface ICommunicationPort with
         member _.Kind = ChannelKind.Can
         member _.State = state
-        member _.IsConnected = false
+        member _.IsConnected = state = ConnectionState.Connected
 
         [<CLIEvent>]
         member _.PacketReceived = packetReceived.Publish
@@ -32,6 +39,8 @@ type private FakeErrorPort() =
         member _.StateChanged = stateChanged.Publish
 
         member _.ConnectAsync(_ct: CancellationToken) =
+            state <- ConnectionState.Connected
+            stateChanged.Trigger(null, ConnectionState.Connected)
             state <- ConnectionState.Error
             stateChanged.Trigger(null, ConnectionState.Error)
             raise (InvalidOperationException("fake: error transition"))

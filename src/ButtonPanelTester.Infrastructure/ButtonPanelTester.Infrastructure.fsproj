@@ -9,6 +9,7 @@
         <Compile Include="Clock.fs" />
         <Compile Include="Can/PcanAdapterIdentity.fs" />
         <Compile Include="Can/PeakErrorText.fs" />
+        <Compile Include="Can/PeakStatusTranslation.fs" />
         <Compile Include="Can/PcanCanLink.fs" />
         <Compile Include="Persistence/JsonFileDictionaryCache.fs" />
         <Compile Include="Persistence/EmbeddedSeedExtractor.fs" />

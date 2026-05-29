@@ -107,16 +107,19 @@ let ``coldStart_FirstOpenAsync_EmitsConnectedOnce`` () =
             (link :> IAsyncDisposable).DisposeAsync().AsTask().Wait()
     }
 
-/// AC3 regression: the existing adapter-absent fail-fast path remains
-/// intact. The fake fires `StateChanged(Error)` then raises
-/// `InvalidOperationException`, mirroring `CanPort.cs:85-87`'s
-/// behaviour when the poll loop exhausts. `PcanCanLink.openInternal`
-/// catches the exception (`PcanCanLink.fs:283-294`) and surfaces the
-/// failure through `LinkStateChanged` only — no exception escapes
-/// `OpenAsync`. Exactly one `Error(Recoverable _, _)` must be
-/// observed; `CurrentState` must reflect it.
+/// AC3 regression, reshaped for #136: a `ConnectionState.Error`
+/// observed on the very first `OpenAsync` — while we have *never* been
+/// connected — is the adapter-absent cold start, not a runtime fault.
+/// `translateState` now reclassifies it as
+/// `Disconnected(NoAdapterPresent, _)` rather than a generic
+/// `Error(Recoverable _, _)`. The fail-fast plumbing is otherwise
+/// unchanged: the fake fires `StateChanged(Error)` then raises
+/// `InvalidOperationException` (mirroring `CanPort.cs:85-87`), and
+/// `PcanCanLink.openInternal` catches it so no exception escapes
+/// `OpenAsync`. Exactly one emission must be observed — no `Connected`
+/// smearing — and `CurrentState` must reflect it.
 [<Fact>]
-let ``coldStart_FirstOpenAsync_FakePortThrows_EmitsErrorOnce`` () =
+let ``coldStart_FirstOpenAsync_FakePortThrows_EmitsNoAdapterPresentOnce`` () =
     task {
         let fakePort = new FakeCommunicationPort(EmitErrorThenThrow)
 
@@ -137,19 +140,20 @@ let ``coldStart_FirstOpenAsync_FakePortThrows_EmitsErrorOnce`` () =
 
             do! iLink.OpenAsync(250_000, CancellationToken.None)
 
-            let recoverableCount =
+            let noAdapterCount =
                 emissions
                 |> Seq.filter (fun s ->
                     match s with
-                    | Error(Recoverable _, _) -> true
+                    | Disconnected(NoAdapterPresent, _) -> true
                     | _ -> false)
                 |> Seq.length
 
-            Assert.Equal(1, recoverableCount)
+            Assert.Equal(1, noAdapterCount)
+            Assert.Equal(1, emissions.Count)
 
             match iLink.CurrentState with
-            | Error(Recoverable _, _) -> ()
-            | other -> Assert.Fail(sprintf "expected Error(Recoverable, _), got %A" other)
+            | Disconnected(NoAdapterPresent, _) -> ()
+            | other -> Assert.Fail(sprintf "expected Disconnected(NoAdapterPresent, _), got %A" other)
         finally
             (link :> IAsyncDisposable).DisposeAsync().AsTask().Wait()
     }

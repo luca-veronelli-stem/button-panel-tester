@@ -179,23 +179,38 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
                 currentState <- state
                 Some state
             | ConnectionState.Error ->
-                // First observation of an unexpected PEAK status is
-                // Recoverable; CanLinkService escalates to Fatal on the
-                // second observation across a reconnect per
-                // `research.md` R8. The detail string follows the
-                // headline\ntechnical convention `buildFailureState`
-                // uses (see comment on that helper). `PeakErrorText`
-                // queries the actual PEAK status text (issue #124,
-                // FR-004); the fallback fires when `PCANBasic.dll` is
-                // unreachable on the host — the technical line is
-                // still non-empty so `CanStatusRow`'s tooltip stays
-                // informative.
-                let detail =
-                    PeakErrorText.tryReadCurrentErrorDetail ()
-                    |> Option.defaultValue
-                        "adapter reported error\nPEAK status query unavailable"
+                let state =
+                    if not haveBeenConnected then
+                        // #136: an `Error` transition before we have ever
+                        // been `Connected` is the adapter-absent cold
+                        // start, not a runtime fault — the PEAK stack
+                        // reports `Error` when no adapter answers on the
+                        // channel. Reclassify it as
+                        // `Disconnected(NoAdapterPresent, _)` so the
+                        // status row shows the boot-time-absence headline
+                        // (FR-002/FR-005) rather than a generic error.
+                        Disconnected(NoAdapterPresent, now)
+                    else
+                        // Mid-session fault on a link that *was* connected
+                        // (#150/#139). Translate the live PEAK status into
+                        // an actionable cause + remediation hint. First
+                        // observation is Recoverable; CanLinkService
+                        // escalates to Fatal on the second observation
+                        // across a reconnect per `research.md` R8. The
+                        // fallback fires when `PCANBasic.dll` is
+                        // unreachable on the host — the technical line is
+                        // still non-empty so `CanStatusRow`'s tooltip
+                        // stays informative.
+                        match PeakStatusTranslation.tryReadCurrentStatus () with
+                        | Some(code, rawText) ->
+                            let translated = PeakStatusTranslation.translate code rawText
+                            Error(PeakStatusTranslation.toErrorClassification translated, now)
+                        | None ->
+                            Error(
+                                Recoverable "adapter reported error\nPEAK status query unavailable",
+                                now
+                            )
 
-                let state = Error(Recoverable detail, now)
                 currentState <- state
                 Some state
             | ConnectionState.Connecting
@@ -238,7 +253,23 @@ type PcanCanLink(portFactory: unit -> ICommunicationPort, logger: ILogger<PcanCa
                 ),
                 now
             )
-        | _ -> Error(Recoverable(detailFor "CAN stack failed to initialise"), now)
+        | _ ->
+            // The DLL loaded but construction threw. Consult the live
+            // PEAK status: a *recognised* code (e.g. the channel is busy
+            // because PCAN-View has it open, #150) yields a translated
+            // cause + remediation hint. For an unreadable status, or one
+            // we have not curated a hint for, the construction exception
+            // is the more informative signal — keep today's generic
+            // Recoverable fallback carrying it. A curated entry is
+            // exactly one that offers a remediation suggestion.
+            let translated =
+                PeakStatusTranslation.tryReadCurrentStatus ()
+                |> Option.map (fun (code, rawText) -> PeakStatusTranslation.translate code rawText)
+                |> Option.filter (fun t -> t.Suggestion.IsSome)
+
+            match translated with
+            | Some t -> Error(PeakStatusTranslation.toErrorClassification t, now)
+            | None -> Error(Recoverable(detailFor "CAN stack failed to initialise"), now)
 
     /// Build the underlying port on first use, or return the
     /// previously-captured failure state. Mutates `portBuild` under
