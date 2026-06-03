@@ -8,6 +8,7 @@ open Avalonia.Media
 open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Types
 open Stem.ButtonPanelTester.Core.Dictionary
+open Stem.ButtonPanelTester.Services.Dictionary
 
 /// FuncUI view for the dictionary status row, per
 /// `specs/001-fetch-dictionary/spec.md` §US1 and §US3. Renders five
@@ -51,6 +52,28 @@ module DictionaryStatusRow =
     type RefreshState =
         | Idle
         | Refreshing
+
+    /// Host-driven render state for the dictionary row, owned by the
+    /// `App.fs` host as a single mutable cell and fed to
+    /// `dictionaryView`:
+    ///   - `Initializing` — pre-first-event placeholder; no source has
+    ///     landed yet. The steady startup state until `SourceChanged`
+    ///     fires or `InitializeAsync` resolves.
+    ///   - `Ready` — a usable `DictionarySource` (Live or Cached);
+    ///     renders the full status row via `view`.
+    ///   - `Unavailable` — the terminal catastrophic-init state (#179):
+    ///     `IDictionaryService.InitializeAsync` returned
+    ///     `NoDictionaryAvailable` (every byte-source — live + cache +
+    ///     seed — failed), the one arm that never fires `SourceChanged`.
+    ///     Without this case the row would sit on "Initializing
+    ///     dictionary…" forever; instead it surfaces the failure reason
+    ///     and a Refresh affordance so the technician can retry. Matches
+    ///     the repo convention of surfacing an init failure as an
+    ///     observable state, never a silent placeholder.
+    type DictionaryRender =
+        | Initializing
+        | Ready of DictionarySource
+        | Unavailable of FetchFailureReason
 
     /// Colour-coded indicator brush per the table in `spec.md` §US1.
     let indicatorBrush (source: DictionarySource) : IBrush =
@@ -279,3 +302,72 @@ module DictionaryStatusRow =
             StackPanel.children allChildren
         ]
         :> IView
+
+    /// Placeholder shown before the first source or init result lands.
+    /// Held here (rather than inlined in `App.fs`) so the host and the
+    /// headless tests share one literal.
+    let initializingText : string = "Initializing dictionary…"
+
+    /// Copy for the terminal `Unavailable` row (#179). The reason is
+    /// rendered with `%A` to match the existing failure-detail wording
+    /// (`detailText`'s "last refresh failed: %A"); in practice the
+    /// init-failure reasons are `CacheAbsent` / `CacheUnreadable`.
+    let unavailableHeadline (reason: FetchFailureReason) : string =
+        sprintf "Dictionary unavailable — %A" reason
+
+    /// Render the dictionary row for a host-driven `DictionaryRender`
+    /// state. `Ready` delegates to `view`; `Initializing` is the bare
+    /// placeholder; `Unavailable` surfaces the catastrophic-init failure
+    /// reason plus a Refresh button so the technician can retry (a
+    /// successful refresh fires `SourceChanged`, which drives the row
+    /// back to `Ready`). The three branches are exercised headlessly in
+    /// `DictionaryStatusRowTests`.
+    let dictionaryView
+        (cachePath: string)
+        (render: DictionaryRender)
+        (now: DateTimeOffset)
+        (refreshState: RefreshState)
+        (onRefresh: unit -> unit)
+        (onReregister: unit -> unit)
+        : IView =
+        match render with
+        | Initializing ->
+            TextBlock.create [
+                TextBlock.name "DictionaryInitializing"
+                TextBlock.text initializingText
+            ]
+            :> IView
+        | Ready source -> view cachePath source now refreshState onRefresh onReregister
+        | Unavailable reason ->
+            StackPanel.create [
+                StackPanel.orientation Orientation.Horizontal
+                StackPanel.spacing 8.0
+                StackPanel.verticalAlignment VerticalAlignment.Center
+                StackPanel.children [
+                    TextBlock.create [
+                        TextBlock.name "DictionaryUnavailableHeadline"
+                        TextBlock.text (unavailableHeadline reason)
+                        TextBlock.foreground (Brushes.Red :> IBrush)
+                        TextBlock.verticalAlignment VerticalAlignment.Center
+                    ]
+                    Button.create [
+                        Button.name "RefreshButton"
+                        Button.content (refreshButtonCaption refreshState)
+                        Button.isEnabled (match refreshState with Idle -> true | Refreshing -> false)
+                        Button.onClick (fun _ -> onRefresh ())
+                    ]
+                ]
+            ]
+            :> IView
+
+    /// Map the awaited `IDictionaryService.InitializeAsync` result to the
+    /// render-state transition the App host applies (#179):
+    ///   - `Updated` — a no-op: `SourceChanged` already drove the row to
+    ///     `Ready` inside `InitializeAsync`, so nothing more is needed.
+    ///   - `NoDictionaryAvailable` — the catastrophic dead-path that
+    ///     `SourceChanged` never covers; flip the row to `Unavailable` so
+    ///     the failure is observable instead of a silent "Initializing…".
+    let renderForInitResult (update: DictionaryStateUpdate) : DictionaryRender option =
+        match update with
+        | Updated _ -> None
+        | NoDictionaryAvailable reason -> Some(Unavailable reason)

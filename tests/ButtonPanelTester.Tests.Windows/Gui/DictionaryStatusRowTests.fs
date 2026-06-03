@@ -8,6 +8,7 @@ open Avalonia.Headless.XUnit
 open Avalonia.FuncUI.VirtualDom
 open Xunit
 open Stem.ButtonPanelTester.Core.Dictionary
+open Stem.ButtonPanelTester.Services.Dictionary
 open Stem.ButtonPanelTester.GUI.Dictionary
 
 /// `Avalonia.Headless.XUnit` tests for `DictionaryStatusRow.view`
@@ -188,3 +189,85 @@ let View_Refreshing_RendersColdStartHintWithDocumentedText () =
             "This may take up to a minute if the service has been idle.",
             hint.Text
         )
+
+// --- tests: host-driven render state (#179 catastrophic-init dead-path) ---
+
+/// Materialise `dictionaryView` for a render state and collect every
+/// TextBlock in the resulting control tree (the row may be a bare
+/// placeholder TextBlock or a StackPanel of headline + button).
+let rec private collectTextBlocks (c: Control) : TextBlock list =
+    match box c with
+    | :? TextBlock as t -> [ t ]
+    | :? Panel as p ->
+        p.Children |> Seq.collect collectTextBlocks |> List.ofSeq
+    | :? ContentControl as cc ->
+        match cc.Content with
+        | :? Control as inner -> collectTextBlocks inner
+        | _ -> []
+    | _ -> []
+
+let private textOf (t: TextBlock) : string =
+    match t.Text with
+    | null -> ""
+    | s -> s
+
+let private renderDictionaryView (render: DictionaryStatusRow.DictionaryRender) : Control =
+    VirtualDom.create (
+        DictionaryStatusRow.dictionaryView
+            cacheFilePath
+            render
+            fixedNow
+            DictionaryStatusRow.Idle
+            noop
+            noop)
+
+[<AvaloniaFact>]
+let DictionaryView_Unavailable_ShowsUnavailableCopyNotInitializing () =
+    // The catastrophic-init dead-path (#179): InitializeAsync returned
+    // NoDictionaryAvailable, so SourceChanged never fired. The row must
+    // surface the terminal "Dictionary unavailable" copy instead of
+    // sitting on the "Initializing dictionary…" placeholder forever.
+    let texts =
+        renderDictionaryView (DictionaryStatusRow.Unavailable CacheUnreadable)
+        |> collectTextBlocks
+        |> List.map textOf
+
+    Assert.Contains(texts, fun t -> t.StartsWith("Dictionary unavailable"))
+    Assert.Contains(texts, fun t -> t.Contains("CacheUnreadable"))
+    Assert.DoesNotContain("Initializing dictionary…", texts)
+
+[<AvaloniaFact>]
+let DictionaryView_Initializing_ShowsInitializingPlaceholder () =
+    // The pre-first-event placeholder is unchanged: before any
+    // SourceChanged or init result lands, the row reads "Initializing
+    // dictionary…".
+    let texts =
+        renderDictionaryView DictionaryStatusRow.Initializing
+        |> collectTextBlocks
+        |> List.map textOf
+
+    Assert.Contains("Initializing dictionary…", texts)
+
+[<Fact>]
+let RenderForInitResult_NoDictionaryAvailable_MapsToUnavailable () =
+    // The heart of the dead-path fix: the App host must turn a discarded
+    // NoDictionaryAvailable init result into a terminal Unavailable
+    // render state. Returning None here (the old "let! _ = …" discard)
+    // is exactly the bug.
+    let render =
+        DictionaryStatusRow.renderForInitResult (NoDictionaryAvailable CacheUnreadable)
+
+    Assert.Equal(Some(DictionaryStatusRow.Unavailable CacheUnreadable), render)
+
+[<Fact>]
+let RenderForInitResult_Updated_ReturnsNone () =
+    // The success path is a no-op: SourceChanged already drove the row
+    // to Ready inside InitializeAsync, so the awaited Updated result
+    // must not re-render anything.
+    let dict = { ContentHash = "abc"; PanelTypes = [] }
+    let source = Live fixedNow
+
+    let render =
+        DictionaryStatusRow.renderForInitResult (Updated(dict, source))
+
+    Assert.Equal(None, render)
