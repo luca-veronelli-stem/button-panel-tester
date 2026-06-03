@@ -51,6 +51,17 @@ let private fixedNow =
 
 let private peakStatusCause = "PEAK status 0x40000"
 
+/// A realistic adapter-busy detail string as composed by
+/// `PeakStatusTranslation.detailText` (#150): the
+/// "adapter busy -- close the app holding the channel" headline plus
+/// the verbatim PEAK technical line. The headline marks the cause as
+/// auto-recoverable (#175) — the vendored PCANManager hot-plug monitor
+/// re-`Initialize`s the channel on its own ~1-2 s after the exclusive
+/// holder (e.g. StemDeviceManager) releases it, so the R8 escalation
+/// must NOT upgrade it to `Fatal`.
+let private adapterBusyDetail =
+    "adapter busy -- close the app holding the channel\nPEAK status 0x40010: A non-OK status code"
+
 let private fixedAdapter: AdapterIdentification =
     { ChannelName = "PCAN-USB (1)"
       DeviceId = "0x01"
@@ -316,3 +327,82 @@ let RecoverableThenDisconnectedThenDifferentRecoverable_DistinctCauseGetsNewSinc
     Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[3])
     Assert.Equal<CanLinkState>(Error(Recoverable otherPeakStatusCause, t3), observed.[4])
     Assert.Equal<CanLinkState>(Error(Recoverable otherPeakStatusCause, t3), service.CurrentState)
+
+// --- auto-recoverable cause exempted from escalation (#175) ---
+
+[<Fact>]
+let AdapterBusyAfterReconnect_StaysRecoverableAcrossRepeatedReconnects () =
+    // #175: "adapter busy" is auto-recoverable — the vendored
+    // PCANManager monitor re-`Initialize`s the channel ~1-2 s after the
+    // exclusive holder frees it, with no user action. Escalating it to
+    // `Fatal` would flip the Reconnect button to "Reconnect (unlikely
+    // to help)", the wrong signal for a cause that recovers on its own.
+    // So every re-observation of the SAME adapter-busy cause across
+    // explicit reconnects STAYS `Recoverable`, anchored at the first
+    // observation's `since` (FR-002b) — it never escalates.
+    let t1 = fixedNow
+    let t2 = fixedNow.AddSeconds(3.0)
+    let t3 = fixedNow.AddSeconds(7.0)
+
+    let script =
+        seq {
+            (Error(Recoverable adapterBusyDetail, t1), TimeSpan.Zero)
+            (Error(Recoverable adapterBusyDetail, t2), TimeSpan.Zero)
+            (Error(Recoverable adapterBusyDetail, t3), TimeSpan.Zero)
+        }
+
+    let service, observed = newService script
+
+    service.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
+    service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
+    service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
+
+    // Two ReconnectAsync calls each insert a synthesised
+    // Disconnected(ReconnectPending, fixedNow) per FR-003 (#131) BEFORE
+    // the link's next emission. Each adapter-busy re-observation stays
+    // Recoverable@t1 — never the Fatal the non-recoverable
+    // `SameRecoverableAfterReconnect_…` / `MultipleEscalationCycles_…`
+    // cases above produce.
+    Assert.Equal(5, observed.Count)
+    Assert.Equal<CanLinkState>(Error(Recoverable adapterBusyDetail, t1), observed.[0])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Error(Recoverable adapterBusyDetail, t1), observed.[2])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[3])
+    Assert.Equal<CanLinkState>(Error(Recoverable adapterBusyDetail, t1), observed.[4])
+    Assert.Equal<CanLinkState>(Error(Recoverable adapterBusyDetail, t1), service.CurrentState)
+
+// --- regression guard: a genuine fault still escalates (#175) ---
+
+[<Fact>]
+let BusOffAfterReconnect_StillEscalatesToFatal () =
+    // Paired regression guard for the adapter-busy exemption above:
+    // bus-off is NOT auto-recoverable — a reconnect genuinely re-inits
+    // the controller and may not clear the fault — so the R8 escalation
+    // MUST still fire when the same bus-off cause recurs after an
+    // explicit reconnect. The exemption is a discriminator, not a
+    // blanket disable.
+    let t1 = fixedNow
+    let t2 = fixedNow.AddSeconds(3.0)
+
+    let busOffDetail =
+        "bus-off -- try reconnect\nPEAK status 0x80000: bus-off detected"
+
+    let script =
+        seq {
+            (Error(Recoverable busOffDetail, t1), TimeSpan.Zero)
+            (Error(Recoverable busOffDetail, t2), TimeSpan.Zero)
+        }
+
+    let service, observed = newService script
+
+    service.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
+    service.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
+
+    let expectedDetail =
+        sprintf "%s persists across reconnect — file bug" busOffDetail
+
+    Assert.Equal(3, observed.Count)
+    Assert.Equal<CanLinkState>(Error(Recoverable busOffDetail, t1), observed.[0])
+    Assert.Equal<CanLinkState>(Disconnected(ReconnectPending, fixedNow), observed.[1])
+    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), observed.[2])
+    Assert.Equal<CanLinkState>(Error(Fatal expectedDetail, t1), service.CurrentState)

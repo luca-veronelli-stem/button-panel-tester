@@ -54,6 +54,46 @@ type ErrorClassification =
     | Recoverable of detail: string
     | Fatal of detail: string
 
+/// Helpers over `ErrorClassification` detail strings. The detail a
+/// `Recoverable`/`Fatal` carries is a `headline\ntechnical` string
+/// (`PcanCanLink.buildFailureState` / `PeakStatusTranslation.detailText`
+/// convention). These live in Core so layers that only see the raw
+/// `string` — notably `CanLinkService` in Services, which must NOT
+/// depend on the Infrastructure producer — can reason about a cause
+/// without re-deriving the wire format.
+module ErrorClassification =
+
+    /// Headline of a detail string: the text before the first newline,
+    /// or the whole string when single-line. The technical second line
+    /// varies per observation (live status code, raw PEAK text), so any
+    /// cause recognition keys off the headline only.
+    let headline (detail: string) : string =
+        if String.IsNullOrEmpty detail then
+            detail
+        else
+            match detail.IndexOf '\n' with
+            | -1 -> detail
+            | i -> detail.Substring(0, i)
+
+    /// Cause label that marks the auto-recoverable "adapter busy"
+    /// status (#150). The single source of truth for the marker: the
+    /// Infrastructure producer (`PeakStatusTranslation`) composes the
+    /// busy headline from it, and the Services recognizer
+    /// (`CanLinkService.translate`) matches the headline against it to
+    /// exempt the cause from the R8 Recoverable→Fatal escalation (#175).
+    [<Literal>]
+    let AdapterBusyCause = "adapter busy"
+
+    /// `true` iff `detail`'s headline marks an auto-recoverable cause —
+    /// one the link recovers from WITHOUT user action, so the R8
+    /// escalation must NOT upgrade it to `Fatal` (#175). Today the sole
+    /// such cause is adapter-busy: the vendored PCANManager hot-plug
+    /// monitor re-`Initialize`s the channel ~1-2 s after the exclusive
+    /// holder releases it. Escalating it would mislabel the Reconnect
+    /// button "unlikely to help" for a cause that self-heals.
+    let isAutoRecoverable (detail: string) : bool =
+        (headline detail).StartsWith(AdapterBusyCause, StringComparison.Ordinal)
+
 /// Closed taxonomy of CAN link states, per `data-model.md` §1.1.
 /// Mirrors the Lean inductive in `lean/Stem/ButtonPanelTester/Phase2/
 /// CanLinkState.lean`; the F# DU is the surface implementation and

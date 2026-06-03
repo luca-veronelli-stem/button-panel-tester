@@ -52,6 +52,15 @@ type private SubjectFanOut<'T>() =
 /// classification is temporal across multiple lifecycle attempts —
 /// state the port itself doesn't carry.
 ///
+/// **Auto-recoverable exemption (#175)** — causes whose headline is
+/// `ErrorClassification.isAutoRecoverable` (today: adapter-busy) are
+/// exempt from the upgrade. They self-heal without user action — the
+/// vendored PCANManager monitor re-`Initialize`s the channel once the
+/// exclusive holder frees it — so re-observing one after a reconnect
+/// keeps it `Recoverable` rather than flipping the Reconnect caption
+/// to "unlikely to help". Genuine faults (bus-off, hardware errors)
+/// still escalate.
+///
 /// The `PanelsOnBus` / `PanelsOnBusChanged` surface is stubbed: an
 /// empty map and a never-firing observable. The observation pipeline
 /// + WHO_I_AM ingest land in PR-D (T046–T047) once `ICanFrameStream`
@@ -129,8 +138,22 @@ type CanLinkService(link: ICanLink, clock: IClock, logger: ILogger<CanLinkServic
                         // Same root cause re-observed — anchor `since`
                         // at the first observation (FR-002b). Escalate
                         // to Fatal iff the user has explicitly
-                        // reconnected since the prior emission.
-                        if reconnectSinceLastRecoverable then
+                        // reconnected since the prior emission AND the
+                        // cause is not auto-recoverable (#175):
+                        // adapter-busy self-heals once the exclusive
+                        // holder frees the channel, so escalating it
+                        // would mislabel the Reconnect button "unlikely
+                        // to help" for a cause that recovers on its own.
+                        // Genuine faults (bus-off, hardware errors) still
+                        // escalate. `isAutoRecoverable` keys off the
+                        // headline only — `translate` sees just the raw
+                        // `cause` string (Services must not depend on the
+                        // Infrastructure producer), and the marker lives
+                        // once in Core.
+                        if
+                            reconnectSinceLastRecoverable
+                            && not (ErrorClassification.isAutoRecoverable cause)
+                        then
                             let detail =
                                 sprintf "%s persists across reconnect — file bug" cause
 
