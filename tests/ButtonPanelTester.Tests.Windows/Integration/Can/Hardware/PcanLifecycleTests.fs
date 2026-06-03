@@ -18,30 +18,31 @@ open Stem.ButtonPanelTester.Tests.Windows.Fixtures
 /// cases require a real PEAK PCAN-USB adapter on the host.
 /// Tracked by [#112](https://github.com/luca-veronelli-stem/button-panel-tester/issues/112).
 ///
-/// The non-interactive cases use `[<HardwareFact>]` (#142): they run only
-/// when `BPT_HARDWARE=1` is set and skip cleanly otherwise, so the suite is
-/// runnable on the bench with no source edits and dormant elsewhere. Every
-/// case also carries `[<Trait("Category", "Hardware")>]` so the standards
+/// Two gating tiers. The state-machine *logic* is covered by fake-driven
+/// unit tests that run in CI (`PcanCanLinkMidSessionUnplugTests`,
+/// `PcanCanLinkColdStartTests`, `CanLinkServiceLifecycleTests`); the cases
+/// here only validate what real hardware must confirm:
+///
+///   - `[<HardwareFact>]` (#142) — **unattended**, gated on `BPT_HARDWARE=1`.
+///     The two `OpenAsync` / `CloseAsync`-then-`OpenAsync` cases: they need a
+///     plugged-in adapter but no operator.
+///   - `[<ManualHardwareFact>]` — **attended**, gated on
+///     `BPT_HARDWARE_INTERACTIVE=1`. The replug case below prompts the
+///     operator to unplug/replug mid-run, so it cannot run unattended. Kept
+///     as the re-vendor guard #111 names — the vendored stack's autonomous
+///     reconnect is emergent behaviour nothing else asserts.
+///
+/// Every case carries `[<Trait("Category", "Hardware")>]`, so the standards
 /// CI category filter (`Category!=Hardware`, default since `@v1.12.0`)
-/// excludes it at discovery time too. The interactive unplug/replug cases
-/// stay on `[<Fact(Skip = "Manual …")>]` — env gating can't capture the
-/// "operator at the keyboard" precondition.
+/// excludes the whole suite at discovery time. The physical *unplug-only*
+/// check is no longer a test — it is a manual step in
+/// `specs/002-can-link-lifecycle/quickstart.md` (its logic is already
+/// covered by `PcanCanLinkMidSessionUnplugTests`).
 ///
-/// Run the suite on a bench rig with the adapter plugged in:
-///   $env:BPT_HARDWARE = "1"
+/// Run on a bench rig with the adapter plugged in:
+///   $env:BPT_HARDWARE = "1"                # unattended cases
+///   $env:BPT_HARDWARE_INTERACTIVE = "1"    # + the attended replug case
 ///   dotnet test tests/ButtonPanelTester.Tests.Windows --filter "Category=Hardware"
-///
-/// Coverage:
-///   - `OpenAsync 250000` succeeds within 2 s and surfaces
-///     `Connected` with a non-empty `AdapterIdentification`.
-///   - `CloseAsync` followed by `OpenAsync` succeeds.
-///   - Physical unplug surfaces `Disconnected(MidSessionUnplug, _)`
-///     within 5 s — manual: the runner must unplug the adapter when
-///     the test prompts.
-///   - #132 hot-plug: after a mid-session unplug, a physical replug
-///     (with NO Reconnect click) re-surfaces `Connected` within 10 s —
-///     manual: the runner unplugs then replugs the adapter when
-///     prompted.
 
 // --- fixtures ---
 
@@ -202,52 +203,23 @@ let CloseAsyncThenOpenAsync_RealAdapter_SecondOpenReachesConnected () =
     | Some other -> Assert.Fail(sprintf "expected second Connected, observed %A" other)
     | None -> Assert.Fail("no second Connected within 2 s after CloseAsync + OpenAsync")
 
-// --- T043.3: physical unplug surfaces Disconnected(MidSessionUnplug, _) ---
-
-[<Trait("Category", "Hardware")>]
-[<Fact(Skip = "Manual: requires the operator to unplug the adapter when prompted")>]
-let PhysicalUnplug_AfterConnected_SurfacesMidSessionUnplug () =
-    // Skip-by-default because there is no way to script a physical
-    // USB unplug inside the test process. Remove the Skip argument
-    // and run interactively when validating the lifecycle on a
-    // bench rig:
-    //   1. Plug the adapter, run the test, wait for the prompt.
-    //   2. Within 5 s, physically unplug the adapter.
-    //   3. Assert observes Disconnected(MidSessionUnplug, _).
-    let link, cleanup = buildLink ()
-    use _ = cleanup
-
-    let observed = collectStates link
-
-    (link :> ICanLink).OpenAsync(baudrateBps, CancellationToken.None)
-        .GetAwaiter().GetResult()
-
-    Assert.NotNull(waitForState observed isConnected connectTimeout |> Option.toObj)
-
-    // Interactive prompt — the operator unplugs the adapter HERE.
-    Console.WriteLine(
-        sprintf "Unplug the PEAK adapter within %.1f s…" unplugObservationTimeout.TotalSeconds
-    )
-
-    match waitForState observed isMidSessionUnplug unplugObservationTimeout with
-    | Some _ -> ()
-    | None ->
-        Assert.Fail(
-            sprintf
-                "no Disconnected(MidSessionUnplug, _) within %.1f s of the prompt"
-                unplugObservationTimeout.TotalSeconds
-        )
-
 // --- #132: hot-plug — replug without a Reconnect click re-Connects ---
+//
+// The physical *unplug-only* check (Connected → unplug →
+// Disconnected(MidSessionUnplug, _)) is no longer a test: its logic is
+// covered by `PcanCanLinkMidSessionUnplugTests` and the physical leg lives
+// as a manual step in the spec-002 quickstart. This attended case remains
+// because it is the only assertion of the vendored stack's AUTONOMOUS
+// reconnect on replug — emergent behaviour #111 must re-verify on re-vendor.
 
 [<Trait("Category", "Hardware")>]
-[<Fact(Skip = "manual bench; see #112 — operator unplugs then replugs the adapter when prompted")>]
+[<ManualHardwareFact>]
 let PhysicalReplug_AfterMidSessionUnplug_ReConnectsWithoutClickWithin10s () =
-    // #132 hot-plug — documents the FULL US3 mid-session survival cycle
-    // on a bench rig: Connected → unplug → MidSessionUnplug → replug
-    // (NO Reconnect click) → Connected. There is no way to script a
-    // physical USB unplug/replug inside the test process, so this is
-    // skipped by default and run interactively:
+    // #132 hot-plug — the FULL US3 mid-session survival cycle on a bench
+    // rig: Connected → unplug → MidSessionUnplug → replug (NO Reconnect
+    // click) → Connected. A physical USB unplug/replug can't be scripted
+    // in-process, so this is attended (BPT_HARDWARE_INTERACTIVE=1) and
+    // prompts the operator:
     //   1. Plug the adapter, run the test, wait for the first prompt.
     //   2. Within 5 s, physically UNPLUG the adapter → MidSessionUnplug.
     //   3. At the second prompt, physically REPLUG the adapter. Do NOT

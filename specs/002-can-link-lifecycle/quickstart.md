@@ -54,17 +54,22 @@ Expected behaviour on a clean bench (lifecycle slice only):
 
 ## Running the hardware E2E suite (manual pre-release check)
 
-The hardware cases are gated behind the `BPT_HARDWARE` environment variable (the `[<HardwareFact>]` attribute, #142). Set it to `1`, then run the `Category=Hardware` filter:
+The hardware cases are gated by environment variables (the `[<HardwareFact>]` / `[<ManualHardwareFact>]` attributes, #142) — two tiers:
 
 ```powershell
-$env:BPT_HARDWARE = "1"
+$env:BPT_HARDWARE = "1"               # unattended cases: plugged-in adapter, no operator
+$env:BPT_HARDWARE_INTERACTIVE = "1"   # + the attended replug case: prompts you to unplug/replug mid-run
 dotnet test tests\ButtonPanelTester.Tests.Windows\ButtonPanelTester.Tests.Windows.fsproj -c Release `
     --filter "Category=Hardware"
 ```
 
-`BPT_HARDWARE=1` is a **promise, not a probe** — set it only when a PEAK PCAN-USB adapter is actually plugged in and the driver is installed. The non-interactive cases *fail* (not skip) if the variable is set but no adapter responds. With the variable unset, every hardware case skips — which is also why CI (where it is never set) stays green even though the suite ships in the test project. The interactive unplug/replug cases stay skipped regardless; they prompt the operator and are run by hand.
+These flags are a **promise, not a probe** — set them only with a PEAK PCAN-USB adapter actually plugged in and the driver installed. The cases *fail* (not skip) if a flag is set but no adapter responds. With both unset, every hardware case skips — which is why CI (where they are never set) stays green even though the suite ships in the test project.
 
-These tests are **excluded from CI** by Principle IV — via both the `Category!=Hardware` filter in the standards reusable workflow and the `BPT_HARDWARE` gate. The Hardware-Test-Setup tracking issue (#112) documents the bench config required.
+**Excluded from CI** by Principle IV — via both the `Category!=Hardware` filter in the standards reusable workflow and the env gates. The Hardware-Test-Setup tracking issue (#112) documents the bench config required.
+
+### Manual physical check: mid-session unplug
+
+A *physical* mid-session unplug is verified by hand — the state-machine logic is already covered by the fake-driven `PcanCanLinkMidSessionUnplugTests`, so only the real driver/OS leg needs eyes. With the adapter connected, run the GUI, then physically unplug it: the CAN status row must flip to an "adapter unplugged" disconnect within ~5 s. Re-run this check (and the attended replug test above) whenever the vendored protocol stack is re-vendored — see #111.
 
 ## File map for spec-002 lifecycle work
 
