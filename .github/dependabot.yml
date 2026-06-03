@@ -9,6 +9,14 @@ updates:
       time: "06:00"
       timezone: Europe/Rome
     open-pull-requests-limit: 10
+    ignore:
+      # Avalonia 12 + FuncUI 2.x major bump is deferred — see #137 / #176
+      # (closed not-planned). Avalonia.FuncUI 1.x is incompatible with
+      # Avalonia 12 (the declarative `create` surface and BindingEvaluator
+      # types break). Revisit when FuncUI 2.x ships with Avalonia 12 support.
+      # Patch/minor bumps on the 11.x line still flow normally.
+      - dependency-name: "Avalonia*"
+        update-types: ["version-update:semver-major"]
     groups:
       avalonia:
         patterns:
