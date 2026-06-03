@@ -11,22 +11,25 @@ open Infrastructure.Protocol.Hardware
 open Xunit
 open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Infrastructure.Can
+open Stem.ButtonPanelTester.Tests.Windows.Fixtures
 
 /// Hardware-marked integration tests for `PcanCanLink` per
 /// `specs/002-can-link-lifecycle/tasks.md` T043. All
 /// cases require a real PEAK PCAN-USB adapter on the host.
 /// Tracked by [#112](https://github.com/luca-veronelli-stem/button-panel-tester/issues/112).
 ///
-/// Carry both `[<Trait("Category", "Hardware")>]` AND `Skip` because the
-/// upstream standards v1.9.0 reusable workflow runs `dotnet test` without
-/// a `--filter` argument, so the Trait alone does not exclude these from
-/// default CI (the local pre-push gate applies the filter, the CI gate
-/// does not — drift tracked for a standards-repo PR).
+/// The non-interactive cases use `[<HardwareFact>]` (#142): they run only
+/// when `BPT_HARDWARE=1` is set and skip cleanly otherwise, so the suite is
+/// runnable on the bench with no source edits and dormant elsewhere. Every
+/// case also carries `[<Trait("Category", "Hardware")>]` so the standards
+/// CI category filter (`Category!=Hardware`, default since `@v1.12.0`)
+/// excludes it at discovery time too. The interactive unplug/replug cases
+/// stay on `[<Fact(Skip = "Manual …")>]` — env gating can't capture the
+/// "operator at the keyboard" precondition.
 ///
-/// Run locally with:
+/// Run the suite on a bench rig with the adapter plugged in:
+///   $env:BPT_HARDWARE = "1"
 ///   dotnet test tests/ButtonPanelTester.Tests.Windows --filter "Category=Hardware"
-/// — and remove the `Skip` arguments on the relevant `[<Fact>]`s for the
-/// run, since `xunit` honours `Skip` ahead of the filter.
 ///
 /// Coverage:
 ///   - `OpenAsync 250000` succeeds within 2 s and surfaces
@@ -129,7 +132,7 @@ let private isMidSessionUnplug (state: CanLinkState) =
 // --- T043.1: open succeeds + Connected with non-empty identification ---
 
 [<Trait("Category", "Hardware")>]
-[<Fact(Skip = "Hardware required; runs locally only — tracked by #112. CI runs dotnet test without a Category filter at standards v1.9.0, so the [<Trait>] alone does not exclude this case.")>]
+[<HardwareFact>]
 let OpenAsync_RealAdapter_SurfacesConnectedWithIdentification () =
     let link, cleanup = buildLink ()
     use _ = cleanup
@@ -155,7 +158,7 @@ let OpenAsync_RealAdapter_SurfacesConnectedWithIdentification () =
 // --- T043.2: CloseAsync followed by OpenAsync succeeds ---
 
 [<Trait("Category", "Hardware")>]
-[<Fact(Skip = "Hardware required; runs locally only — tracked by #112. CI runs dotnet test without a Category filter at standards v1.9.0, so the [<Trait>] alone does not exclude this case.")>]
+[<HardwareFact>]
 let CloseAsyncThenOpenAsync_RealAdapter_SecondOpenReachesConnected () =
     let link, cleanup = buildLink ()
     use _ = cleanup

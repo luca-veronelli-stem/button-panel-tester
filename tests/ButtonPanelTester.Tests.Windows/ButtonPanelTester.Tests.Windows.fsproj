@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <Compile Include="TestApp.fs" />
+        <Compile Include="Fixtures/HardwareFactAttribute.fs" />
         <Compile Include="Unit/StemAppDataTests.fs" />
         <Compile Include="Unit/JsonFileDictionaryCacheTests.fs" />
         <Compile Include="Unit/DpapiCredentialStoreTests.fs" />
