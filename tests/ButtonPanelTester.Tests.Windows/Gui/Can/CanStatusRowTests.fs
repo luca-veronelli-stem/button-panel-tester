@@ -468,3 +468,63 @@ let View_NonDriverFatal_HasReconnectButton () =
     match tryReconnectButton panel with
     | None -> Assert.Fail("expected a Reconnect button on a non-driver Fatal")
     | Some _ -> ()
+
+// --- #140: detail tooltip renders the opened/since HH:MM timestamp ---
+//
+// Adapter identification and the Recoverable/Fatal classification are
+// pinned above; these pin the *timestamp* portion of
+// `CanStatusRow.detailText`, which a regression could drop, mis-format,
+// or stick without any other assertion firing (#130 was a bench-visible
+// timestamp bug in exactly this tooltip). Each state uses a distinct
+// non-12:00 minute so a hard-coded "12:00" cannot satisfy them; the
+// expected substring is derived through `LocalDateTime` the same way the
+// renderer formats it, so the assertion is timezone-robust.
+
+let private detailTooltipText (state: CanLinkState) : string =
+    let panel = renderState state
+    let headline = headlineChild panel
+
+    match ToolTip.GetTip(headline) with
+    | null -> failwith "expected a tooltip on the headline TextBlock"
+    | tooltip ->
+        match tooltip.ToString() with
+        | null -> failwith "expected non-null tooltip text"
+        | s -> s
+
+let private hhmm (ts: DateTimeOffset) : string =
+    let local = ts.LocalDateTime
+    sprintf "%02d:%02d" local.Hour local.Minute
+
+[<AvaloniaFact>]
+let View_Connected_DetailTooltipRendersOpenedTimestamp () =
+    let openedAt = DateTimeOffset(2026, 5, 24, 9, 7, 0, TimeSpan.Zero)
+    let text = detailTooltipText (Connected(fixedAdapter, openedAt))
+
+    Assert.Contains(sprintf "opened %s" (hhmm openedAt), text)
+
+[<AvaloniaFact>]
+let View_Disconnected_DetailTooltipRendersSinceTimestamp () =
+    let since = DateTimeOffset(2026, 5, 24, 13, 41, 0, TimeSpan.Zero)
+    let text = detailTooltipText (Disconnected(MidSessionUnplug, since))
+
+    Assert.Contains(sprintf "since %s" (hhmm since), text)
+
+[<AvaloniaFact>]
+let View_ErrorRecoverable_DetailTooltipRendersSinceTimestamp () =
+    let since = DateTimeOffset(2026, 5, 24, 16, 23, 0, TimeSpan.Zero)
+
+    let text =
+        detailTooltipText (Error(Recoverable "Bus-off detected — try reconnect", since))
+
+    Assert.Contains(sprintf "since %s" (hhmm since), text)
+
+[<AvaloniaFact>]
+let View_ErrorFatal_DetailTooltipRendersSinceTimestamp () =
+    let since = DateTimeOffset(2026, 5, 24, 21, 58, 0, TimeSpan.Zero)
+
+    let text =
+        detailTooltipText (
+            Error(Fatal "PEAK status 0x40000 persists across reconnect — file bug", since)
+        )
+
+    Assert.Contains(sprintf "since %s" (hhmm since), text)
