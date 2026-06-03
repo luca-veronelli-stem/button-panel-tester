@@ -71,6 +71,16 @@ These flags are a **promise, not a probe** — set them only with a PEAK PCAN-US
 
 A *physical* mid-session unplug is verified by hand — the state-machine logic is already covered by the fake-driven `PcanCanLinkMidSessionUnplugTests`, so only the real driver/OS leg needs eyes. With the adapter connected, run the GUI, then physically unplug it: the CAN status row must flip to an "adapter unplugged" disconnect within ~5 s. Re-run this check (and the attended replug test above) whenever the vendored protocol stack is re-vendored — see #111.
 
+### Manual physical check: adapter-busy auto-recovery (#175)
+
+The escalation-exemption logic is covered by the fake-driven `RecoverableToFatalEscalationTests` (`AdapterBusyAfterReconnect_StaysRecoverableAcrossRepeatedReconnects`), so only the real PCANManager-monitor leg needs eyes. With the adapter connected:
+
+1. Start **StemDeviceManager** so it claims the PEAK channel *exclusively*, then run the GUI. The CAN status row reads `Recoverable · adapter busy — close the app holding the channel` (red chip) and the button reads **Try reconnect**.
+2. Click **Reconnect** several times. The row must STAY `Recoverable` / **Try reconnect** — it must NOT flip to `Fatal` / **Reconnect (unlikely to help)** (the #175 bug). The headline `since` HH:MM stays anchored at the first observation.
+3. Close StemDeviceManager. Within ~1–2 s the vendored PCANManager monitor re-`Initialize`s the channel on its own and the row flips to `Connected` (green chip) — no user click required.
+
+Re-run whenever the vendored protocol stack is re-vendored — see #111.
+
 ## File map for spec-002 lifecycle work
 
 | Task type | Where the code lives |

@@ -82,7 +82,10 @@ module PeakStatusTranslation =
             // frees it. The status row's Reconnect button is a manual
             // nudge, not a required step.
             { Fatal = false
-              Cause = "adapter busy"
+              // Compose the headline from the Core marker so the
+              // Services recognizer (`ErrorClassification.isAutoRecoverable`,
+              // #175) and this producer never drift on the cause label.
+              Cause = ErrorClassification.AdapterBusyCause
               Suggestion = Some "close the app holding the channel"
               RawCode = code
               RawText = rawText }
