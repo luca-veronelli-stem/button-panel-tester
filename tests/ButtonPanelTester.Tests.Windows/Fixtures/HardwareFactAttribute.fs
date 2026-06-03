@@ -27,3 +27,25 @@ type HardwareFactAttribute() as this =
             this.Skip <-
                 "Hardware required. Set BPT_HARDWARE=1 (PowerShell: $env:BPT_HARDWARE=\"1\") "
                 + "on a bench rig with a PEAK PCAN-USB adapter plugged in and the driver installed."
+
+/// `[<Fact>]` variant for tests that need a **human acting mid-run** (e.g.
+/// physically unplugging/replugging the adapter on a prompt), gated behind
+/// `BPT_HARDWARE_INTERACTIVE=1`. A strictly stronger precondition than
+/// [`HardwareFactAttribute`](#): it implies an attended bench session, so it
+/// is kept on its OWN variable — never run these unattended (they would hang
+/// waiting for the operator) and never on CI.
+///
+/// Reserve this for assertions a fixture or a fake cannot make: validating an
+/// emergent, undocumented third-party behaviour against real hardware (e.g.
+/// the vendored stack's autonomous reconnect on replug). The state-machine
+/// *logic* belongs in fake-driven unit tests, not here. See
+/// [#142](https://github.com/luca-veronelli-stem/button-panel-tester/issues/142).
+type ManualHardwareFactAttribute() as this =
+    inherit FactAttribute()
+
+    do
+        if Environment.GetEnvironmentVariable("BPT_HARDWARE_INTERACTIVE") <> "1" then
+            this.Skip <-
+                "Attended hardware test. Set BPT_HARDWARE_INTERACTIVE=1 "
+                + "(PowerShell: $env:BPT_HARDWARE_INTERACTIVE=\"1\") and run it yourself "
+                + "on a bench rig — it prompts you to unplug/replug the adapter mid-run."
