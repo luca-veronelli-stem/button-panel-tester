@@ -192,4 +192,4 @@ eng/
 
 ### Blockers
 
-- None. Remaining items are out-of-scope and tracked elsewhere: bench-only validation T069/T070 (SC-001/002/005/008 walk + SC-007 external-bus capture) carried to a bench follow-up; app-wide NotificationCenter + structured `ErrorClassification` ([#149](https://github.com/luca-veronelli-stem/button-panel-tester/issues/149)); vendored-stack → `Stem.Communication` migration with hot-plug regression guard ([#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)).
+- None. Bench validation T069/T070 (SC-001/002/005/008 walk + SC-007 external-bus capture) operator-attested passing on 2026-06-03. Remaining items are out-of-scope and tracked elsewhere: app-wide NotificationCenter + structured `ErrorClassification` ([#149](https://github.com/luca-veronelli-stem/button-panel-tester/issues/149)); vendored-stack → `Stem.Communication` migration with hot-plug regression guard ([#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)).
