@@ -49,6 +49,30 @@ let ``Decode truncated payload throws CrcMismatch`` () =
 
 Either backtick-style names or PascalCase function names are fine. Stay consistent within a module.
 
+## Unattended-only test suites
+
+The `tests/` project holds **only tests that run to completion with no human intervention**. In an unattended run (CI, a fresh clone, the pre-push gate) every test either asserts and finishes, or is excluded by a runtime gate — never parked waiting on a person. Admissible shapes:
+
+- **Pure logic / fake-seam integration** — run everywhere, every time.
+- **Hardware-present-but-unattended** — env-gated *and* `[<Trait("Category", "Hardware")>]`-traited (reference impl: `[<HardwareFact>]`). The device is plugged in; the test drives it and asserts with nobody watching. CI's `Category!=Hardware` filter excludes it on hosted runners — see [CI](./CI.md) → "Hardware-test exclusion".
+
+A test that needs a human to act *during* the run — press a button, unplug a cable, observe a screen — must **not** live in the suite as a `Skip`-by-default case (`[<Fact(Skip = "Manual: unplug the CAN cable")>]`). An unconditional `Skip =` literal is a manual procedure wearing a test's clothing:
+
+- it inflates the *skipped* count and **fakes coverage** — green-adjacent, asserts nothing on any run;
+- it **rots** — nobody remembers to remove the `Skip` and perform the dance;
+- it can't be gated cleanly — the literal needs a *source edit* to ever run, whereas a bare env gate with no `Skip` would let an unattended run **hang** waiting on the operator.
+
+Resolve it one of two ways:
+
+1. **Automate the human away** with a fixture — a programmable USB power switch / relay for unplug-replug, an input injector for button presses — so the case becomes unattended (`[<HardwareFact>]`).
+2. **Demote it to a manual step** in a release / re-vendor **runbook** run against the real application.
+
+The state-machine *logic* such a scenario exercises belongs in fast fake-driven tests **regardless** — only the irreducibly-physical leg is a runbook candidate.
+
+**Exception — attended but env-gated.** When the *only* assertion of some genuinely-physical, non-deterministic behavior can be neither automated nor faithfully captured in prose (e.g. proving a vendored stack's *autonomous* reconnect after a physical replug), keep the test but re-gate it as **attended and env-gated**: `[<ManualHardwareFact>]` keyed on an interactive env var (e.g. `BPT_HARDWARE_INTERACTIVE=1`), tied explicitly to its trigger (a re-vendor guard, a driver bump). This is *not* a `Skip`-by-default case — the env gate is a runtime condition: dormant in every unattended run (CI never hangs), runnable on demand by an operator with **no source edit**. The `[<HardwareFact>]` / `[<ManualHardwareFact>]` attributes are the reference implementation — see [`button-panel-tester#142`](https://github.com/luca-veronelli-stem/button-panel-tester/issues/142).
+
+> **Scope.** This principle governs **attended / human-in-the-loop** tests — those needing a person to act mid-run. Platform gating (a `net10.0-windows`-only test) is an orthogonal concern; hardware gating uses the `Category` trait filter ([CI](./CI.md) → "Hardware-test exclusion"), which already forbids substituting `Skip` for the same exclusion intent.
+
 ## Test categories
 
 Organize tests by *what they exercise*, not *who wrote them*:

@@ -128,6 +128,20 @@ type FrameDecoder(driver: IDriver) =
 
 For F# `Async<'T>` workflows, run with `Async.StartAsTask(work, cancellationToken = ct)` from the C# boundary; inside the workflow, `Async` cancellation is automatic at every `let!` and `do!`.
 
+`reraise()` is **not available after an `await`** inside a `task { ... }` CE — once execution resumes on a continuation the original exception context is gone, so `reraise()` won't compile there. Capture and rethrow with `ExceptionDispatchInfo` instead (it preserves the original stack trace):
+
+```fsharp
+task {
+    try
+        do! risky ct
+    with ex ->
+        // reraise() is unavailable past the first await — context is gone
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex).Throw()
+}
+```
+
+`reraise()` works as normal in `async { ... }`; this gotcha is specific to `task`.
+
 ## What this means in practice
 
 - **New async method:** add `CancellationToken cancellationToken = default` last; propagate through every `await` inside.

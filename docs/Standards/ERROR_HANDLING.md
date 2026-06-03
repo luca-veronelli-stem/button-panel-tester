@@ -170,6 +170,8 @@ let processFrame raw = result {
 
 For exception-throwing interop with C#, F# code can `throw` the same BCL exceptions as C#. The throw helpers work in F# too.
 
+When failures are modelled as **DU cases** (the `ParseError` above, or a `FetchFailureReason` in `Result<'T, FetchFailureReason>`), the **DU is the hierarchy** — a closed, exhaustively-matchable set of failures. The "≥3 related failures → consider a small exception hierarchy" guidance below is about *exception types*; it does **not** mean you should introduce an exception class when the failures are already a DU returned through `Result`. Add an exception only when the caller genuinely shouldn't routinely catch (a bug or broken invariant), not to satisfy the threshold.
+
 ## What this means in practice
 
 - **New routine failure** (parse, validate, CRC): return a Result type or a Try-pattern.

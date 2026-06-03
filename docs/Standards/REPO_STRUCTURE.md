@@ -33,6 +33,7 @@
 - Project folders inside `src/` and `tests/` are **PascalCase** and match the project name (`Stem.Communication.Abstractions/`, `<App>.GUI/`).
 - Each project has its own folder; the `.fsproj` / `.csproj` filename matches the folder name.
 - Project namespace prefix is `Stem.<App>.<Layer>` (archetype A) or `Stem.<Lib>.<Layer>` (archetype B).
+- F# files organise by **module / namespace**, not one type per file — there is no one-type-per-file rule. A `.fs` that groups a module's related functions with its small supporting types is the expected shape, not a layout violation. (Compilation order within a project is still significant: list files dependency-first in the `.fsproj`.)
 
 ## Per-archetype layout
 

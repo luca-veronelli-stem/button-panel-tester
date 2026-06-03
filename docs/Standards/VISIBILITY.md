@@ -72,6 +72,15 @@ A `public abstract class` is a public inheritance hook. They earn their keep occ
 
 The standard does not legislate fields-vs-auto-properties — both express private state correctly. Choose for clarity at the callsite.
 
+## F#
+
+F# applies the same archetype defaults (library: internal-by-default; app: public where it earns it), with two shapes C# has no analogue for:
+
+- **Discriminated union cases inherit the type's visibility.** An `internal`/`private` DU is closed — its cases can only be constructed and matched inside the declaring scope. Keep domain and error DUs `internal` by default in a library (e.g. the `FetchFailureReason` in a `Result<'T, FetchFailureReason>`), exposing a smart constructor or mapping function rather than the raw cases. Mark individual cases `private` only when the type itself is public but some cases are construction details.
+- **Modules** are not a special visibility case. A top-level module follows the same rule as any other declaration: `internal` in a library unless a member is part of the public surface; treat its `let`-bound functions like methods. `[<AutoOpen>]` and `module private` apply as usual.
+
+`BannedSymbols.txt` is unrelated to DU visibility: it bans **BCL symbols** (e.g. `System.Drawing.*`) through the banned-API analyzer. DU-constructor visibility is enforced by the F# compiler via `private`/`internal`, so it needs no — and cannot take — a BannedSymbols entry.
+
 ## What to do when adopting
 
 When a repo bumps to v1.2.0:
