@@ -172,7 +172,7 @@ eng/
 
 ## Status
 
-*Last refreshed: 2026-05-26 (post-#151 split). Living Plan per the speckit RPI overlay — `Completed` / `Current` / `Blockers`.*
+*Last refreshed: 2026-06-03 (post-salvage-epic #159). Living Plan per the speckit RPI overlay — `Completed` / `Current` / `Blockers`.*
 
 ### Completed
 
@@ -182,16 +182,14 @@ eng/
 - Phase 1 Setup (T001–T011) — vendor stack + scaffolding via PR-A [#120](https://github.com/luca-veronelli-stem/button-panel-tester/pull/120). Boot-sequence extract added by PR [#133](https://github.com/luca-veronelli-stem/button-panel-tester/pull/133) closes the T040b deferral with `src/ButtonPanelTester.Services/BootSequence.fs` + FR-001 ordering test (issue [#125](https://github.com/luca-veronelli-stem/button-panel-tester/issues/125)).
 - Phase 2 Foundational (T012–T033) — Core types + ports + virtual fakes + 5 FsCheck suites + 6 Lean Phase 2 theorems + WHO_I_AM fixtures via PR-B [#121](https://github.com/luca-veronelli-stem/button-panel-tester/pull/121). Shared with spec-003.
 - Phase 3 US1 — MVP (T034–T043) — `PcanCanLink` + `CanLinkService` lifecycle slice + `CanStatusRow` + composition root wiring + integration/GUI/hardware tests via PR-C [#122](https://github.com/luca-veronelli-stem/button-panel-tester/pull/122).
-- Phase 3.5 post-PR-C fix queue — 7 of 9 amendments shipped (full task table in `tasks.md` §Phase 3.5): PR [#133](https://github.com/luca-veronelli-stem/button-panel-tester/pull/133), [#134](https://github.com/luca-veronelli-stem/button-panel-tester/pull/134), [#135](https://github.com/luca-veronelli-stem/button-panel-tester/pull/135), [#138](https://github.com/luca-veronelli-stem/button-panel-tester/pull/138), [#141](https://github.com/luca-veronelli-stem/button-panel-tester/pull/141), [#145](https://github.com/luca-veronelli-stem/button-panel-tester/pull/145), [#147](https://github.com/luca-veronelli-stem/button-panel-tester/pull/147).
+- Phase 3.5 post-PR-C fix queue — all amendments shipped (full task table in `tasks.md` §Phase 3.5): early PRs [#133](https://github.com/luca-veronelli-stem/button-panel-tester/pull/133), [#134](https://github.com/luca-veronelli-stem/button-panel-tester/pull/134), [#135](https://github.com/luca-veronelli-stem/button-panel-tester/pull/135), [#138](https://github.com/luca-veronelli-stem/button-panel-tester/pull/138), [#141](https://github.com/luca-veronelli-stem/button-panel-tester/pull/141), [#145](https://github.com/luca-veronelli-stem/button-panel-tester/pull/145), [#147](https://github.com/luca-veronelli-stem/button-panel-tester/pull/147); remaining amendments ([#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136), [#139](https://github.com/luca-veronelli-stem/button-panel-tester/issues/139), [#142](https://github.com/luca-veronelli-stem/button-panel-tester/issues/142), [#132](https://github.com/luca-veronelli-stem/button-panel-tester/issues/132), [#140](https://github.com/luca-veronelli-stem/button-panel-tester/issues/140), [#143](https://github.com/luca-veronelli-stem/button-panel-tester/issues/143)) closed under salvage epic [#159](https://github.com/luca-veronelli-stem/button-panel-tester/issues/159).
+- Phase 5 US3 (mid-session unplug) — `Disconnected(MidSessionUnplug, _)` translation + distinct status-row headline + integration/GUI/hardware tests shipped via [#117](https://github.com/luca-veronelli-stem/button-panel-tester/issues/117) (tests refreshed by PR #163).
+- Phase N polish (lifecycle slice) — CHANGELOG/README/XML docs + read-only logging/async/Principle-V audits via docs capstone [#154](https://github.com/luca-veronelli-stem/button-panel-tester/issues/154) / PR #165. Lean `lake build` and `VENDOR.sha256` checks green.
 
 ### Current
 
-- Closing out the Phase 3.5 fix queue (lifecycle-only amendments remain: [#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136), [#142](https://github.com/luca-veronelli-stem/button-panel-tester/issues/142)).
-- US3 (mid-session unplug, Phase 5) — implementation slice tracked by [#117](https://github.com/luca-veronelli-stem/button-panel-tester/issues/117) remains ahead.
-- Phase N polish split by spec-002 / spec-003 per #151 (new lifecycle polish issue + spec-003 polish issue, replacing [#118](https://github.com/luca-veronelli-stem/button-panel-tester/issues/118)).
+- Lifecycle complete on the four-family FSM under salvage epic [#159](https://github.com/luca-veronelli-stem/button-panel-tester/issues/159). No open lifecycle work.
 
 ### Blockers
 
-- [#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136) widens `Disconnected` arity and forces a Lean Phase 2 re-parametrisation alongside the F# change. Mandatory Lean → test → impl order per the F2 gate.
-- Non-blocking carry-overs tracked for visibility, NOT gating Phase 5: [#132](https://github.com/luca-veronelli-stem/button-panel-tester/issues/132) (hot-plug regression test, depends on [#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)), [#140](https://github.com/luca-veronelli-stem/button-panel-tester/issues/140) (GUI tooltip test).
-- C4 follow-up (driver-download link in Fatal-driver-missing) — its own follow-up issue per the PR-C handoff plan. Not gating Phase 5.
+- None. Remaining items are out-of-scope and tracked elsewhere: bench-only validation T069/T070 (SC-001/002/005/008 walk + SC-007 external-bus capture) carried to a bench follow-up; app-wide NotificationCenter + structured `ErrorClassification` ([#149](https://github.com/luca-veronelli-stem/button-panel-tester/issues/149)); vendored-stack → `Stem.Communication` migration with hot-plug regression guard ([#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)).

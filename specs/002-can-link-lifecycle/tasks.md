@@ -129,16 +129,16 @@ Tasks marked **(spec-003 also)** are shared foundation: the file lives in this r
 - [X] T-amend-5 (FR-003 click-feedback contract) — `ReconnectAsync` synthesises `Disconnected(ReconnectPending, _)`. PR [#141](https://github.com/luca-veronelli-stem/button-panel-tester/pull/141).
 - [X] T-amend-6 (FR-003 visibility table) — `CanStatusRow.shouldShowReconnectButton`. PR [#145](https://github.com/luca-veronelli-stem/button-panel-tester/pull/145).
 - [X] T-amend-7 (FR-002a severity in headline) — render Recoverable/Fatal prefix in Error chip headline. PR [#147](https://github.com/luca-veronelli-stem/button-panel-tester/pull/147).
-- [ ] T-amend-8 (Edge case cold-start poll-exhaust) — reclassify cold-start poll-exhaust from `Error(Recoverable, _)` to `Disconnected(NoAdapterPresent, detail)`, widening the `Disconnected` arity. Cascades into `lean/Stem/ButtonPanelTester/Phase2/CanLinkState.lean` (re-parametrise the `Disconnected` constructor and re-prove `state_classification_total` + `transition_reachability_closed`); FR-005 wording carries the same parametrisation. Issue [#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136).
-- [ ] T-amend-9 [P] (Phase 3 hardware suite gate) — env-gated `[<HardwareFact>]` xUnit attribute. Issue [#142](https://github.com/luca-veronelli-stem/button-panel-tester/issues/142).
+- [X] T-amend-8 (Edge case cold-start poll-exhaust) — reclassify cold-start poll-exhaust from `Error(Recoverable, _)` to `Disconnected(NoAdapterPresent, detail)`, widening the `Disconnected` arity. Cascades into `lean/Stem/ButtonPanelTester/Phase2/CanLinkState.lean` (re-parametrise the `Disconnected` constructor and re-prove `state_classification_total` + `transition_reachability_closed`); FR-005 wording carries the same parametrisation. Issue [#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136). → Closed under salvage epic #159 (#150 / PR #161); shipped as `PcanCanLink.coldStartState → Disconnected(NoAdapterPresent, _)`.
+- [X] T-amend-9 [P] (Phase 3 hardware suite gate) — env-gated `[<HardwareFact>]` xUnit attribute. Issue [#142](https://github.com/luca-veronelli-stem/button-panel-tester/issues/142). → Closed via PR #182 (`[<HardwareFact>]` + `[<ManualHardwareFact>]`); runbook in `quickstart.md`.
 
 **Carry-overs (tracked, NOT gating Phase 5):**
 
-- [ ] T-amend-10 [P] — hot-plug auto-reconnect regression test (depends on [#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)). Issue [#132](https://github.com/luca-veronelli-stem/button-panel-tester/issues/132).
-- [ ] T-amend-11 [P] — GUI tooltip test asserting `CanStatusRow` detail renders the `since` / opened timestamp. Issue [#140](https://github.com/luca-veronelli-stem/button-panel-tester/issues/140).
-- [ ] T-amend-12 (C4 from PR-C audit) — render a driver-download remediation link inside the `Error · Fatal · "PEAK PCANBasic native DLL not found …"` chip. Issue [#143](https://github.com/luca-veronelli-stem/button-panel-tester/issues/143).
+- [X] T-amend-10 [P] — hot-plug auto-reconnect regression test (depends on [#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111)). Issue [#132](https://github.com/luca-veronelli-stem/button-panel-tester/issues/132). → Closed via PR #163; the unattended leg covers auto-recovery, the physical leg is a `quickstart.md` runbook step pending the #111 vendored-stack removal.
+- [X] T-amend-11 [P] — GUI tooltip test asserting `CanStatusRow` detail renders the `since` / opened timestamp. Issue [#140](https://github.com/luca-veronelli-stem/button-panel-tester/issues/140). → Closed via PR #181 (commit a851247).
+- [X] T-amend-12 (C4 from PR-C audit) — render a driver-download remediation link inside the `Error · Fatal · "PEAK PCANBasic native DLL not found …"` chip. Issue [#143](https://github.com/luca-veronelli-stem/button-panel-tester/issues/143). → Closed under salvage epic #159.
 
-**Checkpoint (Phase 3.5)**: open amendments above are closed; `dotnet test --filter "Category!=Hardware"` green; `lake build` re-greens (T-amend-8 invalidates Phase 2 proofs that must be re-proven). At this point Phase 5 (US3) may start.
+**Checkpoint (Phase 3.5)** ✅ COMPLETE — all amendments above closed under salvage epic [#159](https://github.com/luca-veronelli-stem/button-panel-tester/issues/159); `dotnet test --filter "Category!=Hardware"` green; `lake build` green (Phase 2 proofs re-greened). Phase 5 (US3) followed.
 
 ---
 
@@ -150,15 +150,15 @@ Tasks marked **(spec-003 also)** are shared foundation: the file lives in this r
 
 ### Implementation for User Story 3
 
-- [ ] T056 [US3] Verify `src/ButtonPanelTester.Infrastructure/Can/PcanCanLink.fs` (T035) translates the vendored `StateChanged` "device removed" path to `Disconnected(MidSessionUnplug, now)` (and not to `Error`). If T035 emitted `Error` for this case, fix it here.
-- [ ] T057 [US3] Verify `src/ButtonPanelTester.GUI/Can/CanStatusRow.fs` (T038) renders the `Disconnected(MidSessionUnplug, _)` headline as `Disconnected · link lost — replug adapter` (distinct from the `NoAdapterPresent` headline per FR-005). If T038 used a generic Disconnected headline, refine it here.
+- [X] T056 [US3] Verify `src/ButtonPanelTester.Infrastructure/Can/PcanCanLink.fs` (T035) translates the vendored `StateChanged` "device removed" path to `Disconnected(MidSessionUnplug, now)` (and not to `Error`). If T035 emitted `Error` for this case, fix it here. → Shipped under salvage epic #159 (#117); `PcanCanLink` emits `Disconnected(MidSessionUnplug, _)`.
+- [X] T057 [US3] Verify `src/ButtonPanelTester.GUI/Can/CanStatusRow.fs` (T038) renders the `Disconnected(MidSessionUnplug, _)` headline as `Disconnected · link lost — replug adapter` (distinct from the `NoAdapterPresent` headline per FR-005). If T038 used a generic Disconnected headline, refine it here. → Shipped (#117); `CanStatusRow.fs` renders a distinct MidSessionUnplug reason (`"adapter unplugged mid-session"`), separate from `NoAdapterPresent` (`"no PEAK adapter found"`).
 
 ### Tests for User Story 3
 
-- [ ] T058 [P] [US3] Add `tests/ButtonPanelTester.Tests/Integration/Can/MidSessionUnplugTests.fs` — scripts `[Connected adapter; Disconnected(MidSessionUnplug)]`. Asserts `LinkStateChanged` emits `Disconnected(MidSessionUnplug, _)` within the SC-005 budget. (Spec-003's list-clear assertion lives in spec-003's tests.)
-- [ ] T059 [P] [US3] Add `tests/ButtonPanelTester.Tests/Integration/Can/DictionaryIndependenceTests.fs` — `IDictionaryService.SourceChanged` emits zero events during the CAN-side disconnect (FR-016 + SC-006).
-- [ ] T060 [P] [US3] Add `tests/ButtonPanelTester.Tests.Windows/Gui/Can/CanStatusRowMidSessionUnplugTests.fs` — row renders `Disconnected · link lost — replug adapter`; Reconnect button visible; dictionary status row unchanged.
-- [ ] T061 [US3] Add hardware unplug case to `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/PcanLifecycleTests.fs` (or split into a dedicated `UnplugReplugCycleHardwareTests.fs`). `[<Trait("Category", "Hardware")>]`. Cases: Connected → physical unplug → `Disconnected(MidSessionUnplug)` within 5 s; replug + click `ReconnectAsync` → `Connected` within 2 s.
+- [X] T058 [P] [US3] Add `tests/ButtonPanelTester.Tests/Integration/Can/MidSessionUnplugTests.fs` — scripts `[Connected adapter; Disconnected(MidSessionUnplug)]`. Asserts `LinkStateChanged` emits `Disconnected(MidSessionUnplug, _)` within the SC-005 budget. (Spec-003's list-clear assertion lives in spec-003's tests.) → Shipped (#163) as `tests/ButtonPanelTester.Tests.Windows/Unit/Can/PcanCanLinkMidSessionUnplugTests.fs` — asserts a single `Disconnected(MidSessionUnplug, _)` on `LinkStateChanged`, never `NoAdapterPresent`.
+- [X] T059 [P] [US3] Add `tests/ButtonPanelTester.Tests/Integration/Can/DictionaryIndependenceTests.fs` — `IDictionaryService.SourceChanged` emits zero events during the CAN-side disconnect (FR-016 + SC-006). → Shipped (#163) at the stated path.
+- [X] T060 [P] [US3] Add `tests/ButtonPanelTester.Tests.Windows/Gui/Can/CanStatusRowMidSessionUnplugTests.fs` — row renders `Disconnected · link lost — replug adapter`; Reconnect button visible; dictionary status row unchanged. → Folded into `tests/ButtonPanelTester.Tests.Windows/Gui/Can/CanStatusRowTests.fs` (#163), which carries the MidSessionUnplug rendering cases.
+- [X] T061 [US3] Add hardware unplug case to `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/PcanLifecycleTests.fs` (or split into a dedicated `UnplugReplugCycleHardwareTests.fs`). `[<Trait("Category", "Hardware")>]`. Cases: Connected → physical unplug → `Disconnected(MidSessionUnplug)` within 5 s; replug + click `ReconnectAsync` → `Connected` within 2 s. → Shipped in `PcanLifecycleTests.fs` (#163); the attended replug case is gated `[<ManualHardwareFact>]` and the physical unplug-only leg demoted to a `quickstart.md` runbook step (#185).
 
 **Checkpoint (US3)**: on the bench, unplugging mid-session flips the CAN row to `Disconnected · link lost — replug adapter` within 5 s; dictionary row is untouched; replug + Reconnect restores the link. `dotnet test --filter "Category!=Hardware"` adds ≥ 3 passing test files. Lifecycle US1 + US3 are both independently demoable.
 
@@ -168,17 +168,17 @@ Tasks marked **(spec-003 also)** are shared foundation: the file lives in this r
 
 **Purpose**: cleanup, docs, audits, and end-to-end validation for the lifecycle. Discovery-side polish lives in spec-003's tasks.md.
 
-- [ ] T062 [P] Add the feat/002 entry to `CHANGELOG.md` under `[Unreleased]` — one line summarising "CAN link lifecycle: status row + vendored protocol stack".
-- [ ] T063 [P] Update `README.md` — link to `specs/002-can-link-lifecycle/quickstart.md`; mention the CAN status row + vendored `Infrastructure.Protocol` project.
-- [ ] T064 [P] Add XML doc comments to every public type and member listed in [data-model.md](./data-model.md) §1–§2 per the COMMENTS standard — `DisconnectReason`, `ErrorClassification`, `CanLinkState`, `AdapterIdentification`, `ICanLink`, `ICanLinkService`.
-- [ ] T065 [P] Logging audit per LOGGING standard for `PcanCanLink` / `PeakErrorText` / `CanLinkService` lifecycle paths.
-- [ ] T066 [P] Async-discipline audit per CANCELLATION + THREAD_SAFETY standards for lifecycle paths.
-- [ ] T067 [P] Compliance check for Principle V on the lifecycle path: grep for OS user / machine name / MAC / SID — expected zero hits. Document in `quickstart.md` "Common gotchas" tail.
-- [ ] T068 [P] Update `docs/Context/bpt-rollout/CORRECTIONS.md` §C5 with a closing paragraph scoping the hardcoded-protocol-metadata stopgap to spec-003+ (per [research.md](./research.md) decisions migrated to spec-003).
-- [ ] T069 End-to-end validation: walk `quickstart.md` §"Expected behaviour on a clean bench" steps 1, 2, 4, 5 on a real bench; verify SC-001, SC-002, SC-005, SC-008. (Step 3 — panel observation — is spec-003's validation.) SC-007 verified separately in T070.
-- [ ] T070 SC-007 verification with an external bus capture. Confirm zero frames originating from the tool. Attach the trace summary to the PR.
-- [ ] T071 `cd lean && lake build` — confirm lifecycle Phase 2 theorems compile with no `sorry` and no custom axioms.
-- [ ] T072 [P] Confirm `VENDOR.sha256` hash check still passes — no silent edits crept into the vendor copy.
+- [X] T062 [P] Add the feat/002 entry to `CHANGELOG.md` under `[Unreleased]` — one line summarising "CAN link lifecycle: status row + vendored protocol stack". → Docs capstone #154 / PR #165.
+- [X] T063 [P] Update `README.md` — link to `specs/002-can-link-lifecycle/quickstart.md`; mention the CAN status row + vendored `Infrastructure.Protocol` project. → Docs capstone #154 / PR #165.
+- [X] T064 [P] Add XML doc comments to every public type and member listed in [data-model.md](./data-model.md) §1–§2 per the COMMENTS standard — `DisconnectReason`, `ErrorClassification`, `CanLinkState`, `AdapterIdentification`, `ICanLink`, `ICanLinkService`. → #154 / PR #165 (six lifecycle types documented).
+- [X] T065 [P] Logging audit per LOGGING standard for `PcanCanLink` / `PeakErrorText` / `CanLinkService` lifecycle paths. → Read-only audit clean in PR #165 (`ILogger` + templates, zero `Console`/`printfn`); per-transition structured logging landed via #148 / PR #160.
+- [X] T066 [P] Async-discipline audit per CANCELLATION + THREAD_SAFETY standards for lifecycle paths. → Read-only audit clean in PR #165 (no sync-over-async on the lifecycle path).
+- [X] T067 [P] Compliance check for Principle V on the lifecycle path: grep for OS user / machine name / MAC / SID — expected zero hits. Document in `quickstart.md` "Common gotchas" tail. → Read-only audit clean in PR #165 (zero OS-identity on the CAN lifecycle path). Audit returned nothing to document, so no `quickstart.md` note was added.
+- [X] T068 [P] Update `docs/Context/bpt-rollout/CORRECTIONS.md` §C5 with a closing paragraph scoping the hardcoded-protocol-metadata stopgap to spec-003+ (per [research.md](./research.md) decisions migrated to spec-003). → #154 / PR #165.
+- [ ] T069 End-to-end validation: walk `quickstart.md` §"Expected behaviour on a clean bench" steps 1, 2, 4, 5 on a real bench; verify SC-001, SC-002, SC-005, SC-008. (Step 3 — panel observation — is spec-003's validation.) SC-007 verified separately in T070. → Manual bench step, no automated artifact. Deferred to a bench follow-up per PR #165; runbook now lives in `quickstart.md` §"Expected behaviour on a clean bench" under the v1.15.0 unattended-only principle. SC-001/002/005/008 are independently covered by the automated suite. No bench run recorded — left unchecked.
+- [ ] T070 SC-007 verification with an external bus capture. Confirm zero frames originating from the tool. Attach the trace summary to the PR. → Manual bench step, no automated artifact. Mechanised in Lean (`Phase2/PassiveObserver.lean`, `observe_emits_no_transmit`); the external-bus-capture confirmation is deferred to a bench follow-up per PR #165. No capture recorded — left unchecked.
+- [X] T071 `cd lean && lake build` — confirm lifecycle Phase 2 theorems compile with no `sorry` and no custom axioms. → Verified on `main` (this reconciliation): `lake build` succeeds (15 jobs), `CanLinkState` + `PassiveObserver` Phase 2 theorems build clean.
+- [X] T072 [P] Confirm `VENDOR.sha256` hash check still passes — no silent edits crept into the vendor copy. → Verified on `main` (this reconciliation): all 27 tracked vendored files hash-match the sidecar, no drift.
 
 ---
 
