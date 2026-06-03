@@ -54,12 +54,17 @@ Expected behaviour on a clean bench (lifecycle slice only):
 
 ## Running the hardware E2E suite (manual pre-release check)
 
+The hardware cases are gated behind the `BPT_HARDWARE` environment variable (the `[<HardwareFact>]` attribute, #142). Set it to `1`, then run the `Category=Hardware` filter:
+
 ```powershell
+$env:BPT_HARDWARE = "1"
 dotnet test tests\ButtonPanelTester.Tests.Windows\ButtonPanelTester.Tests.Windows.fsproj -c Release `
     --filter "Category=Hardware"
 ```
 
-These tests are **excluded from CI** by Principle IV and are gated as a manual pre-release check. The Hardware-Test-Setup tracking issue documents the bench config required.
+`BPT_HARDWARE=1` is a **promise, not a probe** — set it only when a PEAK PCAN-USB adapter is actually plugged in and the driver is installed. The non-interactive cases *fail* (not skip) if the variable is set but no adapter responds. With the variable unset, every hardware case skips — which is also why CI (where it is never set) stays green even though the suite ships in the test project. The interactive unplug/replug cases stay skipped regardless; they prompt the operator and are run by hand.
+
+These tests are **excluded from CI** by Principle IV — via both the `Category!=Hardware` filter in the standards reusable workflow and the `BPT_HARDWARE` gate. The Hardware-Test-Setup tracking issue (#112) documents the bench config required.
 
 ## File map for spec-002 lifecycle work
 
