@@ -164,7 +164,14 @@ type MainWindow(services: IServiceProvider) as this =
     // in-flight UX (pulsing pill opacity, spinner glyph, ellipsis
     // headline) renders until the task resolves.
     let mutable refreshState = DictionaryStatusRow.Idle
-    let mutable lastSource: DictionarySource option = None
+
+    // Host-driven dictionary render state (#179). Starts at
+    // `Initializing` (the pre-first-event placeholder); the
+    // `SourceChanged` handler advances it to `Ready` on the success
+    // path, and the `Opened` handler flips it to `Unavailable` on the
+    // catastrophic-init dead-path (`NoDictionaryAvailable`) that
+    // `SourceChanged` never covers.
+    let mutable dictionaryRender = DictionaryStatusRow.Initializing
 
     /// Latest `CanLinkState` observed via
     /// `ICanLinkService.LinkStateChanged`. Initial value is
@@ -183,10 +190,10 @@ type MainWindow(services: IServiceProvider) as this =
     let mutable currentTheme = Chrome.currentTheme ()
 
     // No separate `renderInitializing` slot: `renderCombined` below
-    // produces the "Initializing dictionary…" headline when
-    // `lastSource = None`, so the CAN status row appears alongside
-    // the dictionary placeholder from the first paint (FR-016: the
-    // two rows are observable independently).
+    // renders the dictionary row from `dictionaryRender`, which starts
+    // at `Initializing` ("Initializing dictionary…"), so the CAN status
+    // row appears alongside the dictionary placeholder from the first
+    // paint (FR-016: the two rows are observable independently).
 
     /// Production `runDialog` callback for the registration
     /// orchestration: constructs a `RegistrationDialogWindow` with the
@@ -304,28 +311,21 @@ type MainWindow(services: IServiceProvider) as this =
             // present, starts in `Initializing`. PanelsOnBus row is
             // reserved for US2 (PR-D) and not rendered yet; the
             // vertical stack leaves room for it as a third child.
-            let dictionaryView : IView =
-                match lastSource with
-                | Some source ->
-                    DictionaryStatusRow.view
-                        cacheFilePath
-                        source
-                        (clock.UtcNow())
-                        refreshState
-                        kickoffRefresh
-                        kickoffReregister
-                | None ->
-                    TextBlock.create [
-                        TextBlock.text "Initializing dictionary…"
-                    ]
-                    :> IView
+            let dictionaryRowView : IView =
+                DictionaryStatusRow.dictionaryView
+                    cacheFilePath
+                    dictionaryRender
+                    (clock.UtcNow())
+                    refreshState
+                    kickoffRefresh
+                    kickoffReregister
 
             let combinedView : IView =
                 StackPanel.create [
                     StackPanel.orientation Orientation.Vertical
                     StackPanel.spacing 8.0
                     StackPanel.children [
-                        dictionaryView
+                        dictionaryRowView
                         CanStatusRow.view lastCanState kickoffReconnect
                     ]
                 ]
@@ -347,7 +347,7 @@ type MainWindow(services: IServiceProvider) as this =
         // InitializeAsync); marshal back via the Avalonia dispatcher.
         service.SourceChanged.Add(fun s ->
             Dispatcher.UIThread.Post(fun () ->
-                lastSource <- Some s
+                dictionaryRender <- DictionaryStatusRow.Ready s
                 renderCombined ()))
 
         // CAN LinkStateChanged → re-render on the UI thread. The
@@ -369,9 +369,9 @@ type MainWindow(services: IServiceProvider) as this =
         // refreshes. The event fires on the UI thread (Avalonia
         // raises it as the OS theme change propagates through the
         // Win32 message pump), so we mutate `currentTheme` and
-        // repaint inline. If `lastSource` hasn't arrived yet we
-        // repaint the initializing view; otherwise we re-run
-        // `renderStatusRow` with the last known source.
+        // repaint inline. `renderCombined` repaints whatever
+        // `dictionaryRender` currently holds (Initializing / Ready /
+        // Unavailable).
         match Application.Current with
         | null -> ()
         | app ->
@@ -394,6 +394,48 @@ type MainWindow(services: IServiceProvider) as this =
         this.Opened.Add(fun _ ->
             (task {
                 let initTask = service.InitializeAsync(CancellationToken.None)
+
+                // #179 catastrophic-init dead-path: observe the init
+                // result the boot sequence otherwise discards. The
+                // `NoDictionaryAvailable` arm never fires `SourceChanged`,
+                // so without this the dictionary row would sit on
+                // "Initializing dictionary…" forever. Await the SAME task
+                // `runBootSequence` awaits below — Tasks are
+                // multi-await-safe, and FR-001 dict→CAN ordering is
+                // preserved because the boot sequence still gates CAN.Open
+                // on it — and flip the row to the terminal `Unavailable`
+                // view on the dead-path. The `Updated` arm is a no-op: the
+                // `SourceChanged` handler already drove the row to `Ready`.
+                // Fire-and-forget so a blocked registration dialog or a
+                // slow CAN open never delays the failure signal; the
+                // continuation marshals back onto the UI thread.
+                let _ : Task =
+                    task {
+                        let! initResult = initTask
+
+                        match DictionaryStatusRow.renderForInitResult initResult with
+                        | Some render ->
+                            // Field-diagnostic trail for the one failure
+                            // that most needs it — live + cache + seed all
+                            // failed. Warning, not Error: the app stays
+                            // usable (CAN still runs, dictionary degraded),
+                            // mirroring the sibling CAN-init LogWarning in
+                            // `runBootSequence`. Logged off the mapping
+                            // result so `renderForInitResult` stays the
+                            // single authority.
+                            match render with
+                            | DictionaryStatusRow.Unavailable reason ->
+                                mainLogger.LogWarning(
+                                    "Dictionary unavailable after init — live, cache and seed all failed: {Reason}",
+                                    reason)
+                            | _ -> ()
+
+                            Dispatcher.UIThread.Post(fun () ->
+                                dictionaryRender <- render
+                                renderCombined ())
+                        | None -> ()
+                    }
+
                 // Fire-and-forget dictionary warm-up per phase-7.md:
                 // primes the Azure Free-tier worker so the technician's
                 // first explicit Refresh click — or registration POST
