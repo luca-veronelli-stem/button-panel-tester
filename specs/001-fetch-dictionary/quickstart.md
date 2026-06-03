@@ -37,9 +37,23 @@ The first build may take 30–60 s because Avalonia and FuncUI pull a moderate d
 
 ## 3. Mint a BootstrapToken on the dictionary service side
 
-Bootstrap tokens are minted by an admin-authenticated endpoint on `stem-dictionaries-manager`. From a separate PowerShell session inside the `stem-dictionaries-manager` repo, run the admin helper (or use `gh` / curl against the admin endpoint — exact ceremony depends on the dictionary service's current admin UX).
+The registration dialog accepts **only** a real `stbt_…` bootstrap token. There is no legacy static-key passthrough: `/register` hashes the supplied plaintext against the `BootstrapToken` table (PBKDF2), so an `ApiKeys` value never matches and the request fails with `401`.
 
-For development, a static dev key works: `appsettings.json` of `stem-dictionaries-manager` carries a static key under `"ApiKeys": { "ButtonPanelTester": "STEM-BT-DEV-KEY-2026" }`. **You can paste this static key into the registration dialog as if it were a `BootstrapToken`** — the dev-side `ApiKeyMiddleware` accepts it as legacy mode. This shortcut is dev-only.
+From a separate PowerShell session, mint a token via the admin endpoint and paste the returned plaintext into the registration dialog:
+
+```powershell
+# Mint a real bootstrap token via the admin endpoint
+$resp = Invoke-RestMethod -Method Post `
+  -Uri "https://localhost:7065/api/admin/bootstrap-tokens" `
+  -Headers @{ "X-Api-Key" = "STEM-ADMIN-DEV-KEY-2026" } `
+  -ContentType "application/json" `
+  -Body '{"clientApp":"ButtonPanelTester","ttlHours":24}'
+$resp.plaintext   # paste this into the registration dialog
+```
+
+`STEM-ADMIN-DEV-KEY-2026` is the dev-mode admin key in `stem-dictionaries-manager`'s `appsettings.Development.json` (`AdminApiKeys`).
+
+> **Note:** on a SQLite dev environment this assumes the `system-admin` user row exists. SQLite dev bootstraps via `EnsureCreated`, which skips the migration-level `InsertData` that seeds `system-admin` — so `/api/admin/*` calls fail until [`stem-dictionaries-manager#88`](https://github.com/luca-veronelli-stem/stem-dictionaries-manager/issues/88) is resolved (or you manually insert the row).
 
 ## 4. Run the GUI
 
