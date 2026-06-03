@@ -41,6 +41,8 @@ If `_logger?.` patterns appear in app code, that's a smell — wire the logger o
 
 A tight cluster of helpers within a single feature may share the **parent's** logger (passed in as `ILogger`, not `ILogger<Helper>`) when each helper would otherwise produce a useless one-call category. Don't reach for this until the multi-category log filter actually feels noisy.
 
+An F# **module** has no type to parameterize `ILogger<T>` with. When a module is the natural unit — one feature, a fire-and-forget function or two, no instance state (e.g. `WarmUp.runAsync`) — don't invent a marker type (`type WarmUpMarker = class end`) and don't promote it to a class just to satisfy this rule. Take a plain `ILogger` and give it a stable, hand-picked category via `ILoggerFactory.CreateLogger("<stable-category>")` at the composition root. This is the module analogue of the helpers carve-out above; see the F# section for the worked example.
+
 ## Templates and parameters — always
 
 ```csharp
@@ -154,6 +156,35 @@ let inline logDebug (logger: ILogger) (template: string) ([<ParamArray>] args: o
 ```
 
 Apps require the logger non-optionally (matching archetype A); libraries take `ILogger<'T> option`.
+
+### Modules — a stable category, not a marker type
+
+A module with no instance state has no `T` for `ILogger<T>`. Don't add a
+`type WarmUpMarker = class end` to satisfy the category rule, and don't promote a
+one-function module to a class. Take a plain `ILogger` and let the composition
+root hand it a stable category:
+
+```fsharp
+module WarmUp =
+    /// Fire-and-forget dictionary warm-up. The composition root supplies a logger
+    /// built with a stable category: ILoggerFactory.CreateLogger("Dictionary.WarmUp").
+    let runAsync (provider: IDictionaryProvider) (logger: ILogger) (ct: CancellationToken) : Task<unit> =
+        task {
+            logger.LogInformation("Warm-up started")
+            do! provider.PrimeAsync ct
+            logger.LogInformation("Warm-up complete")
+        }
+```
+
+```fsharp
+// composition root — pick the category string once, keep it stable
+let warmUpLogger = loggerFactory.CreateLogger "Dictionary.WarmUp"
+do! WarmUp.runAsync provider warmUpLogger ct
+```
+
+Ops filter on that category exactly as they would a type-name one
+(`Dictionary.WarmUp:Information`). Choose it deliberately and don't let it drift —
+it is the module's stand-in for the `ILogger<T>` category.
 
 ## Where logs land on disk
 

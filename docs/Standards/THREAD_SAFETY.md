@@ -129,6 +129,7 @@ F#'s default is immutability; most thread-safety problems don't materialize. Whe
 - For producer-consumer, use `Channel<'T>` (the C# type works fine in F#).
 - For pure async work, use `Async<'T>` workflows or `task { ... }` with `CancellationToken` propagation.
 - When `ref cell` or mutable fields appear, the same primitives as C# apply: `Interlocked`, `Volatile`, `Lock`. Reach for them only after the immutable / actor option has been ruled out.
+- `let mutable` at **module scope** is global mutable state — the F# analogue of a `static` mutable field, with the same hazard. Treat it exactly like one: synchronize every access, or (better) move the state into a `MailboxProcessor` or an immutable design. Module-level `let mutable` touched from more than one thread without a lock is the same bug as an unguarded shared static field.
 
 ```fsharp
 let scanner = MailboxProcessor.Start(fun inbox ->

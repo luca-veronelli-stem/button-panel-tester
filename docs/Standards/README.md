@@ -1,6 +1,6 @@
-# STEM standards (Standard version: v1.9.0)
+# STEM standards (Standard version: v1.15.0)
 
-These are inline copies pinned to `v1.9.0`. Upstream source of truth is [standards/shared/standards/](https://github.com/luca-veronelli-stem/standards/tree/v1.9.0/shared/standards).
+These are inline copies pinned to `v1.15.0`. Upstream source of truth is [standards/shared/standards/](https://github.com/luca-veronelli-stem/standards/tree/v1.15.0/shared/standards).
 
 | Standard | Purpose |
 | --- | --- |

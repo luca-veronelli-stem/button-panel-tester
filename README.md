@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#license)
 
 > **Bench tool to test STEM button-panel hardware over CAN.**
-> **Standard:** v1.9.0 — see [`docs/Standards/`](./docs/Standards/).
+> **Standard:** v1.15.0 — see [`docs/Standards/`](./docs/Standards/).
 
 ---
 
@@ -44,7 +44,7 @@ eng/                             build / release scripts
 
 - Dictionary fetch & registration walkthrough: [`specs/001-fetch-dictionary/quickstart.md`](./specs/001-fetch-dictionary/quickstart.md).
 - CAN-link lifecycle walkthrough: [`specs/002-can-link-lifecycle/quickstart.md`](./specs/002-can-link-lifecycle/quickstart.md).
-- Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.9.0`.
+- Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.15.0`.
 - Changelog: [`CHANGELOG.md`](./CHANGELOG.md).
 - Repo-specific notes: [`CLAUDE.md`](./CLAUDE.md).
 

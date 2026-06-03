@@ -7,6 +7,7 @@ name: Mirror to Bitbucket
 on:
   push:
     branches: [main]
+    tags: ['v*.*.*']
 
 concurrency:
   group: mirror-bitbucket-${{ github.ref }}
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   mirror:
-    uses: luca-veronelli-stem/standards/.github/workflows/mirror-bitbucket.yml@v1.12.0
+    uses: luca-veronelli-stem/standards/.github/workflows/mirror-bitbucket.yml@v1.15.0
     with:
       bitbucket-repo: stem-fw/button-panel-tester
     secrets:
