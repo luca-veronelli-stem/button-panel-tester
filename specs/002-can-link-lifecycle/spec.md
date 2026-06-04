@@ -144,7 +144,7 @@ The same `CanLinkState` value flows into all three; each surface projects the pa
 
 ## Assumptions
 
-- The supplier bench has exactly one PEAK PCAN-USB adapter plugged into the test workstation. Multi-adapter setups are out of scope.
+- The supplier bench has exactly one PEAK PCAN-USB adapter plugged into the test workstation. Multi-adapter setups are out of scope. *(Revised by [`amendments/192-first-available-channel/`](./amendments/192-first-available-channel/spec.md) (#192): the bench may have more than one adapter; the tool opens the first that initializes from an ordered, bounded candidate set, defaulting to single-`0x51` when only one is present.)*
 - The CAN bus baud rate is 250 kbps. This is fixed by the panel firmware, not configurable by the technician.
 - The dictionary fetched by feat-001 is not consulted to drive any CAN-side decisioning in this slice — the lifecycle is independent of dictionary content.
 
@@ -159,5 +159,5 @@ The same `CanLinkState` value flows into all three; each surface projects the pa
 ## Out of Scope (for this feature)
 
 - Sending any CAN frame: probing, addressing, baptizing, variable read/write — all deferred to later features.
-- Multi-adapter disambiguation: covered by the "first enumerated wins" edge case; richer disambiguation is downstream.
+- Multi-adapter disambiguation: covered by the "first enumerated wins" edge case; richer disambiguation is downstream. *(Revised by [`amendments/192-first-available-channel/`](./amendments/192-first-available-channel/spec.md) (#192) to "first **free** adapter wins" — the scan skips a busy candidate to reach a free one. A per-identity picker UI remains downstream.)*
 - Panel discovery: extracted to [`specs/003-panel-discovery/`](../003-panel-discovery/).
