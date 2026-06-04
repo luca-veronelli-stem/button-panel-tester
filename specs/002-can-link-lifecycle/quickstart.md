@@ -98,6 +98,7 @@ Re-run whenever the vendored protocol stack is re-vendored — see #111.
 - **`PCAN status 0x40010` on Open**: PCAN driver thinks the adapter is in use by another process. Close any PCAN-View or competing apps.
 - **`PCAN status 0x80000` on Open**: bus-off detected immediately — usually a wiring or termination problem on the bench (check the 120 Ω termination at both ends).
 - **Status row stays `Initializing` past 5 s**: the dictionary boot from feat-001 has not completed yet; check the dictionary status row first. The CAN link only opens after dictionary boot per FR-001.
+- **Single fixed channel — no multi-adapter switching**: BPT opens the first PCAN-USB channel (`PCAN_USBBUS1` / `0x51`, hardcoded in `PCANManager`) and stays bound to it. It does **not** enumerate or switch adapters — if that channel is held by another app (e.g. StemDeviceManager) the row shows `Recoverable · adapter busy` and waits for it to free, even when a second adapter sits free on another channel; it connects only when *that* channel frees. Single-adapter bench use (the spec-002 Assumption) is unaffected. Selecting among multiple present adapters is deliberately out of scope for the shipped slice — deferred, see [#190](https://github.com/luca-veronelli-stem/button-panel-tester/issues/190).
 
 ## Where to go next
 
