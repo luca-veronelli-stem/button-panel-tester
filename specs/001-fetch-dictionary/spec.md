@@ -82,7 +82,7 @@ On success the status row flips to *Live · synced now*. On failure the status r
 - **Authentication failure on refresh**: the status row shows *refresh failed (authentication)* and the detail view offers a "re-register" action that re-opens the registration dialog. The previously-stored credential is preserved unless the technician explicitly proceeds to overwrite it.
 - **Service returns a malformed response**: the response is rejected as a whole, the status row reflects a malformed-response failure, and the previously-loaded dictionary remains in use.
 - **Concurrent refresh attempts**: a second Refresh click while an in-flight fetch has not yet returned does not start a second network request; both clicks observe the same outcome.
-- **Successful fetch returns identical data**: the local copy is unchanged on disk (no rewrite), the in-memory dictionary is unchanged, the timestamp advances to *now*, and the status row flips to *Live*.
+- **Successful fetch returns identical data**: the dictionary *content* on disk is unchanged, but the local copy is rewritten so its persisted `fetchedAt` advances to *now* (so an offline relaunch reports this sync, not the last content-change date — #191); the in-memory dictionary is unchanged, the timestamp advances to *now*, and the status row flips to *Live*.
 
 ## Requirements *(mandatory)*
 

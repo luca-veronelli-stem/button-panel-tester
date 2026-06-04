@@ -142,6 +142,11 @@ let RefreshAsync_FailedRefresh_PreservesInMemoryDictionaryAndPreviousFetchedAt (
     // to Cached with the prior FetchedAt and the failure reason
     // chip, but the bytes the rest of the app sees are
     // bit-identical to the pre-refresh snapshot.
+    //
+    // #191 regression (FR-012 "only on success" half): a FAILED
+    // refresh must also leave the *persisted* timestamp untouched —
+    // no WriteAsync, and a read-back still carries the prior
+    // cachedFetchedAt rather than `now`.
     task {
         let cache = InMemoryDictionaryCache()
         cache.PrePopulate(dictA, cachedFetchedAt)
@@ -149,6 +154,7 @@ let RefreshAsync_FailedRefresh_PreservesInMemoryDictionaryAndPreviousFetchedAt (
         let service = mkService cache scripted
 
         do! initialiseFromCache service
+        let baselineWriteCount = cache.WriteCount
 
         let! update = service.RefreshAsync(CancellationToken.None)
 
@@ -167,14 +173,32 @@ let RefreshAsync_FailedRefresh_PreservesInMemoryDictionaryAndPreviousFetchedAt (
                 )
         | NoDictionaryAvailable reason ->
             Assert.Fail(sprintf "expected Updated, got NoDictionaryAvailable %A" reason)
+
+        // No write on failure, and the disk timestamp is unchanged.
+        Assert.Equal(baselineWriteCount, cache.WriteCount)
+
+        let! readBack = (cache :> IDictionaryCache).ReadAsync(CancellationToken.None)
+
+        match readBack with
+        | Success(dict, t) ->
+            Assert.Equal(dictA, dict)
+            Assert.Equal(cachedFetchedAt, t)
+        | other ->
+            Assert.Fail(sprintf "expected Success(dictA, cachedFetchedAt) on read-back, got %A" other)
     }
 
 [<Fact>]
-let RefreshAsync_IdenticalContentSuccess_SkipsCacheWriteEmitsLive () =
-    // cache-format.md "Skip-write optimisation": the in-memory
-    // hash already matches, so no IO. The status row still flips
-    // to Live with the new fetchedAt — the technician's signal
-    // that "we just verified we're current" remains.
+let RefreshAsync_IdenticalContentSuccess_PersistsAdvancedFetchedAtEmitsLive () =
+    // #191 (FR-001 / FR-012 / spec.md:85 edge case): a successful
+    // refresh that returns byte-identical content MUST persist the
+    // advanced fetchedAt to disk, so an offline relaunch reports the
+    // last *successful sync*, not the last content-change date.
+    //
+    // The success carries a fresh fetchedAt (the provider stamps it
+    // with clock.UtcNow()), so the cache envelope bytes change and
+    // the write goes through — the service no longer short-circuits
+    // on a matching ContentHash. The in-memory Live(fetchedAt)
+    // signal is unchanged (acceptance #4).
     task {
         let cache = InMemoryDictionaryCache()
         cache.PrePopulate(dictA, cachedFetchedAt)
@@ -189,13 +213,25 @@ let RefreshAsync_IdenticalContentSuccess_SkipsCacheWriteEmitsLive () =
 
         let! update = service.RefreshAsync(CancellationToken.None)
 
-        Assert.Equal(baselineWriteCount, cache.WriteCount)
+        // The persisted timestamp advances: exactly one write through.
+        Assert.Equal(baselineWriteCount + 1, cache.WriteCount)
 
         match update with
         | Updated(dict, Live t) ->
             Assert.Equal(dictA, dict)
             Assert.Equal(liveFetchedAt, t)
         | other -> Assert.Fail(sprintf "expected Updated(_, Live _), got %A" other)
+
+        // A read-back observes the advanced fetchedAt on the same
+        // (byte-identical) dictionary content.
+        let! readBack = (cache :> IDictionaryCache).ReadAsync(CancellationToken.None)
+
+        match readBack with
+        | Success(dict, t) ->
+            Assert.Equal(dictA, dict)
+            Assert.Equal(liveFetchedAt, t)
+        | other ->
+            Assert.Fail(sprintf "expected Success(dictA, liveFetchedAt) on read-back, got %A" other)
     }
 
 [<Fact>]

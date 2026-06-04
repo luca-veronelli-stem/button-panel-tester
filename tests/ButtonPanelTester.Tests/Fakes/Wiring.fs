@@ -117,10 +117,10 @@ type InMemoryDictionaryCache() =
     member _.SetCorrupt(detail: string option) = state <- Corrupt detail
 
     /// Count of `WriteAsync` invocations observed since construction.
-    /// `DictionaryServiceRefreshTests` (T055) uses this to assert the
-    /// `cache-format.md` "Skip-write optimisation": an identical-
-    /// content refresh emits `Live(now)` without an extra cache write
-    /// (T050 in-memory hash check). Test-only surface — the
+    /// `DictionaryServiceRefreshTests` uses this to assert FR-001 /
+    /// FR-012 (#191): a successful identical-content refresh writes
+    /// through to persist the advanced `fetchedAt`, while a FAILED
+    /// refresh does not write at all. Test-only surface — the
     /// production adapter has no equivalent counter.
     member _.WriteCount = writeCount
 
