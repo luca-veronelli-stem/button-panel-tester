@@ -4,12 +4,25 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-04
+
+Ships spec 002 (CAN-link lifecycle) plus dictionary-status hardening and the STEM standards `v1.9.0 → v1.15.0` bump that landed since v0.1.0.
+
 ### Added
 
 - **CAN-link lifecycle** ([spec 002](specs/002-can-link-lifecycle/spec.md)): a persistent CAN status row on the main window reporting the live link state over a four-family FSM (`Initializing | Connected | Disconnected | Error`) — colour-coded chip, human-readable headline, detail tooltip, and a manual **Reconnect** control. Opens the configured PEAK PCAN-USB adapter at 250 kbps and surfaces bench realities: no adapter present, mid-session unplug, driver missing, bus-off, transient PEAK faults. Runs over a vendored `ButtonPanelTester.Infrastructure.Protocol` C# stack (frozen copy of `stem-device-manager`'s CAN + raw-frame layer; documented stopgap per Constitution Principle VI).
 - Per-transition structured logging in `CanLinkService`: one `ILogger` entry per `CanLinkState` transition carrying `State` / `Severity` / `Detail` / `Since` fields ([#148](https://github.com/luca-veronelli-stem/button-panel-tester/issues/148)).
 - User-friendly PEAK status translation: adapter-busy and bus-off statuses render a jargon-free cause + remediation suggestion instead of the raw PEAK `GetErrorText`; cold-start poll-exhaust is classified as `Disconnected(NoAdapterPresent)` rather than a runtime `Error` ([#150](https://github.com/luca-veronelli-stem/button-panel-tester/issues/150), [#136](https://github.com/luca-veronelli-stem/button-panel-tester/issues/136), [#139](https://github.com/luca-veronelli-stem/button-panel-tester/issues/139)).
 - Driver-download link on the missing-PEAK-driver `Error · Fatal` status, pointing at the PEAK downloads page ([#143](https://github.com/luca-veronelli-stem/button-panel-tester/issues/143)).
+
+### Changed
+
+- Bumped STEM standards from v1.9.0 to v1.15.0.
+
+### Fixed
+
+- Dictionary status row no longer loses its last-confirmed-live timestamp across restart when a refresh returns byte-identical content ([#191](https://github.com/luca-veronelli-stem/button-panel-tester/issues/191)).
+- A catastrophic dictionary-init failure now surfaces as a terminal status row instead of leaving the row without a signal in the situation that most needs one ([#179](https://github.com/luca-veronelli-stem/button-panel-tester/issues/179)).
 
 ### Notes
 
