@@ -37,7 +37,7 @@ types (below); the type re-carving itself delivers no user-visible benefit and w
 | Driver-not-installed download affordance | [#143](https://github.com/luca-veronelli-stem/button-panel-tester/issues/143) |
 | Per-transition structured logging | [#148](https://github.com/luca-veronelli-stem/button-panel-tester/issues/148) |
 | PEAK status → cause + suggestion (no `FaultCause` DU) | [#150](https://github.com/luca-veronelli-stem/button-panel-tester/issues/150) |
-| Multi-adapter iteration (FR-012) | _no ticket yet — open one if a multi-adapter bench need is real_ |
+| Multi-adapter iteration (FR-012) | _bench need confirmed 2026-06-04 (test, not production) via [#192](https://github.com/luca-veronelli-stem/button-panel-tester/issues/192); recorded in [#190](https://github.com/luca-veronelli-stem/button-panel-tester/issues/190) Future modifications and **deferred** — needs a spec-level vehicle when built, not a four-family salvage_ |
 
 ## When to unpark
 
