@@ -27,6 +27,7 @@
         <Compile Include="Integration/HttpDictionaryProviderTests.fs" />
         <Compile Include="Integration/HttpDictionaryProviderTimeoutTests.fs" />
         <Compile Include="Integration/HttpDictionaryServiceWarmUpTests.fs" />
+        <Compile Include="Integration/DictionaryRestartPersistenceTests.fs" />
         <Compile Include="Gui/DictionaryStatusRowTests.fs" />
         <Compile Include="Gui/DictionaryStatusRowRefreshTests.fs" />
         <Compile Include="Gui/RegistrationDialogTests.fs" />

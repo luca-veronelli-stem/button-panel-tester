@@ -93,9 +93,9 @@ Atomic via temp-file + rename. The two renames are not atomic together; if the p
 
 ## Skip-write optimisation
 
-When `WriteAsync` would produce the same `ContentHash` already on disk, **the write is skipped**. Only the `fetchedAt` claim advances on subsequent reads — but since the on-disk file already matches, `JsonFileDictionaryCache` does not need to rewrite it. This matches FR-009: "MUST overwrite the local copy when they differ."
+When `WriteAsync` would produce **bit-identical bytes** to what is already on disk, **the write is skipped** — there is nothing to change. Because the envelope carries `fetchedAt`, this skip fires only on a genuine no-op: the same `ContentHash` **and** the same `fetchedAt`. A refresh that returns identical content with a *newer* `fetchedAt` changes the bytes (and thus the `.sha256` sidecar), so it is **not** skipped — it is persisted.
 
-`fetchedAt` advancement on identical content is reflected in `DictionarySource.Live(t)` returned by `DictionaryService` to subscribers, not in the file's `fetchedAt` timestamp (which would be a needless write). The cache file's `fetchedAt` thus represents "when this *content* was first observed live", which is monotonically older than or equal to the in-memory `Live(t)`.
+This is required by FR-001 / FR-012 (#191): the cache file's `fetchedAt` must record the last *confirmed-live* fetch so that an offline relaunch reports the last successful sync, not the date the *content* last changed. `DictionaryService.RefreshAsync` therefore calls `WriteAsync` on every successful fetch and lets this byte-level check absorb the rare true no-op. The in-memory `DictionarySource.Live(t)` and the persisted `fetchedAt` advance together; the cache file's `fetchedAt` is no longer pinned to "when this *content* was first observed live".
 
 ## Permissions and crash safety
 

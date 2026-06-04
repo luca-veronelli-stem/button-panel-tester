@@ -139,19 +139,21 @@ type DictionaryService(clock: IClock, cache: IDictionaryCache, provider: IDictio
                                 task {
                                     match fetchResult with
                                     | Success(dict, fetchedAt) ->
-                                        // Identical-content optimisation per
-                                        // cache-format.md §"Skip-write optimisation":
-                                        // skip the IO when the new content matches
-                                        // the in-memory hash, but still emit Live so
-                                        // the status row advances its synced
-                                        // timestamp.
-                                        let needsWrite =
-                                            match snapshot with
-                                            | ValueSome(current, _) ->
-                                                current.ContentHash <> dict.ContentHash
-                                            | ValueNone -> true
-                                        if needsWrite then
-                                            do! cache.WriteAsync(dict, fetchedAt, ct)
+                                        // FR-001 / FR-012 (#191): persist the advanced
+                                        // fetchedAt on EVERY successful fetch — including
+                                        // when the content is byte-identical to the
+                                        // in-memory copy. The earlier ContentHash
+                                        // short-circuit skipped the write on identical
+                                        // content, so the on-disk fetchedAt stayed at the
+                                        // last content-change date and an offline relaunch
+                                        // reported a stale "last synced" timestamp.
+                                        // The cache envelope carries FetchedAt, so a fresh
+                                        // timestamp changes the bytes and
+                                        // JsonFileDictionaryCache.WriteAsync rewrites the
+                                        // file; a genuine no-op (same content AND same
+                                        // fetchedAt) is still skipped there by its hash
+                                        // compare.
+                                        do! cache.WriteAsync(dict, fetchedAt, ct)
                                         let newSource = Live(fetchedAt)
                                         snapshot <- ValueSome(dict, newSource)
                                         sourceChanged.Trigger(newSource)

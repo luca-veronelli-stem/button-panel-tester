@@ -182,9 +182,13 @@ type JsonFileDictionaryCache(cacheDirectory: string, seedReader: SeedBytesReader
             // Skip-write optimisation per cache-format.md §"Skip-write
             // optimisation": if the bytes we would write hash to the
             // same value already on disk, the on-disk file is bit-equal
-            // and rewriting is needless IO. `fetchedAt` advancement is
-            // reflected in `DictionaryService`'s in-memory
-            // `DictionarySource.Live(t)`, not in the file.
+            // and rewriting is needless IO. Because the envelope carries
+            // `FetchedAt`, an advanced timestamp changes the bytes (and
+            // thus the sidecar hash), so a timestamp-only refresh is NOT
+            // skipped here — it is persisted, which is what an offline
+            // relaunch needs to report the last successful sync (#191,
+            // FR-001 / FR-012). The skip fires only on a genuine no-op:
+            // same content AND same fetchedAt.
             let mutable skip = false
             if File.Exists(sidecarPath) then
                 let! existingRaw = File.ReadAllTextAsync(sidecarPath, ct)
