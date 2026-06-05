@@ -8,6 +8,8 @@
         <Compile Include="Can/ICanLinkService.fs" />
         <Compile Include="Can/CanLinkLogging.fs" />
         <Compile Include="Can/CanLinkService.fs" />
+        <Compile Include="Can/IPanelDiscoveryService.fs" />
+        <Compile Include="Can/PanelDiscoveryService.fs" />
         <Compile Include="Dictionary/DictionaryOptions.fs" />
         <Compile Include="Dictionary/IDictionaryService.fs" />
         <Compile Include="Dictionary/DictionaryService.fs" />

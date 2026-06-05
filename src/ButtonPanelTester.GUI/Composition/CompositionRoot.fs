@@ -282,3 +282,12 @@ module CompositionRoot =
                 let clock = sp.GetRequiredService<IClock>()
                 let logger = sp.GetRequiredService<ILogger<CanLinkService>>()
                 CanLinkService(link, clock, logger) :> ICanLinkService)
+            // Panel discovery (#197) — split out of CanLinkService so
+            // spec-003 can own the discovery pipeline as an independent
+            // spec. Stub today: empty map + never-firing observable, so
+            // the constructor is parameterless. The forward discovery →
+            // lifecycle dependencies (ICanLinkService, ICanFrameStream)
+            // arrive when the spec-003 pipeline lands; nothing renders
+            // the surface yet (the third UI slot is spec-003 too).
+            .AddSingleton<IPanelDiscoveryService>(fun _ ->
+                PanelDiscoveryService() :> IPanelDiscoveryService)
