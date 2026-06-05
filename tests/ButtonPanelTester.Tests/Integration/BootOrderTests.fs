@@ -33,15 +33,12 @@ type private SpyCanLinkService
         ?openedSignal: TaskCompletionSource<unit>
     ) =
     let linkSubject = Event<CanLinkState>()
-    let panelsSubject = Event<PanelsOnBus>()
 
     member val InitializeCalls = 0 with get, set
 
     interface ICanLinkService with
         member _.CurrentState = Initializing
-        member _.PanelsOnBus = PanelsOnBus.empty
         member _.LinkStateChanged = linkSubject.Publish
-        member _.PanelsOnBusChanged = panelsSubject.Publish
 
         member this.InitializeAsync(_ct: CancellationToken) : Task =
             this.InitializeCalls <- this.InitializeCalls + 1
