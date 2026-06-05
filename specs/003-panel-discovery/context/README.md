@@ -37,3 +37,24 @@ rather than re-derived:
 - Do **not** edit anything under `previous-003/`. It is a frozen snapshot kept
   for traceability and to source the rewrite.
 - Tracker: #153.
+
+## Numbering map (previous-003 → independent spec)
+
+The independent spec renumbers requirements and success criteria from 1 and
+promotes the previously-implicit no-transmit invariant to an explicit
+requirement. For traceability with #153's body and any PR that cites the old
+numbers:
+
+| previous-003 | independent spec | Requirement |
+|---|---|---|
+| FR-007 | FR-001 | listen for `WHO_I_AM` while Connected, present each panel |
+| FR-008 | FR-002 | identify by UUID, coalesce — no duplicates |
+| FR-009 | FR-003 | decode the variant-identity byte |
+| FR-010 | FR-004 | show + update the last-seen timestamp in place |
+| FR-011 | FR-005 | prune after 15 s |
+| FR-012 | FR-006 | empty-state explanation |
+| FR-013 | FR-007 | silently discard a malformed frame |
+| FR-015' | FR-008 | clear the list when the link leaves Connected |
+| (spec-002 FR-014 / SC-007, implicit) | FR-009 / SC-003 | no CAN transmit — now explicit |
+| SC-003 | SC-001 | discovery within 6 s |
+| SC-004 | SC-002 | in-place coalesce, no duplicate row |
