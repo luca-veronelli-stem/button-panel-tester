@@ -308,9 +308,10 @@ type MainWindow(services: IServiceProvider) as this =
         renderCombined <- fun () ->
             // Dictionary row (top) — placeholder until SourceChanged
             // fires for the first time. CAN row (middle) — always
-            // present, starts in `Initializing`. PanelsOnBus row is
-            // reserved for US2 (PR-D) and not rendered yet; the
-            // vertical stack leaves room for it as a third child.
+            // present, starts in `Initializing`. The PanelsOnBus row is
+            // reserved for spec-003 and not rendered yet; its data comes
+            // from `IPanelDiscoveryService` (#197), and the vertical
+            // stack leaves room for it as a third child.
             let dictionaryRowView : IView =
                 DictionaryStatusRow.dictionaryView
                     cacheFilePath
