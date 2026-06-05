@@ -19,8 +19,8 @@ type private Subscription(remove: unit -> unit) =
 
 /// Hand-rolled hot `IObservable<'T>` subject backed by a
 /// `ConcurrentBag` of observers, per `research.md` R4. Used for
-/// `LinkStateChanged` and `PanelsOnBusChanged` so the service does
-/// not take a `System.Reactive` dependency. Hot — observers added
+/// `LinkStateChanged` so the service does not take a
+/// `System.Reactive` dependency. Hot — observers added
 /// after a fan-out do NOT replay it.
 type private SubjectFanOut<'T>() =
     let observers = ConcurrentBag<IObserver<'T>>()
@@ -61,12 +61,6 @@ type private SubjectFanOut<'T>() =
 /// to "unlikely to help". Genuine faults (bus-off, hardware errors)
 /// still escalate.
 ///
-/// The `PanelsOnBus` / `PanelsOnBusChanged` surface is stubbed: an
-/// empty map and a never-firing observable. The observation pipeline
-/// + WHO_I_AM ingest land in PR-D (T046–T047) once `ICanFrameStream`
-/// is wired up; until then the dictionary row + CAN status row are
-/// observable on their own.
-///
 /// Constructor parameters:
 ///   - `link`   — `ICanLink` port; `PcanCanLink` in production
 ///                (T035), `InMemoryCanLink` in tests.
@@ -85,7 +79,6 @@ type private SubjectFanOut<'T>() =
 type CanLinkService(link: ICanLink, clock: IClock, logger: ILogger<CanLinkService>) =
 
     let stateSubject = SubjectFanOut<CanLinkState>()
-    let panelsSubject = SubjectFanOut<PanelsOnBus>()
 
     /// `quickstart.md` pins spec-002 to 250 kbps. Encoded here so the
     /// composition root does not need to thread the bitrate through.
@@ -220,11 +213,7 @@ type CanLinkService(link: ICanLink, clock: IClock, logger: ILogger<CanLinkServic
         member _.CurrentState =
             lock stateLock (fun () -> currentState)
 
-        member _.PanelsOnBus = PanelsOnBus.empty
-
         member _.LinkStateChanged = stateSubject :> IObservable<CanLinkState>
-
-        member _.PanelsOnBusChanged = panelsSubject :> IObservable<PanelsOnBus>
 
         member _.InitializeAsync(cancellationToken: CancellationToken) =
             logger.LogInformation(
