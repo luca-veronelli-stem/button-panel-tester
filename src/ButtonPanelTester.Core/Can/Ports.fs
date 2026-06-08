@@ -4,10 +4,10 @@ open System
 open System.Threading
 open System.Threading.Tasks
 
-/// Single raw frame received off the CAN bus, per `specs/002-can-link-
-/// and-panel-discovery/contracts/can-frame-stream-port.md` §Port
+/// Single raw frame received off the CAN bus, per
+/// `specs/003-panel-discovery/contracts/can-frame-stream-port.md` §Port
 /// definition. The `[<Struct>]` attribute keeps the value-type carrier
-/// allocation-free on the receive thread per `research.md` R7; the
+/// allocation-free on the receive thread per `research.md` R3; the
 /// `Payload` is a `ReadOnlyMemory<byte>` over the vendored stack's
 /// reassembled buffer (valid only for the duration of the `OnNext`
 /// callback — see the contract's Threading section).
@@ -73,7 +73,7 @@ type ICanLink =
 /// Frames received while the link is down are dropped silently (no
 /// buffering across reconnects, per the contract's Adapter section).
 /// All filtering on `CanId` / `Payload.Length` happens in the service
-/// layer (`CanLinkService`); the port is a generic receive surface
+/// layer (`PanelDiscoveryService`); the port is a generic receive surface
 /// that later specs reuse for transmit-side responses.
 type ICanFrameStream =
     /// Hot observable of every raw CAN frame received while the link

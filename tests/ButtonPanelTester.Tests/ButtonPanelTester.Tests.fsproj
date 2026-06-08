@@ -23,6 +23,7 @@
         <Compile Include="Property/Can/PanelsOnBusProperties.fs" />
         <Compile Include="Property/Can/PruningProperties.fs" />
         <Compile Include="Integration/Can/CanLinkServiceLifecycleTests.fs" />
+        <Compile Include="Integration/Can/DiscoveryE2ETests.fs" />
         <Compile Include="Integration/Can/RecoverableToFatalEscalationTests.fs" />
         <Compile Include="Integration/Can/DictionaryIndependenceTests.fs" />
         <Compile Include="Integration/BootOrderTests.fs" />

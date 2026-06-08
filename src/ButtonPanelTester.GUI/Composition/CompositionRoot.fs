@@ -283,11 +283,18 @@ module CompositionRoot =
                 let logger = sp.GetRequiredService<ILogger<CanLinkService>>()
                 CanLinkService(link, clock, logger) :> ICanLinkService)
             // Panel discovery (#197) — split out of CanLinkService so
-            // spec-003 can own the discovery pipeline as an independent
-            // spec. Stub today: empty map + never-firing observable, so
-            // the constructor is parameterless. The forward discovery →
-            // lifecycle dependencies (ICanLinkService, ICanFrameStream)
-            // arrive when the spec-003 pipeline lands; nothing renders
-            // the surface yet (the third UI slot is spec-003 too).
-            .AddSingleton<IPanelDiscoveryService>(fun _ ->
-                PanelDiscoveryService() :> IPanelDiscoveryService)
+            // spec-003 owns the discovery pipeline as an independent
+            // spec. The live WHO_I_AM ingest pipeline (filter → parse →
+            // coalesce → publish) is wired here: the service subscribes
+            // to `ICanFrameStream` and gates on `ICanLinkService`'s
+            // Connected state. `ICanFrameStream` is still the
+            // `NoOpCanFrameStream` placeholder above until Phase C/T018
+            // swaps in `PcanCanFrameStream`, so no frames flow yet at
+            // runtime; nothing renders the surface either (the third UI
+            // slot is spec-003 too). The three dependencies are already
+            // bound earlier in this graph.
+            .AddSingleton<IPanelDiscoveryService>(fun sp ->
+                let frameStream = sp.GetRequiredService<ICanFrameStream>()
+                let link = sp.GetRequiredService<ICanLinkService>()
+                let clock = sp.GetRequiredService<IClock>()
+                PanelDiscoveryService(frameStream, link, clock) :> IPanelDiscoveryService)
