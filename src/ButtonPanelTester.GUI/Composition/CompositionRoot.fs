@@ -297,4 +297,4 @@ module CompositionRoot =
                 let frameStream = sp.GetRequiredService<ICanFrameStream>()
                 let link = sp.GetRequiredService<ICanLinkService>()
                 let clock = sp.GetRequiredService<IClock>()
-                PanelDiscoveryService(frameStream, link, clock) :> IPanelDiscoveryService)
+                new PanelDiscoveryService(frameStream, link, clock) :> IPanelDiscoveryService)

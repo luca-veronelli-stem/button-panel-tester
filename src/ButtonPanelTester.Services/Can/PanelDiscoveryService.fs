@@ -1,6 +1,7 @@
 namespace Stem.ButtonPanelTester.Services.Can
 
 open System
+open System.Threading
 open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Core.Dictionary // IClock
 
@@ -55,11 +56,10 @@ module private DiscoveryObservable =
 /// publish the new snapshot. Every other frame, a parse failure, or a
 /// non-Connected link is a silent drop (FR-007).
 ///
-/// This slice (B1) wires ingest only. The 1 s prune timer (FR-005,
-/// B2/T013), the link-loss clear (FR-008, B3/T015), and the full
-/// `IDisposable` teardown arrive in later slices — the frame
-/// subscription is held in a `let` binding for now (mirrors
-/// `CanLinkService`'s `_linkSubscription`).
+/// B2 (this slice) adds the 1 s prune timer (FR-005): each tick drops rows older
+/// than the 15 s TTL and republishes only when the row count changed. The service
+/// now owns `IDisposable` (stops + disposes the timer and detaches the frame
+/// subscription). The link-loss clear (FR-008, B3/T015) is the remaining pipeline slice.
 type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, clock: IClock) =
 
     let panelsSubject = DiscoveryObservable.SubjectFanOut<PanelsOnBus>()
@@ -86,15 +86,51 @@ type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, 
             | None -> ()
         | _ -> ()
 
+    /// One prune pass: drop rows older than the 15 s TTL (FR-005) as of `clock.UtcNow()`,
+    /// then publish the new snapshot ONLY when the row count changed (idle-render
+    /// suppression, backed by `prune_idempotent`). Map mutates under `panelsLock`; the
+    /// publish fires OUTSIDE it (same discipline as `onFrame`).
+    let pruneOnce () =
+        let changed =
+            lock panelsLock (fun () ->
+                let pruned = Pruning.prune (TimeSpan.FromSeconds 15.0) (clock.UtcNow()) panelsOnBus
+                if Map.count pruned <> Map.count panelsOnBus then
+                    panelsOnBus <- pruned
+                    Some pruned
+                else
+                    None)
+
+        changed |> Option.iter (fun snapshot -> panelsSubject.OnNext snapshot)
+
     /// Held so the frame subscription outlives the constructor (mirrors
-    /// `CanLinkService`'s `_linkSubscription`). The full `IDisposable`
-    /// teardown — and the prune timer (B2/T013) + link-loss clear
-    /// (B3/T015) — arrive in later slices; this slice wires ingest only.
+    /// `CanLinkService`'s `_linkSubscription`); detached in `Dispose`
+    /// alongside the prune timer. The link-loss clear (FR-008, B3/T015)
+    /// is the remaining pipeline slice.
     let _frameSubscription: IDisposable =
         frameStream.RawFramesReceived |> Observable.subscribe onFrame
+
+    /// 1 s prune timer (research R4). Created + started in the ctor; each tick runs
+    /// `pruneOnce`. A tick over the empty map is a no-op, so it self-quiesces when no
+    /// panels are present. Stopped + disposed in `Dispose`.
+    let pruneTimer =
+        new Timer(
+            TimerCallback(fun _ -> pruneOnce ()),
+            null,
+            TimeSpan.FromSeconds 1.0,
+            TimeSpan.FromSeconds 1.0)
+
+    /// Run one prune pass synchronously on the calling thread — the exact body the 1 s
+    /// timer invokes. Exposed so `PruningE2ETests` can step pruning deterministically
+    /// under `FrozenClock` (a real `Timer` fires on wall-clock and cannot be stepped by it).
+    member _.RunPruneTick() = pruneOnce ()
 
     interface IPanelDiscoveryService with
 
         member _.PanelsOnBus = lock panelsLock (fun () -> panelsOnBus)
 
         member _.PanelsOnBusChanged = panelsSubject :> IObservable<PanelsOnBus>
+
+    interface IDisposable with
+        member _.Dispose() =
+            pruneTimer.Dispose()
+            _frameSubscription.Dispose()
