@@ -91,7 +91,7 @@ let Ingest_ConnectedSingleBroadcast_AddsOneRowWithDecodedVariant () =
     let stream = InMemoryCanFrameStream(Seq.empty)
 
     let svc =
-        PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
 
     let changes = collect svc
 
@@ -112,7 +112,7 @@ let Ingest_SameUuidReBroadcastAfterAdvance_CoalescesAndAdvancesLastSeen () =
     let stream = InMemoryCanFrameStream(Seq.empty)
 
     let svc =
-        PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
 
     let uuid = (0x1u, 0x2u, 0x3u)
     stream.Emit(whoIam broadcastId uuid)
@@ -133,7 +133,7 @@ let Ingest_TwoDistinctUuids_AddsTwoRows () =
     let stream = InMemoryCanFrameStream(Seq.empty)
 
     let svc =
-        PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
 
     stream.Emit(whoIam broadcastId (0x1u, 0x2u, 0x3u))
     stream.Emit(whoIam broadcastId (0x4u, 0x5u, 0x6u))
@@ -149,7 +149,7 @@ let Ingest_BroadcastWrongLengthPayload_DropsSilentlyKeepsLinkConnected () =
     let stream = InMemoryCanFrameStream(Seq.empty)
 
     let svc =
-        PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
 
     let malformed : RawCanFrame =
         { CanId = broadcastId
@@ -174,7 +174,7 @@ let Ingest_ValidFrameOnNonBroadcastId_Ignored () =
     let stream = InMemoryCanFrameStream(Seq.empty)
 
     let svc =
-        PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
 
     stream.Emit(whoIam 0x123u (0x1u, 0x2u, 0x3u))
 
@@ -189,7 +189,7 @@ let Ingest_LinkNotConnected_DropsBroadcastSilently () =
     let stream = InMemoryCanFrameStream(Seq.empty)
 
     let svc =
-        PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
 
     stream.Emit(whoIam broadcastId (0x1u, 0x2u, 0x3u))
 
@@ -204,7 +204,7 @@ let Ingest_ConnectedSingleBroadcast_PublishesOnceWithinLatencyBudget () =
     let stream = InMemoryCanFrameStream(Seq.empty)
 
     let svc =
-        PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
 
     let changes = collect svc
 
