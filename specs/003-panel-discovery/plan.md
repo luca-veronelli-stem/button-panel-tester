@@ -301,13 +301,14 @@ Ordered, each a bisect-safe vertical slice (`bisect-safe` + `vertical-commits`).
 The working branch is `docs/153-spec-003-respec` (issue-numbered), which does not
 match speckit's branch-prefix → spec-dir convention. `.specify/feature.json`
 (`{"feature_directory": "specs/003-panel-discovery"}`) pins the feature dir so
-`get_feature_paths` resolves correctly and skips branch-name validation. On this
-machine `jq` is absent and `python3` is the non-functional Windows Store stub, so
-the JSON parser in `common.sh` returns empty and the grep/sed fallback is
-shadowed; until that is fixed, invoke the speckit bash scripts with
-`SPECIFY_FEATURE_DIRECTORY=specs/003-panel-discovery` (env var, priority 1) to
-force correct resolution. `feature.json` remains the durable cross-machine fix
-(it works wherever `jq` or a real `python3` is on PATH).
+`get_feature_paths` resolves correctly and skips branch-name validation.
+
+`jq` (1.8.1) is installed on this machine, so `common.sh` parses `feature.json`
+and the speckit bash scripts resolve `specs/003-panel-discovery` directly — no
+env var needed. (Historical note: `python3` here is the non-functional Windows
+Store stub, which shadows the parser's grep/sed fallback; `jq` is first in the
+parser order, so this no longer matters. If `jq` is ever unavailable, override
+with `SPECIFY_FEATURE_DIRECTORY=specs/003-panel-discovery`.)
 
 ## Status
 

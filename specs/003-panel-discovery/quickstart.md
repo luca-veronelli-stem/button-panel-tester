@@ -39,11 +39,10 @@ dotnet test tests\ButtonPanelTester.Tests.Windows\ButtonPanelTester.Tests.Window
     --filter "Category!=Hardware"
 ```
 
-> **Speckit tooling on this machine.** `jq` is absent and `python3` is the
-> Windows Store stub, so the speckit bash scripts can't parse
-> `.specify/feature.json`. Invoke them with the env-var override:
-> `SPECIFY_FEATURE_DIRECTORY=specs/003-panel-discovery bash .specify/scripts/bash/setup-tasks.sh --json`.
-> See [plan.md](./plan.md) §Tooling note.
+> **Speckit tooling.** `jq` (1.8.1) is installed, so the speckit bash scripts
+> parse `.specify/feature.json` and resolve `specs/003-panel-discovery` directly
+> — run e.g. `bash .specify/scripts/bash/setup-tasks.sh --json` with no env-var
+> override. See [plan.md](./plan.md) §Tooling note.
 
 ## Running the tool against a real panel
 
