@@ -1,8 +1,8 @@
 /-
 T031 — Lean Phase-2 module for `Pruning`.
 
-Mechanises the pruning-correctness invariant of `specs/002-can-link-and-panel-
-discovery/data-model.md` §5.4 / FR-011: post-prune membership iff
+Mechanises the pruning-correctness invariant of `specs/003-panel-discovery/
+data-model.md` §4 / FR-005: post-prune membership iff
 `now - lastSeen ≤ ttl`. The F# side carries `ttl` as a `TimeSpan` and uses
 `DateTimeOffset` subtraction; the Lean model carries both as `Nat`s
 (milliseconds since epoch is a reasonable interpretation, but the proof
@@ -46,7 +46,7 @@ def prune (ttl now : Nat) (m : PanelsOnBus) : PanelsOnBus :=
         if now ≤ observation.lastSeen + ttl then some observation else none
     | none => none
 
-/-! ## prune_partitions_by_threshold (data-model.md §5.4 / FR-011)
+/-! ## prune_partitions_by_threshold (data-model.md §4 / FR-005)
 
 Post-prune membership iff `now ≤ lastSeen + ttl`. The `↔` form makes
 the partition explicit — kept rows are exactly the ones satisfying the

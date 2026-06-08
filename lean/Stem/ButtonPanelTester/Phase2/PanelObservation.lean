@@ -1,8 +1,8 @@
 /-
 T029 — Lean Phase-2 module for `PanelObservation` (variant decoding side).
 
-Mechanises the totality of `decodeVariant`, per `specs/002-can-link-and-panel-
-discovery/data-model.md` §3.2 (FR-009): for every `UInt8`, `decodeVariant`
+Mechanises the totality of `decodeVariant`, per `specs/003-panel-discovery/
+data-model.md` §2 (FR-003): for every `UInt8`, `decodeVariant`
 produces exactly one `VariantIdentity` value, and that value falls into one
 of the six classifications
 `{edenXpClass, optimusXpClass, r3LXpClass, edenBs8Class, virginClass,
@@ -81,7 +81,7 @@ Six-way classification of `VariantIdentity`, mirroring the F# private
 `tests/.../Property/Can/VariantDecoderProperties.fs` (T023). The four
 `marketing` arms are flattened into their per-variant classes so the
 closure statement matches what the GUI must render distinctly per
-FR-009.
+FR-003.
 -/
 
 inductive VariantClass where
@@ -110,7 +110,7 @@ def classify (v : VariantIdentity) : VariantClass :=
 
 end VariantIdentity
 
-/-! ## variant_decoding_total (data-model.md §3.2 / FR-009)
+/-! ## variant_decoding_total (data-model.md §2 / FR-003)
 
 Totality: for every `Nat`, `decodeVariant` produces a `VariantIdentity`
 that classifies as one of the six declared shapes. The function's mere
@@ -118,7 +118,7 @@ existence already proves "decodeVariant raw is some VariantIdentity"
 (Lean's exhaustiveness checker rejects a non-total `match` at definition
 time); the theorem upgrades this to "and that VariantIdentity falls into
 one of the six wildcard-free classifications", which is the actual
-contract FR-009 expects.
+contract FR-003 expects.
 
 Proof: `cases h : classify (decodeVariant raw)` produces six sub-goals,
 one per `VariantClass` constructor; `simp` discharges each by reducing
