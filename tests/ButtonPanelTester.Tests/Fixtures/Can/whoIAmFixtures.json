@@ -1,72 +1,83 @@
 {
-    "$schema-description": "WHO_I_AM fixture set per specs/003-panel-discovery/contracts/who-i-am-wire-format.md §Fixtures. Each entry: name, hex-string payload, expected parse outcome, expected VariantIdentity (when parse succeeds). Loaded by Tests/Unit/Can/WhoIAmFrameFixtureTests.fs (T033). Payload is 15 bytes for well-formed entries; the two malformed entries are intentionally off-spec.",
+    "$schema-description": "WHO_I_AM fixture set per specs/003-panel-discovery/contracts/who-i-am-wire-format.md §Fixtures, corrected 15-byte layout: [0] machineType u8, [1..2] fwType u16 big-endian, [3..6]/[7..10]/[11..14] three big-endian u32 UUID words, no padding, length-only reject (FR-007). Each entry carries name, 15-byte hex payload (the malformed entry is intentionally 14 bytes), expected parse outcome, expected machineType/fwType/three-u32-UUID/VariantIdentity, and a provenance `source`. Loaded by Tests/Unit/Can/WhoIAmFrameFixtureTests.fs (T006).",
     "fixtures": [
         {
-            "name": "virgin_panel_uuid_AABBCC",
-            "payload": "FF04000000AA000000BB000000CC00",
+            "name": "virgin_panel_12v",
+            "source": "Real bench capture (PCAN-View v6, 2026-06-08): 15-byte WHO_I_AM reassembled from the chunked CAN-ID 0x1FFFFFFF frames in virgin_whoami.trc (raw trace archived under specs/003-panel-discovery/context/captures/). The load-bearing wire-format regression anchor.",
+            "payload": "FF0004177C126D7308748F16092104",
             "expectsParse": true,
             "expectedMachineType": 255,
             "expectedFwType": 4,
-            "expectedUuid": [170, 187, 204],
+            "expectedUuid": [394007149, 1929933967, 369697028],
             "expectedVariantIdentity": "Virgin"
         },
         {
-            "name": "eden_xp_uuid_112233",
-            "payload": "0304000000110000002200000033FF",
+            "name": "eden_xp",
+            "source": "Synthetic — verified layout, real machineType constant 0x03, synthetic UUID. No real EDEN-XP WHO_I_AM exists (baptized panels do not broadcast WHO_I_AM).",
+            "payload": "030004A1A1A1A1B1B1B1B1C1C1C1C1",
             "expectsParse": true,
             "expectedMachineType": 3,
             "expectedFwType": 4,
-            "expectedUuid": [17, 34, 51],
+            "expectedUuid": [2711724449, 2981212593, 3250700737],
             "expectedVariantIdentity": "EdenXp"
         },
         {
-            "name": "optimus_xp_uuid_445566",
-            "payload": "0A0400000044000000550000006600",
+            "name": "optimus_xp",
+            "source": "Synthetic — verified layout, real machineType constant 0x0A, synthetic UUID.",
+            "payload": "0A0004A2A2A2A2B2B2B2B2C2C2C2C2",
             "expectsParse": true,
             "expectedMachineType": 10,
             "expectedFwType": 4,
-            "expectedUuid": [68, 85, 102],
+            "expectedUuid": [2728567458, 2998055602, 3267543746],
             "expectedVariantIdentity": "OptimusXp"
         },
         {
-            "name": "r3l_xp_uuid_778899",
-            "payload": "0B0400000077000000880000009900",
+            "name": "r3l_xp",
+            "source": "Synthetic — verified layout, real machineType constant 0x0B, synthetic UUID.",
+            "payload": "0B0004A3A3A3A3B3B3B3B3C3C3C3C3",
             "expectsParse": true,
             "expectedMachineType": 11,
             "expectedFwType": 4,
-            "expectedUuid": [119, 136, 153],
+            "expectedUuid": [2745410467, 3014898611, 3284386755],
             "expectedVariantIdentity": "R3LXp"
         },
         {
-            "name": "eden_bs8_uuid_AABBCC",
-            "payload": "0C04000000AA000000BB000000CC00",
+            "name": "eden_bs8",
+            "source": "Synthetic — verified layout, real machineType constant 0x0C, synthetic UUID.",
+            "payload": "0C0004A4A4A4A4B4B4B4B4C4C4C4C4",
             "expectsParse": true,
             "expectedMachineType": 12,
             "expectedFwType": 4,
-            "expectedUuid": [170, 187, 204],
+            "expectedUuid": [2762253476, 3031741620, 3301229764],
             "expectedVariantIdentity": "EdenBs8"
         },
         {
-            "name": "unknown_machine_type_uuid_DDEEFF",
-            "payload": "7704000000DD000000EE000000FF00",
+            "name": "virgin_panel_24v",
+            "source": "Synthetic — exercises the 24V fwType 0x000F path (machineType 0xFF virgin), synthetic UUID.",
+            "payload": "FF000FD5D5D5D5E5E5E5E5F5F5F5F5",
             "expectsParse": true,
-            "expectedMachineType": 119,
+            "expectedMachineType": 255,
+            "expectedFwType": 15,
+            "expectedUuid": [3587560917, 3857049061, 4126537205],
+            "expectedVariantIdentity": "Virgin"
+        },
+        {
+            "name": "unknown_toplift_a",
+            "source": "Synthetic — TopLift-A machineType 0x08, out of the 4-machine scope, decodes to Unknown 0x08. Synthetic UUID.",
+            "payload": "080004A6A6A6A6B6B6B6B6C6C6C6C6",
+            "expectsParse": true,
+            "expectedMachineType": 8,
             "expectedFwType": 4,
-            "expectedUuid": [221, 238, 255],
+            "expectedUuid": [2795939494, 3065427638, 3334915782],
             "expectedVariantIdentity": "Unknown",
-            "expectedVariantRawByte": 119
+            "expectedVariantRawByte": 8
         },
         {
             "name": "malformed_too_short_14b",
-            "payload": "FF04000000AA000000BB000000CC",
+            "source": "Synthetic — virgin_panel_12v minus its last byte (14 bytes). Length-only reject.",
+            "payload": "FF0004177C126D7308748F160921",
             "expectsParse": false,
-            "reason": "Length is 14 bytes — wire contract requires exactly 15 (FR-013 silent drop)."
-        },
-        {
-            "name": "malformed_wrong_fwtype",
-            "payload": "0307000000110000002200000033FF",
-            "expectsParse": false,
-            "reason": "fwType is 0x07 — wire contract requires 0x04 for button panels (FR-013 silent drop)."
+            "reason": "Length is 14 bytes — wire contract requires exactly 15 (FR-007 silent drop)."
         }
     ]
 }

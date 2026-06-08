@@ -6,7 +6,7 @@ open System.Text.Json
 open Xunit
 open Stem.ButtonPanelTester.Core.Can
 
-/// Path of the fixture file shipped by T021 at
+/// Path of the fixture file shipped by T004 at
 /// `tests/ButtonPanelTester.Tests/Fixtures/Can/whoIAmFixtures.json`,
 /// copied to the test bin directory by the project's
 /// `<Content CopyToOutputDirectory="PreserveNewest" />` item.
@@ -24,7 +24,7 @@ type private Fixture =
       Payload: string
       ExpectsParse: bool
       ExpectedMachineType: byte option
-      ExpectedFwType: byte option
+      ExpectedFwType: uint16 option
       ExpectedUuid: uint32[] option
       ExpectedVariantIdentity: string option
       ExpectedVariantRawByte: byte option }
@@ -66,7 +66,7 @@ let private loadFixture (name: string) : Fixture =
       Payload = requireString element "payload"
       ExpectsParse = element.GetProperty("expectsParse").GetBoolean()
       ExpectedMachineType = tryGet element "expectedMachineType" |> Option.map (fun v -> v.GetByte())
-      ExpectedFwType = tryGet element "expectedFwType" |> Option.map (fun v -> v.GetByte())
+      ExpectedFwType = tryGet element "expectedFwType" |> Option.map (fun v -> v.GetUInt16())
       ExpectedUuid =
         tryGet element "expectedUuid"
         |> Option.map (fun v -> v.EnumerateArray() |> Seq.map (fun e -> e.GetUInt32()) |> Array.ofSeq)
@@ -118,38 +118,38 @@ let private assertParseMatches (fixtureName: string) =
         match expectedIdentityFor fixture with
         | Some expected -> Assert.Equal(expected, VariantDecoder.decode frame.MachineType)
         | None -> ()
-    | false, None -> () // expected silent drop per FR-013
+    | false, None -> () // expected silent drop per FR-007
     | true, None -> Assert.Fail $"Fixture {fixtureName}: expected parse Some, got None"
     | false, Some _ -> Assert.Fail $"Fixture {fixtureName}: expected parse None, got Some"
 
 [<Fact>]
-let ``Fixture virgin_panel_uuid_AABBCC parses with machineType 0xFF`` () =
-    assertParseMatches "virgin_panel_uuid_AABBCC"
+let ``Fixture virgin_panel_12v parses the real bench capture`` () =
+    assertParseMatches "virgin_panel_12v"
 
 [<Fact>]
-let ``Fixture eden_xp_uuid_112233 parses with machineType 0x03`` () =
-    assertParseMatches "eden_xp_uuid_112233"
+let ``Fixture eden_xp parses with machineType 0x03`` () =
+    assertParseMatches "eden_xp"
 
 [<Fact>]
-let ``Fixture optimus_xp_uuid_445566 parses with machineType 0x0A`` () =
-    assertParseMatches "optimus_xp_uuid_445566"
+let ``Fixture optimus_xp parses with machineType 0x0A`` () =
+    assertParseMatches "optimus_xp"
 
 [<Fact>]
-let ``Fixture r3l_xp_uuid_778899 parses with machineType 0x0B`` () =
-    assertParseMatches "r3l_xp_uuid_778899"
+let ``Fixture r3l_xp parses with machineType 0x0B`` () =
+    assertParseMatches "r3l_xp"
 
 [<Fact>]
-let ``Fixture eden_bs8_uuid_AABBCC parses with machineType 0x0C`` () =
-    assertParseMatches "eden_bs8_uuid_AABBCC"
+let ``Fixture eden_bs8 parses with machineType 0x0C`` () =
+    assertParseMatches "eden_bs8"
 
 [<Fact>]
-let ``Fixture unknown_machine_type_uuid_DDEEFF parses with machineType 0x77`` () =
-    assertParseMatches "unknown_machine_type_uuid_DDEEFF"
+let ``Fixture virgin_panel_24v round-trips the fwType 0x000F path`` () =
+    assertParseMatches "virgin_panel_24v"
+
+[<Fact>]
+let ``Fixture unknown_toplift_a decodes to Unknown 0x08`` () =
+    assertParseMatches "unknown_toplift_a"
 
 [<Fact>]
 let ``Fixture malformed_too_short_14b silently drops on length mismatch`` () =
     assertParseMatches "malformed_too_short_14b"
-
-[<Fact>]
-let ``Fixture malformed_wrong_fwtype silently drops on fwType mismatch`` () =
-    assertParseMatches "malformed_wrong_fwtype"
