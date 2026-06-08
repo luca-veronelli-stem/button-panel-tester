@@ -36,6 +36,11 @@
 # POSIX scripts (must be LF for /bin/sh shebangs)
 *.sh   text eol=lf
 
+# CAN bus traces (PCAN-View .trc) — archived bench captures kept verbatim.
+# The vendor format puts trailing whitespace on every data line; keep them as
+# diffable LF text but exclude them from the whitespace gate (git diff --check).
+*.trc  text eol=lf -whitespace
+
 # Binary
 *.png binary
 *.jpg binary
