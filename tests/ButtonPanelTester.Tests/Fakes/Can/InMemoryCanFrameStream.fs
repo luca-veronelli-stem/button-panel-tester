@@ -44,6 +44,13 @@ type InMemoryCanFrameStream(script: seq<RawCanFrame * TimeSpan>) =
                     observer.OnNext frame
         }
 
+    /// Synchronously push a single frame to every current subscriber, on the
+    /// calling thread. Deterministic alternative to `Start` for tests that drive
+    /// frames one at a time and advance `FrozenClock` between emissions.
+    member _.Emit(frame: RawCanFrame) =
+        for observer in observers do
+            observer.OnNext frame
+
     interface ICanFrameStream with
         member _.RawFramesReceived =
             { new IObservable<RawCanFrame> with
