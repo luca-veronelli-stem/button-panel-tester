@@ -5,18 +5,20 @@ open System.Buffers.Binary
 
 /// Three-word UUID identifying a button panel, per
 /// `specs/003-panel-discovery/contracts/who-i-am-wire-format.md`
-/// §Payload table (offsets 2/6/10, each a big-endian `UInt32`). The DU
+/// §Payload table (offsets 3/7/11, each a big-endian `UInt32`). The DU
 /// is a single-case wrapper so call sites cannot accidentally pass an
 /// arbitrary `(uint32, uint32, uint32)` tuple where a `PanelUuid` is
 /// expected.
 type PanelUuid = PanelUuid of uuid0: uint32 * uuid1: uint32 * uuid2: uint32
 
-/// Firmware-type byte at offset 1 of a WHO_I_AM payload, per
-/// `who-i-am-wire-format.md` §Payload table. Always `0x04` for button
-/// panels (per the audit in `docs/Context/bpt-rollout/CORRECTIONS.md`
-/// §C1); the single-case wrapper keeps the raw byte distinguishable
-/// from other byte fields at type level.
-type FwType = FwType of byte
+/// Firmware/hardware-variant field at offsets 1-2 of a WHO_I_AM
+/// payload, per `who-i-am-wire-format.md` §Payload table: the panel
+/// hardware variant as a big-endian `UInt16` (`0x0004` = 12V,
+/// `0x000F` = 24V). This is informational metadata only — it NEVER
+/// gates acceptance (the FR-007 reject is length-only). The single-
+/// case wrapper keeps the value distinguishable from other fields at
+/// type level.
+type FwType = FwType of uint16
 
 /// Machine-type byte at offset 0 of a WHO_I_AM payload, per
 /// `who-i-am-wire-format.md` §Payload table. Carries the raw value
@@ -27,16 +29,15 @@ type FwType = FwType of byte
 type MachineTypeByte = MachineTypeByte of byte
 
 /// Parsed WHO_I_AM payload, per `who-i-am-wire-format.md` §Payload
-/// table. The 15-byte wire layout is:
-///   offset 0:    `machineType` (UInt8)
-///   offset 1:    `fwType` (UInt8 — always `0x04` for button panels)
-///   offsets 2..: three big-endian `UInt32` UUID words
-///   offset 14:   padding byte (ignored on receive)
+/// table. The 15-byte wire layout is fully packed (no padding):
+///   offset 0:       `machineType` (UInt8)
+///   offsets 1-2:    `fwType` (big-endian UInt16 — hardware variant)
+///   offsets 3/7/11: three big-endian `UInt32` UUID words
+/// (offset 14 is the low byte of the third UUID word, not padding.)
 ///
 /// Round-trips with `encode`: `parse (encode f) = Some f` for every
-/// well-formed `WhoIAmFrame`. The Lean theorem
-/// `parse_encode_roundtrip` in `Phase2/WhoIAmFrame.lean` (T028)
-/// mechanises this invariant.
+/// `WhoIAmFrame`. The Lean theorem `parse_encode_roundtrip` in
+/// `Phase2/WhoIAmFrame.lean` (T002) mechanises this invariant.
 type WhoIAmFrame =
     { MachineType: MachineTypeByte
       FwType: FwType
@@ -46,57 +47,47 @@ module WhoIAmFrame =
 
     /// Wire layout is fixed at 15 bytes per
     /// `who-i-am-wire-format.md` §Payload. Any other length is a
-    /// silent drop (FR-013) — the parser returns `None`.
+    /// silent drop (FR-007) — the parser returns `None`.
     let private wireLength = 15
-
-    /// All button-panel WHO_I_AM frames carry `fwType = 0x04` per the
-    /// audit in `CORRECTIONS.md` §C1. The parser rejects every other
-    /// value as a silent drop (FR-013) because an `fwType` mismatch
-    /// implies a different device class on the bus, which is out of
-    /// scope for spec-002.
-    let private buttonPanelFwType = 0x04uy
 
     /// Decode a 15-byte WHO_I_AM payload, per
     /// `who-i-am-wire-format.md` §Parse contract:
-    ///   1. length-check (≠ 15 → `None`);
-    ///   2. `fwType` check (≠ `0x04` → `None`);
-    ///   3. accept any `machineType`;
-    ///   4. big-endian UUID reads.
-    /// Both rejection paths return `None` silently per FR-013 — no
+    ///   1. length-check (≠ 15 → `None`) — the ONLY rejection path;
+    ///   2. accept any `machineType`;
+    ///   3. read `fwType` as a big-endian `UInt16` at offsets 1-2
+    ///      (informational — never gates acceptance);
+    ///   4. big-endian UUID reads at offsets 3/7/11.
+    /// The rejection path returns `None` silently per FR-007 — no
     /// throw, no log, no Error-state flip.
     let parse (payload: ReadOnlyMemory<byte>) : WhoIAmFrame option =
         if payload.Length <> wireLength then
             None
         else
             let span = payload.Span
-            let fwType = span[1]
+            let machineType = span[0]
+            let fwType = BinaryPrimitives.ReadUInt16BigEndian(span.Slice(1, 2))
+            let uuid0 = BinaryPrimitives.ReadUInt32BigEndian(span.Slice(3, 4))
+            let uuid1 = BinaryPrimitives.ReadUInt32BigEndian(span.Slice(7, 4))
+            let uuid2 = BinaryPrimitives.ReadUInt32BigEndian(span.Slice(11, 4))
 
-            if fwType <> buttonPanelFwType then
-                None
-            else
-                let machineType = span[0]
-                let uuid0 = BinaryPrimitives.ReadUInt32BigEndian(span.Slice(2, 4))
-                let uuid1 = BinaryPrimitives.ReadUInt32BigEndian(span.Slice(6, 4))
-                let uuid2 = BinaryPrimitives.ReadUInt32BigEndian(span.Slice(10, 4))
-
-                Some
-                    { MachineType = MachineTypeByte machineType
-                      FwType = FwType fwType
-                      Uuid = PanelUuid(uuid0, uuid1, uuid2) }
+            Some
+                { MachineType = MachineTypeByte machineType
+                  FwType = FwType fwType
+                  Uuid = PanelUuid(uuid0, uuid1, uuid2) }
 
     /// Encode a `WhoIAmFrame` to its 15-byte wire payload, per
-    /// `who-i-am-wire-format.md` §Payload. Offset 14 is padding and
-    /// is left zero on emit (the wire contract states the value is
-    /// ignored on receive). Left-inverse of `parse` on well-formed
-    /// frames: `parse (encode f) = Some f`.
+    /// `who-i-am-wire-format.md` §Payload. The layout is fully packed —
+    /// there is no padding; offset 14 is the low byte of the third
+    /// UUID word. Left-inverse of `parse` for every frame:
+    /// `parse (encode f) = Some f`.
     let encode (frame: WhoIAmFrame) : byte[] =
         let buffer = Array.zeroCreate wireLength
         let (MachineTypeByte machineType) = frame.MachineType
         let (FwType fwType) = frame.FwType
         let (PanelUuid(uuid0, uuid1, uuid2)) = frame.Uuid
         buffer[0] <- machineType
-        buffer[1] <- fwType
-        BinaryPrimitives.WriteUInt32BigEndian(Span(buffer, 2, 4), uuid0)
-        BinaryPrimitives.WriteUInt32BigEndian(Span(buffer, 6, 4), uuid1)
-        BinaryPrimitives.WriteUInt32BigEndian(Span(buffer, 10, 4), uuid2)
+        BinaryPrimitives.WriteUInt16BigEndian(Span(buffer, 1, 2), fwType)
+        BinaryPrimitives.WriteUInt32BigEndian(Span(buffer, 3, 4), uuid0)
+        BinaryPrimitives.WriteUInt32BigEndian(Span(buffer, 7, 4), uuid1)
+        BinaryPrimitives.WriteUInt32BigEndian(Span(buffer, 11, 4), uuid2)
         buffer

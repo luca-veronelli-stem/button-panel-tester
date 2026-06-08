@@ -11,7 +11,7 @@ open Stem.ButtonPanelTester.Core.Can
 /// `machineType` bytes.
 let private mkFrame (machineType: byte) (u0: uint32) (u1: uint32) (u2: uint32) : WhoIAmFrame =
     { MachineType = MachineTypeByte machineType
-      FwType = FwType 0x04uy
+      FwType = FwType 0x0004us
       Uuid = PanelUuid(u0, u1, u2) }
 
 /// FsCheck property covering `data-model.md` §5.4 (coalescing): for any

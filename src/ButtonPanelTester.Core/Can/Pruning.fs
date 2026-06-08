@@ -5,8 +5,8 @@ open System
 module Pruning =
 
     /// Remove every row whose `LastSeen` is older than `ttl` from the
-    /// reference instant `now`, per `specs/002-can-link-and-panel-
-    /// discovery/data-model.md` §5.2 / FR-011. The kept-iff-`≤ttl`
+    /// reference instant `now`, per `specs/003-panel-discovery/
+    /// data-model.md` §4 / FR-005. The kept-iff-`≤ttl`
     /// boundary is the contract pinned by clarify (spec-002 ttl =
     /// `TimeSpan.FromSeconds 15.0`) and mechanised by the Lean theorem
     /// `prune_partitions_by_threshold` in `Phase2/Pruning.lean` (T031).
