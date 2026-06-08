@@ -30,7 +30,7 @@ type ICanFrameStream =
 ```
 
 The `[<Struct>]` value type keeps the receive thread allocation-free (see
-[../research.md](../research.md) R7); `ReadOnlyMemory<byte>` lets the vendored
+[../research.md](../research.md) R3); `ReadOnlyMemory<byte>` lets the vendored
 stack hand the tester a pooled buffer without a copy at the port boundary.
 
 > **Citation re-point (tracked in the plan).** The `RawCanFrame` doc-comment in
