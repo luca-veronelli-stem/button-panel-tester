@@ -1,8 +1,8 @@
 /-
 T030 — Lean Phase-2 module for `PanelsOnBus`.
 
-Mechanises the coalescing invariant of `specs/002-can-link-and-panel-
-discovery/data-model.md` §5.4 / FR-008: same-UUID observations never
+Mechanises the coalescing invariant of `specs/003-panel-discovery/
+data-model.md` §4 / FR-002: same-UUID observations never
 produce duplicate rows, and the post-observe `LastSeen` is the
 maximum of the prior `LastSeen` and the observation's timestamp.
 
@@ -84,7 +84,7 @@ The empty `PanelsOnBus`. Reads return `none` for every key.
 
 def empty : PanelsOnBus := fun _ => none
 
-/-! ## observe_coalesces_by_uuid (data-model.md §5.4 / FR-008)
+/-! ## observe_coalesces_by_uuid (data-model.md §4 / FR-002)
 
 Coalescing: observing the same UUID twice (with timestamps `t1 < t2`)
 yields a map whose value at that UUID is `some` with `lastSeen = t2`,
