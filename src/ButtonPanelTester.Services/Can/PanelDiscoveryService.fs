@@ -59,7 +59,9 @@ module private DiscoveryObservable =
 /// B2 (this slice) adds the 1 s prune timer (FR-005): each tick drops rows older
 /// than the 15 s TTL and republishes only when the row count changed. The service
 /// now owns `IDisposable` (stops + disposes the timer and detaches the frame
-/// subscription). The link-loss clear (FR-008, B3/T015) is the remaining pipeline slice.
+/// subscription). B3 adds the FR-008 link-loss clear: on leaving `Connected` the held
+/// map is cleared and an empty snapshot published immediately (independent of the
+/// prune TTL). The discovery pipeline is now complete.
 type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, clock: IClock) =
 
     let panelsSubject = DiscoveryObservable.SubjectFanOut<PanelsOnBus>()
@@ -102,10 +104,28 @@ type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, 
 
         changed |> Option.iter (fun snapshot -> panelsSubject.OnNext snapshot)
 
+    /// FR-008 link-loss clear: when the link leaves `Connected` (any non-`Connected`
+    /// emission), drop every row and publish the empty snapshot immediately — so the
+    /// list empties on disconnect rather than after the 15 s prune TTL (SC-004).
+    /// Publish-on-change: a clear over an already-empty map stays silent. Map mutates
+    /// under `panelsLock`; the publish fires OUTSIDE it (same discipline as `onFrame`).
+    let onLinkState (state: CanLinkState) =
+        match state with
+        | Connected _ -> ()
+        | _ ->
+            let cleared =
+                lock panelsLock (fun () ->
+                    if Map.isEmpty panelsOnBus then
+                        None
+                    else
+                        panelsOnBus <- PanelsOnBus.clear panelsOnBus
+                        Some panelsOnBus)
+
+            cleared |> Option.iter (fun snapshot -> panelsSubject.OnNext snapshot)
+
     /// Held so the frame subscription outlives the constructor (mirrors
     /// `CanLinkService`'s `_linkSubscription`); detached in `Dispose`
-    /// alongside the prune timer. The link-loss clear (FR-008, B3/T015)
-    /// is the remaining pipeline slice.
+    /// alongside the prune timer and the link-state subscription.
     let _frameSubscription: IDisposable =
         frameStream.RawFramesReceived |> Observable.subscribe onFrame
 
@@ -118,6 +138,12 @@ type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, 
             null,
             TimeSpan.FromSeconds 1.0,
             TimeSpan.FromSeconds 1.0)
+
+    /// Held so the link-state subscription outlives the ctor; detached in `Dispose`
+    /// alongside the frame subscription and the prune timer. Drives the FR-008 clear
+    /// on every `LinkStateChanged` emission (see `onLinkState`).
+    let _linkSubscription: IDisposable =
+        link.LinkStateChanged |> Observable.subscribe onLinkState
 
     /// Run one prune pass synchronously on the calling thread — the exact body the 1 s
     /// timer invokes. Exposed so `PruningE2ETests` can step pruning deterministically
@@ -134,3 +160,4 @@ type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, 
         member _.Dispose() =
             pruneTimer.Dispose()
             _frameSubscription.Dispose()
+            _linkSubscription.Dispose()
