@@ -20,6 +20,15 @@ mandatory triple: **Lean theorem + FsCheck property + XML-doc citation** (Princi
 The archived `context/previous-003/tasks.md` (pre-correction, pre-#197 service split,
 spec-002 T044+ numbering) is **structural reference only** — not the source of these tasks.
 
+**Re-scope (2026-06-09).** Bench validation after Phase C found `WHO_I_AM` is a *segmented
+multi-frame* SP_APP message (not a single frame) and the vendored receive loop was never
+started — so the CI-green pipeline received nothing on real hardware (plan §Re-scope).
+**Phase R (T033–T040)** corrects this and executes **after Phase C, before Phase D** (its
+higher task numbers are append order, not execution order). Phases A–C are `[X]` (landed);
+two of their tasks are superseded: **T009's raw-frame ingest → re-sourced by T038**, and
+**T017's "one CAN-FD frame" note is wrong** — it is multi-frame *classic* CAN reassembled by
+the Network Layer (see [contracts/who-i-am-wire-format.md](./contracts/who-i-am-wire-format.md)).
+
 ---
 
 ## Format
@@ -121,11 +130,35 @@ each a vertical slice landing impl + its integration test together.
 **Goal**: write the production `ICanFrameStream` adapter and wire the live service into the GUI
 host, replacing the `NoOpCanFrameStream` placeholder and the stub ctor.
 
-- [X] T017 [US1] **[NEW]** Add `src/ButtonPanelTester.Infrastructure/Can/PcanCanFrameStream.fs` (`net10.0-windows`) implementing `ICanFrameStream` per [contracts/can-frame-stream-port.md](./contracts/can-frame-stream-port.md) §Production: ctor takes the **new `CanPortShare` holder** (`Infrastructure/Can/CanPortShare.fs`, also this slice) + `IClock` + `ILogger<PcanCanFrameStream>` — NOT the raw port: the shared-host design keeps `PcanCanLink`'s lazy build (its `portFactory` becomes `share.GetOrBuild`), and `PcanCanFrameStream` attaches to the built port's `PacketReceived` via `share.OnBuilt` (deferred — no eager PEAK build at composition). Translate each `RawPacket` → `RawCanFrame`: `CanId` = `ReadUInt32LittleEndian(payload[0..4])` (`CanPort` carries the arbitration ID as a 4-byte LE in-band prefix), `Payload` = a zero-copy `ReadOnlyMemory<byte>` over `payload[4..]` (the CAN data; the 15-byte WHO_I_AM is one CAN-FD frame), `ReceivedAt` = `RawPacket.Timestamp` (→ UTC `DateTimeOffset`) falling back to `clock.UtcNow()`; allocate nothing per frame beyond the struct; hand-rolled `IObservable<RawCanFrame>` (gated-list, real unsubscribe); `IDisposable` detaches the handler. (FR-001 receive side; FR-009 — receive-only, no send surface)
+- [X] T017 [US1] **[NEW]** Add `src/ButtonPanelTester.Infrastructure/Can/PcanCanFrameStream.fs` (`net10.0-windows`) implementing `ICanFrameStream` per [contracts/can-frame-stream-port.md](./contracts/can-frame-stream-port.md) §Production: ctor takes the **new `CanPortShare` holder** (`Infrastructure/Can/CanPortShare.fs`, also this slice) + `IClock` + `ILogger<PcanCanFrameStream>` — NOT the raw port: the shared-host design keeps `PcanCanLink`'s lazy build (its `portFactory` becomes `share.GetOrBuild`), and `PcanCanFrameStream` attaches to the built port's `PacketReceived` via `share.OnBuilt` (deferred — no eager PEAK build at composition). Translate each `RawPacket` → `RawCanFrame`: `CanId` = `ReadUInt32LittleEndian(payload[0..4])` (`CanPort` carries the arbitration ID as a 4-byte LE in-band prefix), `Payload` = a zero-copy `ReadOnlyMemory<byte>` over `payload[4..]` (the CAN data; **re-scope correction: the original "15-byte WHO_I_AM is one CAN-FD frame" note is WRONG — it is multi-frame *classic* CAN reassembled by the Network Layer; see the Re-scope banner + Phase R + the wire contract**), `ReceivedAt` = `RawPacket.Timestamp` (→ UTC `DateTimeOffset`) falling back to `clock.UtcNow()`; allocate nothing per frame beyond the struct; hand-rolled `IObservable<RawCanFrame>` (gated-list, real unsubscribe); `IDisposable` detaches the handler. (FR-001 receive side; FR-009 — receive-only, no send surface)
 - [X] T018 [US1] **[EXTEND]** Extend `src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs`: register the `CanPortShare` singleton (its `GetOrBuild` becomes `PcanCanLink`'s `portFactory`, so one PEAK handle serves both lifecycle + receive — resolving the PR-C "single consumer of `ICommunicationPort`" comment); bind `ICanFrameStream → new PcanCanFrameStream(share, clock, logger)` (`new` per FS0760 — it is `IDisposable`); delete the private `NoOpCanFrameStream`. The `IPanelDiscoveryService` registration is **already** the 3-arg `PanelDiscoveryService(frameStream, canLinkService, clock)` form from B1/T009, so T018 only redirects which `ICanFrameStream` the graph resolves (NoOp → Pcan). Preserve the lazy-PCANManager construction (no eager P/Invoke before `OpenAsync`). Add a CI composition smoke (`tests/ButtonPanelTester.Tests.Windows/Integration/Can/CompositionRootCanTests.fs`): `CompositionRoot.configure` → `BuildServiceProvider` → resolve `ICanFrameStream` / `ICanLink` / `IPanelDiscoveryService` and assert the resolved `ICanFrameStream` is `PcanCanFrameStream` (not the `NoOp`) — proving the wiring with **no hardware** (the lazy `CanPortShare` build means resolution never P/Invokes `pcanbasic.dll`); dispose the provider via `DisposeAsync` (`PcanCanLink` is `IAsyncDisposable`). RED = the pre-rewire `Assert.IsType<PcanCanFrameStream>` failing against the `NoOp` binding. The real PEAK frame-flow is the bench / Phase-E proof (runnable now — hardware on hand). (FR-001/008/009)
 - [X] T019 [P] [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Unit/Can/PcanCanFrameStreamTests.fs` covering the `RawPacket` → `RawCanFrame` translation (LE-arbId decode, data-slice payload, timestamp/clock fallback). The vendored `PacketReceived` **is** raisable without hardware: drive a file-private fake `ICommunicationPort` (the shipped `FakeCommunicationPort` pattern — `Event<EventHandler<RawPacket>, RawPacket>` + `[<CLIEvent>]` + a `RaisePacket` member) through the `CanPortShare`, raise a synthetic WHO_I_AM packet, assert the translated `RawCanFrame`. No hardware — the live-boundary gap is the real PEAK frame-flow + sharing, which Phase E (T024) proves. (FR-001 receive side)
 
 **Checkpoint C**: the GUI host binds the real PEAK receive adapter and the live discovery service; the app composes + launches (on a host without the PEAK driver it still launches — the link surfaces `Error`, the discovery list stays empty).
+
+---
+
+## Phase R: Receive-path re-scope (User Story 1) — segmented WHO_I_AM transport
+
+**Goal**: the 2026-06-09 bench re-scope (plan §Re-scope). `WHO_I_AM` is a *segmented*
+multi-frame SP_APP message, not a single frame, and the vendored receive loop was never
+started — so the CI-green pipeline produced nothing on real hardware. Fix the read loop,
+reassemble the fragments, and re-source discovery onto the reassembled feed. **Executes after
+Phase C and before Phase D** (this section's position = execution order; T033+ is append order).
+
+**Commit grouping**: R1 = {T033, T034}; R2 = {T035, T036, T037}; R3 = {T038, T039, T040} — each a
+vertical slice landing impl + its tests together.
+
+- [ ] T033 **[CORRECT]** Activate the receive loop in the vendored stack. In `src/ButtonPanelTester.Infrastructure.Protocol/Hardware/IPcanDriver.cs` expose `void StartReading();`; in `CanPort.ConnectAsync` (`Hardware/CanPort.cs`), once the driver reports `Connected`, call `_driver.StartReading()`. Make `PCANManager.StartReading` **idempotent** (the monitor's reconnect branches already call it and it spawns `_readTask = Task.Run(...)` unconditionally — guard so a second call does not start a second read loop). Root cause (bench 2026-06-09): `Initialize` sets `IsConnected` but never starts reading on a clean open, and the monitor only calls `StartReading` on a reconnect, so `PacketReceived` never fires and nothing is received. Reading is spec-003's domain (#151 split); folds in closed #203. (FR-001 receive side; prerequisite for SC-001 on hardware)
+- [ ] T034 **[NEW]** Add a CI regression for T033 (no hardware): drive `CanPort` over a fake `IPcanDriver` (the shipped fake-driver / `FakeCommunicationPort` pattern) whose `StartReading` increments a counter; assert `ConnectAsync` (driver reporting connected) calls `StartReading` **exactly once**, and a subsequent reconnect does not start a second read loop. Lands with T033. (FR-001 receive side)
+- [ ] T035 [US1] **[NEW]** Add the reassembled-WHO_I_AM port `IWhoIAmObserver` (`WhoIAmObserved : IObservable<WhoIAmFrame>`) in **`src/ButtonPanelTester.Core/Can/`** (Constitution III — ports live in `Core`; pairs with the existing `ICanFrameStream` + `WhoIAmFrame` there). It is the input `PanelDiscoveryService` consumes instead of the raw `ICanFrameStream`; its only production adapter is the R2 reassembler (Infrastructure), with a trivial in-memory fake for tests. (FR-001)
+- [ ] T036 [US1] **[NEW]** Add the WHO_I_AM reassembly adapter in `src/ButtonPanelTester.Infrastructure/Can/` implementing `IWhoIAmObserver` over the raw `ICanFrameStream.RawFramesReceived`: per frame, when `CanId = 0x1FFFFFFFu`, feed `Payload` to `Services.Protocol.PacketReassembler.Accept`; on a complete reassembled packet, check command bytes `[7..8] = 0x00,0x24` (`SP_APP_CMD_AA_WHO_I_AM`), extract the application payload `packet[9 .. len-2]` (reuse `PacketDecoder`'s `ApplicationPayloadStart = 9` / `CrcTailLength = 2` — name them locally, cite the contract), `WhoIAmFrame.parse` it, emit on `Some f`. Every drop axis (wrong id / incomplete / wrong command / bad length) is a silent non-event (FR-007). Reuse the hand-rolled `SubjectFanOut` fan-out. Do **not** use the dictionary-driven `PacketDecoder`. Per [contracts/who-i-am-wire-format.md](./contracts/who-i-am-wire-format.md) §Transport + §Reassembled SP_APP application packet. (FR-001/002/003/007)
+- [ ] T037 [US1] **[NEW]** Add transport fixtures + adapter unit tests for T036 (no hardware): `whoiam_5frame_virgin_12v` = the verbatim real 5-frame split from the bench trace (contract §Fixtures); `whoiam_missing_fragment` (incomplete → no emission); `whoiam_wrong_command` (reassembles but `cmd ≠ 0x0024` → dropped); `whoiam_wrong_length` (reassembles to a payload length ≠ 15 → `parse` returns `None` → dropped — **absorbs old `DiscoveryE2ETests` case (d)**); `nonbroadcast_id` (id ≠ 0x1FFFFFFF → ignored — **absorbs old case (e)**); `interleaved_packetids` (two concurrent `PacketId`s reassemble independently). Drive the adapter via `InMemoryCanFrameStream.Emit`; assert the emitted `WhoIAmFrame` equals the §1 `virgin_panel_12v` parse on the happy path, and that **every** drop axis is a silent non-event — **no emission, no exception** (the adapter has no CAN-status surface, so a drop structurally cannot flip the link to Error: FR-007). Lands with T035/T036. (FR-001/007)
+- [ ] T038 [US1] **[GROW]** Re-source `PanelDiscoveryService` (`src/ButtonPanelTester.Services/Can/PanelDiscoveryService.fs`): ctor takes `IWhoIAmObserver` in place of `ICanFrameStream`; subscribe to `WhoIAmObserved`; the on-observed handler **drops the inline `CanId = 0x1FFFFFFF ∧ Payload.Length = 15 ∧ parse` filter** (the adapter owns reassembly/command/parse) and, when `link.CurrentState = Connected`, applies `PanelsOnBus.observe (clock.UtcNow()) f` + publishes (not-Connected = ignored). Coalesce / prune (B2) / link-loss-clear (B3) logic is **unchanged**. Supersedes T009's raw-frame ingest. (FR-001/002/004)
+- [ ] T039 [US1] **[EXTEND]** Rewire `src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs`: register the reassembly adapter as `IWhoIAmObserver` (consuming the already-bound `ICanFrameStream`); resolve `IPanelDiscoveryService` from `IWhoIAmObserver` + `ICanLinkService` + `IClock` (was `ICanFrameStream` + …). `PcanCanFrameStream` / `CanPortShare` (C1/C2) bindings unchanged — the adapter layers on top. Extend the C2 composition smoke (`CompositionRootCanTests`) to also resolve `IWhoIAmObserver`. Lands with T038. (FR-001)
+- [ ] T040 [US1] **[CORRECT]** Rework the B-phase integration-test setups (`DiscoveryE2ETests`, `PruningE2ETests`, `LinkLossClearsListTests`) for the re-sourced ctor: either drive the **real** reassembly adapter with `InMemoryCanFrameStream` emitting multi-frame WHO_I_AM sequences (preferred — exercises reassembly end-to-end), or inject a trivial fake `IWhoIAmObserver`. The coalesce/prune/clear **assertions** are unchanged. **Relocate** old `DiscoveryE2ETests` cases (d) (`Payload.Length = 14`) and (e) (`CanId ≠ 0x1FFFFFFF`) into the adapter test (T037) — post-re-source the service never sees those frames (the adapter filters them), so keeping the assertions at the service layer is vacuous; do not merely re-plumb them. **Add** one integration case over a real `CanLinkService`: a malformed/incomplete multi-frame sequence while `Connected` produces no row **and** the link stays `Connected` (FR-007 no-Error-flip, end-to-end — the assertion that needs the link service, which the adapter unit test cannot make). Lands with T038. (FR-002/004/005/007/008)
+
+**Checkpoint R**: with the read loop running and the reassembly adapter in place, a WHO_I_AM (synthetic multi-frame on CI, real on the bench) produces a discovery row — the receive path is correct end-to-end, validated against the real bench trace.
 
 ---
 
@@ -159,7 +192,7 @@ loudly at the CAN boundary.
 > env-gated attributes only; never a bare `Skip` literal.
 
 - [ ] T023 [US1] **[NEW]** Establish the **live** CAN-hardware bench-suite tracking issue for the discovery E2E. History: **#112** was a deliberate cross-spec *living tracker* ("add the discovery suite here rather than opening a per-spec issue") but closed COMPLETED 2026-06-03 with its spec-003 checkbox unticked; **#116** (the issue it deferred the discovery suite to) is `CLOSED/NOT_PLANNED` — the old plan was abandoned for the #153 re-spec; **#142** (`[<HardwareFact>]` infra) is also closed. So the "add it to #112" path is dead and no live hardware tracker exists. Decide one: **reopen #112** (restore the living tracker — most faithful to its design), track the suite under the live re-spec issue **#153**'s bench-validation follow-up, or open a fresh `chore(test): bench config for spec-003 Category=Hardware E2E`. A `[<Trait("Category","Hardware")>]` test MUST carry a **live** tracking-issue link (Constitution IV — "no untagged skip, no exclusion without a linked tracking issue").
-- [ ] T024 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/DiscoveryHardwareTests.fs`, every case `[<Trait("Category","Hardware")>]` (excluded by the default `Category!=Hardware` CI filter) and linked to the T023 issue: `[<HardwareFact>]` (env-gated `BPT_HARDWARE=1`, unattended) — with a real virgin panel powered on the bus, assert `PanelsOnBusChanged` emits a 1-row map decoding to `Virgin` within 6 s (SC-001) **and** a bus capture shows zero frames originating from the tool (FR-009/SC-003); `[<ManualHardwareFact>]` (env-gated `BPT_HARDWARE_INTERACTIVE=1`, attended) — operator powers the panel off, assert the row prunes within ~16 s (FR-005). The assertions read the **parsed UUID + variant off a real wire frame**, so a codec regression fails here even when the synthetic suite is green. **Never** use a bare `[<Fact(Skip = "…")>]` literal (#142: unconditional `Skip` makes the case dormant everywhere); the shipped `[<HardwareFact>]` / `[<ManualHardwareFact>]` + the `Category=Hardware` trait are the only gating mechanism. (SC-001/SC-003; FR-005/009)
+- [ ] T024 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/DiscoveryHardwareTests.fs`, every case `[<Trait("Category","Hardware")>]` (excluded by the default `Category!=Hardware` CI filter) and linked to the T023 issue: `[<HardwareFact>]` (env-gated `BPT_HARDWARE=1`, unattended) — with a real virgin panel powered on the bus, assert `PanelsOnBusChanged` emits a 1-row map decoding to `Virgin` within 6 s (SC-001) **and** a bus capture shows zero frames originating from the tool (FR-009/SC-003); `[<ManualHardwareFact>]` (env-gated `BPT_HARDWARE_INTERACTIVE=1`, attended) — operator powers the panel off, assert the row prunes within ~16 s (FR-005). The assertions read the **parsed UUID + variant off the reassembled real wire message** (the full read-loop → reassemble → discovery chain, Phase R), so a codec **or transport** regression fails here even when the synthetic suite is green; this E2E is seeded by the throwaway `PanelDiscoverySmoke.fs`. **Never** use a bare `[<Fact(Skip = "…")>]` literal (#142: unconditional `Skip` makes the case dormant everywhere); the shipped `[<HardwareFact>]` / `[<ManualHardwareFact>]` + the `Category=Hardware` trait are the only gating mechanism. (SC-001/SC-003; FR-005/009)
 
 **Checkpoint E**: on a bench rig (`BPT_HARDWARE=1`), a real virgin panel appears within 6 s with zero tool-originated frames; the wire-format boundary is proven against live firmware, closing the #121 false-green gap. Per the Validation Gate, the feature is **not "Done"** until this bench artifact exists.
 
@@ -170,7 +203,7 @@ loudly at the CAN boundary.
 - [ ] T025 [P] **[NEW]** XML-doc the new public surfaces per COMMENTS / stem-fp-discipline §10: `PcanCanFrameStream`, `PanelsOnBusView`; confirm the corrected `WhoIAmFrame` / `FwType` docs (T007) cite the re-stated Lean theorem + corrected contract (Lean-citation format: path + `parse_encode_roundtrip` + task number).
 - [ ] T026 [P] **[NEW]** Logging audit per LOGGING / stem-logging over `PcanCanFrameStream` and the discovery branches of `PanelDiscoveryService`: typed `ILogger<T>`, template messages with named params (no string interpolation), exception-as-first-arg, no `Console.WriteLine` / `Debug.WriteLine` on the production path.
 - [ ] T027 [P] Principle V compliance grep over the discovery path: confirm **zero** OS-user / machine-name / SID / MAC fields cross to STEM-controlled storage — the discovery wire surface is panel-side `WHO_I_AM` payloads in volatile UI memory only (research R8). Expected zero hits.
-- [ ] T028 [P] FR-009 / SC-003 zero-transmit audit: grep the discovery path (`PcanCanFrameStream`, `PanelDiscoveryService`) for any CAN send/write call; confirm the `ICanFrameStream` port has no send surface and nothing on the discovery path transmits.
+- [ ] T028 [P] FR-009 / SC-003 zero-transmit audit: grep the discovery path (`PcanCanFrameStream`, the R2 reassembly adapter, `PanelDiscoveryService`) for any CAN send/write call; confirm the `ICanFrameStream` and `IWhoIAmObserver` ports have no send surface and nothing on the discovery path transmits.
 - [ ] T029 [P] `cd lean; lake build` — confirm the four Phase-2 discovery theorems compile with no `sorry`; `#print axioms parse_encode_roundtrip` (and the three unchanged theorems) shows only standard axioms.
 - [ ] T030 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Passive CAN panel discovery — Panels-on-bus list (spec-003)."
 - [ ] T031 [P] Update `README.md`: link `specs/003-panel-discovery/quickstart.md` and add a one-paragraph mention of the Panels-on-bus list.
@@ -183,22 +216,25 @@ loudly at the CAN boundary.
 ### Phase order (strict)
 
 `Setup (T001)` → **`Phase A` (foundational — blocks everything)** → `Phase B` → `Phase C` →
-`Phase D` → `Phase E` → `Polish`. Phase A is non-negotiably first: no real frame parses
-without it, so every Phase B–E behaviour and SC-001 are unreachable until it lands.
+**`Phase R` (receive-path re-scope)** → `Phase D` → `Phase E` → `Polish`. Phase A is
+non-negotiably first: no real frame parses without it. Phase R depends on Phase C (it layers
+on the C1/C2 receive graph) and gates real-hardware discovery (R1 read loop + R2 reassembly +
+R3 re-source); Phase D depends on Phase R's re-sourced service; Phase E proves the full chain.
 
 ### Commit groupings (bisect-safe; test + impl land together)
 
 - **A1** = {T002, T003} — Lean only; `lake build` green.
 - **A2** = {T004, T005, T006, T007, T008} — corrected fixtures + FsCheck + fixture tests + `WhoIAmFrame.fs` + `Pruning.fs` re-point, **one commit** (RED until T007).
 - **B1** = {T009, T010, T011, T012} · **B2** = {T013, T014} · **B3** = {T015, T016}.
-- **C1** = {T017, T019} (PcanCanFrameStream + CanPortShare + the no-hardware translation test; `NoOpCanFrameStream` stays bound → bisect-safe) · **C2** = {T018} (composition flip: register `CanPortShare`, rewire both adapters, drop `NoOpCanFrameStream`, `new` FS0760 fix; + a CI composition smoke resolving the graph hardware-free, RED vs `NoOp`) · **D** = {T020, T021, T022} (T022 [P]).
-- **E** = T023 then T024 · **Polish** = T025–T032 (mostly [P]).
+- **C1** = {T017, T019} (PcanCanFrameStream + CanPortShare + the no-hardware translation test; `NoOpCanFrameStream` stays bound → bisect-safe) · **C2** = {T018} (composition flip: register `CanPortShare`, rewire both adapters, drop `NoOpCanFrameStream`, `new` FS0760 fix; + a CI composition smoke resolving the graph hardware-free, RED vs `NoOp`).
+- **R1** = {T033, T034} (read-loop activation + fake-driver regression) · **R2** = {T035, T036, T037} (`IWhoIAmObserver` port + reassembly adapter + transport fixtures) · **R3** = {T038, T039, T040} (re-source `PanelDiscoveryService` + composition rewire + B-test rework).
+- **D** = {T020, T021, T022} (T022 [P]) · **E** = T023 then T024 · **Polish** = T025–T032 (mostly [P]).
 
 ### Within-phase notes
 
 - **Phase A carries a one-time bench-hardware dependency.** T004's `virgin_panel_12v` fixture MUST be a verbatim real PEAK-wire capture — the only PR-time wire-format guard while the hardware E2E (T024) is dormant. Capturing it needs bench access *before* Phase A can close, even though the bench tracker (T023) is not established until Phase E. Schedule the capture as a Phase-A input; never substitute a reconstructed payload (it re-creates the #121 false-green).
 - `PanelDiscoveryService.fs` is edited by T009/T012 (B1), T013 (B2), T015 (B3) — sequential edits on one file; keep the slices ordered to avoid rebase pain. B1 additionally makes a minimal registration touch in `CompositionRoot.fs` (3-arg ctor rewire, `NoOpCanFrameStream` retained) and a one-line synchronous `Emit` extension to the shipped `InMemoryCanFrameStream` fake; the full NoOp→Pcan composition swap is T018 (Phase C).
-- Phase B depends on Phase A's corrected `WhoIAmFrame.parse`. Phase C depends on Phase B's live service ctor. Phase D depends on Phase C's wired `IPanelDiscoveryService`. Phase E depends on Phases C+D (real adapter + render) for a bench run.
+- Phase B depends on Phase A's corrected `WhoIAmFrame.parse`. Phase C depends on Phase B's live service ctor. **Phase R depends on Phase C** (it layers the reassembly adapter on the C1/C2 graph and starts the read loop); R1 → R2 → R3 in order (R3 re-sources the service onto R2's port). **Phase D depends on Phase R** (binds the re-sourced service). Phase E depends on Phases C+R+D (real adapter + reassembly + render) for a bench run.
 
 ### Parallel opportunities
 
@@ -216,29 +252,29 @@ least one implementing task and one test.)*
 
 | Requirement | Implementing task(s) | Test(s) | Shipped proof preserved |
 |---|---|---|---|
-| **FR-001** listen while Connected, present each panel | T007, T009, T017, T020, T021 | T010, T024 | — |
+| **FR-001** listen while Connected, present each panel | T007, T009, T017, T033, T036, T038, T020, T021 | T010, T034, T037, T024 | — |
 | **FR-002** UUID coalesce, no duplicates | T009 (`observe`) | T010(b), T022 | Lean `observe_coalesces_by_uuid` + FsCheck `PanelsOnBusCoalescing` (re-pointed T003) |
 | **FR-003** decode variant; raw byte via detail | T004, T006, T020 | T022 | Lean `variant_decoding_total` + FsCheck `VariantByteMappingTotal` (re-pointed T003) |
 | **FR-004** last-seen, update in place | T009, T020, T021 | T010(b), T022 | — |
 | **FR-005** prune after 15 s | T013 | T014, T024 | Lean `prune_partitions_by_threshold` / `prune_idempotent` (re-pointed T003/T008) |
 | **FR-006** empty-state explainer (down vs silent) | T020, T021 | T022 | — |
-| **FR-007** silent drop malformed; no Error flip | T002, T005, T007, T009 | T005, T006, T010(d) | — |
+| **FR-007** silent drop malformed; no Error flip | T002, T005, T007, T009, T036 | T005, T006, T010(d), T037 | — |
 | **FR-008** clear on Connected→¬Connected | T015, T021 | T016, T022 | — |
-| **FR-009** transmit zero frames | T017, T028 | T024 (bus capture) | receive-only `ICanFrameStream` (no send surface) |
-| **SC-001** pristine panel visible ≤ 6 s | T007, T009, T013, T024 | T010(g), T024 | — |
+| **FR-009** transmit zero frames | T017, T036, T028 | T024 (bus capture) | receive-only `ICanFrameStream` / `IWhoIAmObserver` (no send surface) |
+| **SC-001** pristine panel visible ≤ 6 s | T007, T009, T013, T033, T036, T038, T024 | T010(g), T037, T024 | — |
 | **SC-002** in-place coalesce 100%, no dup | T009 | T010(b), T022, T032 | FsCheck `PanelsOnBusCoalescing` |
-| **SC-003** zero frames across session | T017, T028 | T024 (capture) | — |
+| **SC-003** zero frames across session | T017, T036, T028 | T024 (capture) | — |
 | **SC-004** list empty by next render after leaving Connected | T015, T021 | T016, T022 | — |
 
 ---
 
 ## Implementation Strategy
 
-### MVP = Phase A → Phase B → Phase C → Phase D (CI-provable US1)
+### MVP = Phase A → Phase B → Phase C → Phase R → Phase D (CI-provable US1)
 
 1. **Phase A** — correct the wire foundation (the strict prerequisite).
 2. **Phase B** — grow the pipeline; **STOP and validate** on the virtual adapter + `FrozenClock` (Checkpoint B greens US1's logic on CI without hardware).
-3. **Phase C + D** — wire the real PEAK adapter and render the row; the app demos US1 end-to-end on a bench.
+3. **Phase C + R + D** — wire the real PEAK adapter (C); start the read loop, reassemble the segmented WHO_I_AM, and re-source the service (R); render the row (D). The app demos US1 end-to-end on a bench.
 4. **Phase E** — the live-boundary bench proof gates the *Done* claim (CI-green closes the code slices; the bench closes the feature — live-boundary-smoke Validation Gate).
 
 ### Discipline

@@ -15,14 +15,18 @@ the last-seen timestamp. Coalesce by UUID (FR-002), prune after 15 s of silence
 **zero** CAN frames (FR-009). This is the supplier-QA "is this pristine board
 alive on the bus?" slice (SC-001: visible within 6 s).
 
-The technical core is a correction plus a pipeline. **Correction:** the shipped
-`WhoIAmFrame.fs` (landed under #121) encodes the wrong wire layout and rejects
-every real frame, so spec-003 first re-bases the codec onto the firmware-verified
-format ([contracts/who-i-am-wire-format.md](./contracts/who-i-am-wire-format.md)).
-**Pipeline:** the shipped `PanelDiscoveryService` is a parameterless stub
-(empty map, never-firing observable); spec-003 grows it into the live
-ingest → parse → observe → prune → clear pipeline, adds the production
-`PcanCanFrameStream` adapter, and fills the GUI's third row.
+The technical core is a **correction**, a **transport fix**, and a **pipeline**.
+**Correction (Phase A — done):** the shipped `WhoIAmFrame.fs` (#121) encoded the
+wrong wire layout and rejected every real frame; spec-003 re-based the codec onto the
+firmware-verified format ([contracts/who-i-am-wire-format.md](./contracts/who-i-am-wire-format.md)).
+**Pipeline (Phases B/C — done):** grew the stub `PanelDiscoveryService` into the live
+observe → prune → clear pipeline and bound the real `PcanCanFrameStream` receive
+adapter. **Transport fix (Phase R — the 2026-06-09 re-scope):** bench validation found
+`WHO_I_AM` is a *segmented multi-frame* SP_APP message, not a single frame, and the
+vendored receive loop was never started — so spec-003 starts the read loop and
+reassembles the fragments (reusing the vendored `PacketReassembler`), then re-sources
+discovery onto the reassembled feed. See
+[§Re-scope](#re-scope-2026-06-09--segmented-who_i_am-transport).
 
 This plan is **independent**: it baselines on the shipped interface contracts
 (`ICanLinkService`, `IPanelDiscoveryService`, the `Core/Can` domain types and
@@ -103,9 +107,14 @@ denser transmit traffic later features add, not for this slice).
 
   | Port | Production adapter | Virtual / fake adapter |
   |---|---|---|
-  | `ICanFrameStream` (`Core/Can/Ports.fs`) | `PcanCanFrameStream` — **to write** (replaces the `NoOpCanFrameStream` placeholder) | `InMemoryCanFrameStream` (shipped) |
+  | `ICanFrameStream` (`Core/Can/Ports.fs`) | `PcanCanFrameStream` (shipped C1/C2 — raw frame source) | `InMemoryCanFrameStream` (shipped) |
+  | `IWhoIAmObserver` (new — R2) | WHO_I_AM reassembly adapter (new — R2, layered over `ICanFrameStream`) | trivial in-memory fake, or drive the real adapter with `InMemoryCanFrameStream` |
   | `ICanLinkService` (`Services/Can/ICanLinkService.fs`) | `CanLinkService` (shipped) | `InMemoryCanLink`-backed (shipped) |
   | `IClock` (`Core/Dictionary/Ports.fs`) | `SystemClock` (`Infrastructure/Clock.fs`, shipped) | `FrozenClock` (`Tests/Fakes/Wiring.fs`, shipped) |
+
+  The re-scope also fixes a port-correctness gap in the vendored `CanPort`
+  (`Infrastructure.Protocol`, C#): it reports `Connected` but never starts the receive
+  loop on a clean open (R1). That is a C# transport fix, not a new port.
 
 - **IV. CI Greens the Whole Stack; Hardware Tests Are Explicit** — (a) unit +
   property + integration + Avalonia.Headless GUI layers all extended; (b) the
@@ -121,8 +130,12 @@ denser transmit traffic later features add, not for this slice).
 
 - **VI. Stopgap Discipline** — **No new stopgap.** The wire-format correction is
   a bug fix, not a knowingly-deferred bypass. The vendored protocol stack is
-  repo-level shared infrastructure under its own existing waiver; spec-003
-  consumes it through `ICanFrameStream` and adds nothing to it.
+  repo-level shared infrastructure under its own existing waiver (#111). The
+  Phase-R read-loop fix (R1) **does** modify the vendored `CanPort.ConnectAsync`
+  + `PCANManager.StartReading` (idempotency guard) — a bug fix to the vendored
+  receive path under that same waiver (it makes the advertised `PacketReceived`
+  event actually fire on a clean open), not a new bypass. Otherwise spec-003
+  consumes the stack through `ICanFrameStream` + the reused `PacketReassembler`.
 
 **Result: PASS.** Complexity Tracking is empty.
 
@@ -253,43 +266,88 @@ the file, unless the lifecycle citation is preferred as the pattern's origin.
 (`ICanLinkService.fs`'s own `specs/002-can-link-lifecycle/…` citations are
 lifecycle-owned and stay.)
 
+## Re-scope (2026-06-09) — segmented WHO_I_AM transport
+
+Bench validation after Phase C (CI-green) found spec-003's receive model wrong on
+real hardware. `WHO_I_AM` is **not** a single 15-byte frame: it is a segmented STEM
+SP_APP message — several classic-CAN frames on `0x1FFFFFFF`, each with a 2-byte
+`NetInfo` header — reassembled into a `[header][15-byte payload][CRC16]` packet (see
+[contracts/who-i-am-wire-format.md](./contracts/who-i-am-wire-format.md)). Two
+findings, both bench-proven:
+
+1. **Dead read loop.** `CanPort`/`PCANManager` report `Connected` but never start the
+   receive loop on a clean open, so nothing is received. A direct `StartReading()`
+   makes the frames flow.
+2. **Wrong source.** Discovery tapped the raw single-frame `ICanFrameStream` feed; it
+   must consume the **reassembled** payload. The existing vendored
+   `Services.Protocol.PacketReassembler` already rebuilds it (no new reassembly code).
+
+Decision (with the operator): a small fix, **not** the long F# `Stem.Communication`
+rewrite (vendored-stack removal #111 stays future). Reading is spec-003's domain per
+the #151 split (lifecycle/spec-002 polls `GetStatus` and never reads), so the
+read-loop fix is folded into spec-003 (mis-framed bug #203 closed not-planned). The
+correction is the **Phase R** slices below.
+
+**Live-boundary (Constitution IV).** *What boundary does this exercise that the unit
+suite cannot?* The real PEAK receive path + multi-frame reassembly. In-CI proxy:
+synthetic transport fixtures (R2) over `InMemoryCanFrameStream`. Conclusive proof: the
+**Phase E** bench E2E (operator/bench follow-up — GitHub Actions cannot reach the PEAK
+hardware). Per the Validation Gate, CI-green is *code-complete*; the bench E2E is the
+*done* line, and the feature is `ValidationPending` until it passes.
+
 ## Implementation phases
 
 Ordered, each a bisect-safe vertical slice (`bisect-safe` + `vertical-commits`).
-`/speckit-tasks` expands these into `tasks.md`; the corrected dir is pinned by
-`.specify/feature.json` (see [§Tooling note](#tooling-note)).
+Phases A–C landed and are CI-green; the **Phase R** re-scope corrects the receive
+path; D–E follow. `/speckit-tasks` expands these into `tasks.md`.
 
-- **Phase A — Correct the WHO_I_AM wire foundation** *(prerequisite for all
-  behaviour).* Re-state `Phase2/WhoIAmFrame.lean` → rebuild `whoIAmFixtures.json`
-  (correct layout, ≥ 1 real capture) + correct the FsCheck round-trip / length-
-  reject → correct `WhoIAmFrame.fs` (`fwType` uint16 BE @[1..2], UUID @3/7/11, no
-  padding, length-only reject). Re-point the Phase-A citations. Without this, no
-  real frame parses and SC-001 is unreachable.
+- **Phase A — Correct the WHO_I_AM wire foundation.** *(DONE — Checkpoint A.)*
+  `Phase2/WhoIAmFrame.lean` re-stated; `whoIAmFixtures.json` rebuilt (real
+  `virgin_panel_12v` anchor); `WhoIAmFrame.fs` corrected (`fwType` u16 BE @[1..2],
+  UUID @3/7/11, length-only reject). Still valid — the codec parses the reassembled
+  15-byte payload.
 
-- **Phase B — Discovery pipeline.** Grow `PanelDiscoveryService` from stub to
-  live: real constructor (`ICanFrameStream` + `ICanLinkService` + `IClock`);
-  ingest + `CanId/length` filter + `parse` + `observe`; 1 s prune timer
-  (`prune 15s`, publish-on-change); `LinkStateChanged` `Connected → ¬Connected`
-  → `clear` (FR-008); make the fan-out subject actually publish with a working
-  `Dispose`. Integration tests `DiscoveryE2ETests`, `PruningE2ETests`,
-  `LinkLossClearsListTests` over the virtual adapter + `FrozenClock`. Re-point
-  the Phase-B citation (`Ports.fs` `RawCanFrame`).
+- **Phase B — Discovery pipeline.** *(DONE — Checkpoint B; RE-SOURCED by R3.)* Grew
+  `PanelDiscoveryService` stub → live (observe/prune/clear; FR-002/004/005/008) with
+  `DiscoveryE2ETests` / `PruningE2ETests` / `LinkLossClearsListTests`. The
+  coalesce/prune/clear logic stays; R3 swaps the **input** from the raw
+  `ICanFrameStream` + inline `CanId/length` filter to the reassembled `IWhoIAmObserver`
+  feed.
 
-- **Phase C — Production adapter + composition.** Write `PcanCanFrameStream`
-  (`net10.0-windows`) subscribing to the vendored stack's `PacketReceived`;
-  swap the `NoOpCanFrameStream` binding and wire the real `PanelDiscoveryService`
-  constructor in `CompositionRoot`.
+- **Phase C — Production adapter + composition.** *(DONE — Checkpoint C.)*
+  `PcanCanFrameStream` + `CanPortShare` (C1); `CompositionRoot` binds the real receive
+  graph, `NoOpCanFrameStream` dropped (C2). `PcanCanFrameStream` is **kept** as the raw
+  `ICanFrameStream` source feeding the R2 reassembly adapter.
 
-- **Phase D — GUI.** `PanelsOnBusView` (rows: UUID, decoded variant + raw-byte
-  detail affordance, last-seen) + empty-state explainer distinguishing "link
-  down" from "link up, nothing announcing" (FR-006); fill `App.fs`'s third
-  vertical slot, subscribing to `PanelsOnBusChanged` via `Cmd.ofSub`. Avalonia.
-  Headless snapshot test.
+- **Phase R — Receive-path re-scope.** *(NEW — bench-driven; CI-provable with synthetic
+  multi-frame fixtures; prerequisite for real-hardware discovery.)* Three slices:
+  - **R1 — read-loop activation** (`Infrastructure.Protocol`, C#): `CanPort.ConnectAsync`
+    starts the driver reading on connect, **idempotent** (the reconnect paths already
+    call `StartReading`; guard the `_readTask`); expose `StartReading` on `IPcanDriver`.
+    RED: a fake-driver test asserting connect triggers reading exactly once, no
+    double-start on reconnect. *(Folds in closed #203.)*
+  - **R2 — WHO_I_AM reassembly adapter + port** (`Infrastructure/Can`, F#): a new
+    `IWhoIAmObserver` port + an adapter consuming raw `ICanFrameStream`, reusing
+    `PacketReassembler` + `PacketDecoder` offsets (filter `0x1FFFFFFF` → reassemble →
+    `cmd 0x0024` → extract `[9 .. len-2]` → `WhoIAmFrame.parse` → emit). Unit tests over
+    the transport fixtures (real 5-frame split, missing-fragment, wrong-command,
+    interleaved-`PacketId`).
+  - **R3 — re-source discovery**: `PanelDiscoveryService` ctor takes `IWhoIAmObserver`
+    (was `ICanFrameStream`); drop the inline `CanId/length` filter (the adapter owns it);
+    rewire `CompositionRoot`; rework the B1/B2/B3 E2E setups to drive multi-frame input
+    (or a fake `IWhoIAmObserver`). Coalesce/prune/clear assertions unchanged.
 
-- **Phase E — Hardware E2E.** `DiscoveryHardwareTests` (`Category=Hardware`,
-  excluded from default CI, linked to the CAN-hardware issue) — the bench proof
-  that a real virgin panel appears within 6 s with zero frames transmitted
-  (SC-001, SC-003).
+- **Phase D — GUI.** *(PENDING.)* `PanelsOnBusView` (UUID, decoded variant + raw-byte
+  detail affordance, last-seen) + empty-state explainer distinguishing "link down" from
+  "link up, nothing announcing" (FR-006); fill `App.fs`'s third vertical slot via
+  `Cmd.ofSub`; Avalonia.Headless snapshot. Binds `PanelsOnBusChanged` — now carrying
+  real rows.
+
+- **Phase E — Hardware E2E + bench validation.** *(PENDING — the Validation Gate.)* A
+  committed `Category=Hardware` receive E2E (seeded by the throwaway
+  `PanelDiscoverySmoke.fs`): a real virgin panel appears within 6 s with zero frames
+  transmitted (SC-001/SC-003) over the full read-loop → reassemble → discovery chain.
+  Linked to the CAN-hardware tracker. The live-boundary proof CI cannot run.
 
 ## Complexity Tracking
 
