@@ -18,6 +18,7 @@ open Infrastructure.Protocol.Hardware
 /// the interface without touching CAN hardware.
 type private FakePcanDriver(initiallyConnected: bool) =
     let mutable connected = initiallyConnected
+    let mutable startReadingCalls = 0
     let packetReceived = Event<EventHandler<CANPacketEventArgs>, CANPacketEventArgs>()
     let statusChanged = Event<EventHandler<bool>, bool>()
 
@@ -29,6 +30,11 @@ type private FakePcanDriver(initiallyConnected: bool) =
             connected <- value
             statusChanged.Trigger(null, value)
 
+    /// Test-only counter: how many times `IPcanDriver.StartReading` was
+    /// invoked on this fake. Lets the R1 regression assert that `CanPort`
+    /// kicks the receive loop exactly once on the initial connect.
+    member _.StartReadingCalls = startReadingCalls
+
     interface IPcanDriver with
         member _.IsConnected = connected
 
@@ -39,6 +45,8 @@ type private FakePcanDriver(initiallyConnected: bool) =
         member _.ConnectionStatusChanged = statusChanged.Publish
 
         member _.SendMessageAsync(_canId, _data, _isExtended) = Task.FromResult(true)
+
+        member _.StartReading() = startReadingCalls <- startReadingCalls + 1
 
         member _.Disconnect() = ()
 
@@ -86,4 +94,30 @@ let ``ConnectAsync_PostCtorSubscriber_EmitsConnectedExactlyOnce``
 
         Assert.Equal(1, connectedCount)
         Assert.Equal(ConnectionState.Connected, port.State)
+    }
+
+/// R1 regression: the vendored CAN stack reports `Connected` after a clean
+/// open but never starts its receive loop on that path — only a driver-side
+/// *reconnect* restarts reading (`PCANManager.cs:134,142`). So `CanPort` must
+/// kick `StartReading` itself when `ConnectAsync` reaches the connected branch,
+/// otherwise `PacketReceived` never fires and nothing is ever received on the
+/// production cold-start path. It must do so exactly once: a later driver-side
+/// reconnect is the monitor's responsibility, not `CanPort`'s, so the port must
+/// not re-trigger reading on the `ConnectionStatusChanged` round-trip.
+[<Fact>]
+let ``ConnectAsync_DriverConnected_StartsReadingExactlyOnce`` () =
+    task {
+        let fake = FakePcanDriver(true)
+        use port = new CanPort(fake)
+
+        do! port.ConnectAsync(CancellationToken.None)
+
+        Assert.Equal(1, fake.StartReadingCalls)
+
+        // Simulate a driver-side reconnect: CanPort reflects the state change
+        // but must NOT start a second read loop — that is the driver monitor's job.
+        fake.SetConnected(false)
+        fake.SetConnected(true)
+
+        Assert.Equal(1, fake.StartReadingCalls)
     }
