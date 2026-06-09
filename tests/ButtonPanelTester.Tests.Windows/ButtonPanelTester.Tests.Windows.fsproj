@@ -37,6 +37,7 @@
         <Compile Include="Gui/Can/PanelsOnBusViewTests.fs" />
         <Compile Include="Integration/Can/CompositionRootCanTests.fs" />
         <Compile Include="Integration/Can/Hardware/PcanLifecycleTests.fs" />
+        <Compile Include="Integration/Can/Hardware/DiscoveryHardwareTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
