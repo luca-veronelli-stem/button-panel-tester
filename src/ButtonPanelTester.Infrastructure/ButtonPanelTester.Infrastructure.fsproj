@@ -11,6 +11,8 @@
         <Compile Include="Can/PeakErrorText.fs" />
         <Compile Include="Can/PeakStatusTranslation.fs" />
         <Compile Include="Can/PcanCanLink.fs" />
+        <Compile Include="Can/CanPortShare.fs" />
+        <Compile Include="Can/PcanCanFrameStream.fs" />
         <Compile Include="Persistence/JsonFileDictionaryCache.fs" />
         <Compile Include="Persistence/EmbeddedSeedExtractor.fs" />
         <Compile Include="Persistence/DpapiCredentialStore.fs" />
