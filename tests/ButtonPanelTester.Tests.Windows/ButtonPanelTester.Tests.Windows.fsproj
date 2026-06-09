@@ -22,6 +22,7 @@
         <Compile Include="Unit/Can/PcanCanLinkColdStartTests.fs" />
         <Compile Include="Unit/Can/PcanCanLinkMidSessionUnplugTests.fs" />
         <Compile Include="Unit/Can/PcanCanLinkErrorTextTests.fs" />
+        <Compile Include="Unit/Can/PcanCanFrameStreamTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTimeoutTests.fs" />
         <Compile Include="Integration/HttpDictionaryProviderTests.fs" />
