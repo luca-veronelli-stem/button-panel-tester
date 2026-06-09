@@ -35,6 +35,10 @@ val parse  : ReadOnlyMemory<byte> -> WhoIAmFrame option   // None iff length <> 
 val encode : WhoIAmFrame -> byte[]                        // 15-byte buffer, no padding
 ```
 
+`parse` operates on the **reassembled** 15-byte application payload (the
+`packet[9 .. len-2]` slice of the SP_APP packet — see the wire contract and §5),
+not on a raw CAN frame.
+
 ### 1.2 What changes from the shipped codec
 
 The shipped `WhoIAmFrame.fs` encodes the wrong wire layout (it models `fwType`
@@ -61,7 +65,7 @@ identity, and last-seen).
   well-formedness precondition, since the only rejection axis — length — cannot
   be violated by `encode`, which always writes 15 bytes).
   **Lean**: `Phase2/WhoIAmFrame.lean` — `parse_encode_roundtrip` (re-stated for
-  the corrected codec).
+  the corrected codec). Status: **done in Phase A**.
 
 ---
 
@@ -157,75 +161,144 @@ For spec-003, `ttl = TimeSpan.FromSeconds 15.0` (FR-005).
   (FR-005). **Lean**: `Phase2/Pruning.lean` — `prune_partitions_by_threshold`,
   `prune_idempotent`.
 
+These four are the B1/B2/B3 pipeline's correctness core; the re-scope leaves them
+unchanged and re-wires only the **input** (§5, §6).
+
 ---
 
-## 5. Discovery service pipeline — *new*
+## 5. Receive path: read-loop activation + WHO_I_AM reassembly — *new / corrected*
+
+Discovery does **not** consume raw CAN frames directly. Two pieces sit between the
+port and the service, per
+[contracts/who-i-am-wire-format.md](./contracts/who-i-am-wire-format.md). Both are
+new in this re-scope (the original single-frame model had neither — it is why the
+pipeline produced nothing on the bench).
+
+### 5.1 Read-loop activation (`Infrastructure.Protocol`, C# — *corrected*)
+
+`CanPort`/`PCANManager` open the channel and report `Connected` but **never start
+the receive loop** on a clean open (`StartReading` is reached only on a reconnect),
+so `PacketReceived` never fires and nothing is received. spec-003 fixes this
+port-correctness gap:
+
+- `IPcanDriver` exposes `StartReading` (`void`).
+- `CanPort.ConnectAsync` calls `driver.StartReading()` once the driver reports
+  connected — **idempotent** (the monitor's reconnect branches already call it; a
+  guard prevents a second `_readTask`).
+
+Reading is spec-003's concern: the #151 split put **observation** here, while
+lifecycle/spec-002 polls `GetStatus` and legitimately never reads. No Core/Service
+type changes — a C# transport fix, proven by the bench receive E2E (§ tasks).
+
+### 5.2 WHO_I_AM reassembly adapter (`Infrastructure/Can`, F# — *new*)
+
+A new adapter consumes the raw `ICanFrameStream.RawFramesReceived` feed
+(`PcanCanFrameStream`, shipped C1/C2 — **kept** as the raw source) and produces a
+higher-level **reassembled WHO_I_AM** feed:
+
+```fsharp
+// new Core/Can port (Constitution III — pairs with ICanFrameStream + WhoIAmFrame)
+type IWhoIAmObserver =
+    abstract member WhoIAmObserved : IObservable<WhoIAmFrame>
+
+// new adapter (Infrastructure/Can), consuming ICanFrameStream:
+//   per raw frame:  CanId = 0x1FFFFFFF ? -> PacketReassembler.Accept(payload)
+//   on a complete reassembled packet:
+//       cmd (bytes 7..8) = 0x0024 (SP_APP_CMD_AA_WHO_I_AM) ?
+//           -> extract payload[9 .. len-2]
+//           -> WhoIAmFrame.parse payload : Some f -> emit f ; None -> drop (FR-007)
+```
+
+Reuses `Services.Protocol.PacketReassembler` and the firmware-pinned offsets from
+`PacketDecoder` (`ApplicationPayloadStart = 9`, `CrcTailLength = 2`,
+`CommandHigh/Low = 7/8`); it does **not** use the dictionary-driven `PacketDecoder`
+(passive observation needs no command/variable/sender resolution and must not
+depend on a loaded dictionary). Every drop axis — wrong id, incomplete sequence,
+wrong command, bad length — is a silent non-event (FR-007), never an Error flip.
+
+### 5.3 Invariant
+
+- **Reassembly fidelity** (transport, fixture-backed — *not* Lean): a complete
+  WHO_I_AM fragment sequence on `0x1FFFFFFF` reassembles to a packet whose
+  `[9 .. len-2]` slice is exactly the 15-byte payload §1 parses. Covered by the
+  transport fixtures in the wire contract (`whoiam_5frame_virgin_12v` anchored to
+  the real bench capture) and the bench E2E. The transport is vendored C#, so it
+  is validated by example + bench rather than a Lean theorem (see §7).
+
+---
+
+## 6. Discovery service pipeline — *new (re-sourced)*
 
 `PanelDiscoveryService` ships today as a parameterless **stub**: `PanelsOnBus`
 returns `empty` and `PanelsOnBusChanged` never fires. Spec-003 grows it into the
-live pipeline. The service is the single owner of mutable discovery state and
+live pipeline, **re-sourced** onto the reassembled WHO_I_AM feed (§5.2) instead of
+the raw frame feed. The service is the single owner of mutable discovery state and
 the merge point for three inputs.
 
-### 5.1 Constructor dependencies (replacing the stub's parameterless ctor)
+### 6.1 Constructor dependencies
 
 | Dependency | Port | Why |
 |---|---|---|
-| `ICanFrameStream` | `Core/Can/Ports.fs` (shipped) | WHO_I_AM ingest (`RawFramesReceived`) |
+| `IWhoIAmObserver` (§5.2) | new | **reassembled** WHO_I_AM ingest (replaces the raw `ICanFrameStream`) |
 | `ICanLinkService` | `Services/Can/ICanLinkService.fs` (shipped) | `LinkStateChanged` → FR-008 clear |
 | `IClock` | `Core/Dictionary/Ports.fs` (shipped, spec-001) | receive `now` + prune reference instant; `FrozenClock` fake in tests |
 
-No new external boundary is introduced — all three ports and their virtual/fake
-adapters already exist (Constitution Principle III is satisfied by reuse).
+The B1 form took `ICanFrameStream` directly and did the `CanId`/length filtering
++ `parse` inline. The re-scope swaps that dependency for `IWhoIAmObserver`: the
+adapter (§5.2) owns reassembly/command-filter/parse, and the service observes
+already-parsed `WhoIAmFrame`s. Per Constitution III the port lives in `Core/Can/`
+(alongside `ICanFrameStream`); it introduces no new *hardware* boundary — its only
+production adapter (the R2 reassembler) is a pure transform over the existing
+`ICanFrameStream`, and its test fake is trivial.
 
-### 5.2 State and transitions
+### 6.2 State and transitions
 
 ```mermaid
 stateDiagram-v2
     [*] --> Empty
     Empty --> Listening: link Connected
-    Listening --> Listening: WHO_I_AM frame (observe) / prune tick
+    Listening --> Listening: WHO_I_AM observed (observe) / prune tick
     Listening --> Empty: link leaves Connected (clear, FR-008)
-    Empty --> Empty: WHO_I_AM frame while not Connected (ignored)
+    Empty --> Empty: WHO_I_AM observed while not Connected (ignored)
 ```
 
 Held state: a single mutable `PanelsOnBus` guarded for thread-safety (the three
-inputs fire on different threads — read thread, timer thread, link-emission
-thread). Each input recomputes the map and publishes through
+inputs fire on different threads — adapter-emission thread, timer thread,
+link-emission thread). Each input recomputes the map and publishes through
 `PanelsOnBusChanged`:
 
-- **On frame** (read thread): if the link is `Connected` and the frame matches
-  `CanId = 0x1FFFFFFF ∧ Payload.Length = 15`, `parse` it; on `Some f`,
-  `observe (clock.UtcNow()) f` and fire. On `None`, silent drop (FR-007). Frames
-  arriving while not `Connected` are ignored.
+- **On WHO_I_AM observed** (adapter-emission thread): if the link is `Connected`,
+  `observe (clock.UtcNow()) f` and fire. The adapter has already filtered,
+  reassembled, command-checked, and parsed, so the service no longer inspects
+  `CanId`/length — it receives a `WhoIAmFrame`. Observations arriving while not
+  `Connected` are ignored.
 - **On prune tick** (1 s timer): `prune 15s (clock.UtcNow())`; fire only if the
   map changed (avoids idle UI churn — backed by `prune_idempotent`).
 - **On link transition** (link-emission thread): `Connected → ¬Connected` →
-  `clear` and fire (FR-008, SC-004). The clear is independent of the prune
-  timer, so the list empties immediately on disconnect rather than after a TTL.
+  `clear` and fire (FR-008, SC-004). Independent of the prune timer, so the list
+  empties immediately on disconnect rather than after a TTL.
 
-### 5.3 Observable plumbing
+### 6.3 Observable plumbing
 
 `PanelsOnBusChanged` is a hand-rolled hot `IObservable<PanelsOnBus>` (no
-`System.Reactive` dependency — matches the lifecycle service's subject style).
-The shipped stub's `SubjectFanOut` has a no-op `OnNext` path and a no-op
-unsubscribe; the pipeline slice makes it actually publish on each recompute and
-gives subscribers a working `Dispose` (the GUI subscribes once at composition
-time via `Cmd.ofSub`, so single-shot fan-out is sufficient, but unsubscribe must
-not leak).
+`System.Reactive` dependency — matches the lifecycle service's subject style). The
+gated-observer-list `SubjectFanOut` (publishes on each recompute, real
+`Dispose`-unsubscribe) landed in B1 and is unchanged. The same hand-rolled subject
+pattern backs the new `IWhoIAmObserver` adapter's `WhoIAmObserved` feed.
 
 ---
 
-## 6. Cross-reference to Lean Phase 2
+## 7. Cross-reference to Lean Phase 2
 
 | Lean module | Mechanises | F# source | Spec-003 action |
 |---|---|---|---|
-| `Phase2/WhoIAmFrame.lean` | §1.3 round-trip | `Core/Can/WhoIAmFrame.fs` | **re-state** for corrected codec (drop `fwType = 4` precondition) |
-| `Phase2/PanelObservation.lean` | §2.2 totality | `Core/Can/PanelObservation.fs` | re-point citation 002 → 003 |
-| `Phase2/PanelsOnBus.lean` | §4.3 coalescing | `Core/Can/PanelsOnBus.fs` | re-point citation 002 → 003 |
-| `Phase2/Pruning.lean` | §4.3 pruning partition | `Core/Can/Pruning.fs` | re-point citation 002 → 003 |
+| `Phase2/WhoIAmFrame.lean` | §1.3 round-trip | `Core/Can/WhoIAmFrame.fs` | **done** (Phase A) — re-stated for corrected codec |
+| `Phase2/PanelObservation.lean` | §2.2 totality | `Core/Can/PanelObservation.fs` | citation re-point 002 → 003 |
+| `Phase2/PanelsOnBus.lean` | §4.3 coalescing | `Core/Can/PanelsOnBus.fs` | citation re-point 002 → 003 |
+| `Phase2/Pruning.lean` | §4.3 pruning partition | `Core/Can/Pruning.fs` | citation re-point 002 → 003 |
 
-The `parse_encode_roundtrip` theorem is the only one whose **statement** changes
-(the corrected codec removes its precondition); the other three are unchanged in
-substance and only need their `specs/002-can-link-and-panel-discovery/…`
-doc-comment citations re-pointed to `specs/003-panel-discovery/…` as 003 takes
-ownership (see [plan.md](./plan.md) §Citation re-pointing).
+The **transport** added in §5 (NetInfo segmentation + reassembly) is vendored C#
+(`PacketReassembler`) and is **not** Lean-formalized in spec-003 — it is pinned by
+the transport fixtures (wire contract §Fixtures) and the bench receive E2E. The
+Core codec/variant/coalesce/prune theorems above remain the formalized spine; the
+re-scope changes their **inputs' provenance**, not their statements.

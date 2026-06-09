@@ -35,7 +35,7 @@ Because pristine panels broadcast their identity automatically on a UUID-derived
 ### Edge Cases
 
 - **Bus is Connected but silent** (no panels powered, or every panel in the claimed silent state): the list is empty and the empty state explains that nothing is currently announcing itself — distinct from "the link is down".
-- **A WHO_I_AM frame with a malformed payload** (wrong length, garbage bytes): the frame is discarded silently; no row is created or updated, and the CAN status row does **not** flip to Error — a malformed frame is a quiet drop, not a link-level fault.
+- **A malformed or incomplete WHO_I_AM announcement** (wrong reassembled length, garbage bytes, a multi-frame sequence missing a fragment, or a reassembled message that decodes to a different command): the announcement is discarded silently; no row is created or updated, and the CAN status row does **not** flip to Error — a bad announcement is a quiet drop, not a link-level fault.
 - **The same panel re-announces several times in quick succession**: the existing row's last-seen timestamp advances with each broadcast; no duplicate row is created.
 - **Pruning a row while the technician is reading it**: the update is non-destructive on screen — hover or selection is not interrupted by the prune.
 - **Variant byte is `0xFF` (the virgin marker)**: the variant column reads "virgin", and the detail affordance explains the panel has never been baptized to a specific machine model.
@@ -50,7 +50,7 @@ Because pristine panels broadcast their identity automatically on a UUID-derived
 - **FR-004**: System MUST show, for each row, the timestamp of that panel's most recent broadcast, and update it in place when a newer broadcast arrives.
 - **FR-005**: System MUST prune a row once no broadcast has been heard from that panel for 15 seconds, so the list reflects what is currently announcing itself rather than everything heard this session.
 - **FR-006**: System MUST present an empty-state explanation when the list is empty, distinguishing "the link is down" from "the link is up but nothing is announcing itself right now".
-- **FR-007**: System MUST silently discard a `WHO_I_AM` frame whose payload does not satisfy the documented wire layout; a discarded frame MUST NOT flip the CAN status row to Error.
+- **FR-007**: System MUST silently discard a `WHO_I_AM` announcement that does not satisfy the documented wire layout — including a multi-frame sequence that fails to reassemble into a complete, correctly sized payload, and a reassembled message that decodes to a command other than `WHO_I_AM`. A discarded announcement MUST NOT flip the CAN status row to Error.
 - **FR-008**: System MUST clear the Panels-on-bus list when the CAN link transitions from Connected to any non-Connected state, so the list never shows stale rows from a prior Connected window.
 - **FR-009**: System MUST NOT transmit any CAN frame as part of discovery — the feature is pure observation, start to finish.
 
@@ -75,7 +75,8 @@ Because pristine panels broadcast their identity automatically on a UUID-derived
 - A claimed (previously-baptized) panel does not broadcast in normal operation; surfacing such a panel in the list requires the reset-to-virgin flow that lands in a later feature.
 - The pruning threshold is locked at **15 seconds** (≈ 2.5× the worst-case ~6 s re-announcement cadence). See FR-005.
 - The four known marketing variants and their identity-byte values (EDEN-XP, OPTIMUS-XP, R-3L XP, EDEN-BS8) are firmware constants, audited 2026-05-24 and recorded in `docs/Context/bpt-rollout/CORRECTIONS.md`.
-- The variant-byte-to-name mapping and the protocol command codes are firmware constants for this feature; no fetched dictionary is consulted to drive any CAN-side decoding in this slice.
+- **A `WHO_I_AM` announcement is carried on the bus as a *segmented* multi-frame STEM SP_APP message** — several classic-CAN frames on the auto-address broadcast id, each carrying a 2-byte Network-Layer header — reassembled into one application packet before its 15-byte payload is decoded. The tester reassembles the fragments and reads the WHO_I_AM payload (firmware `AutoAddressSlave.c`; transport: STEM Network Layer). The single-frame model in the previous draft was wrong; the reassembly machinery already exists in the vendored protocol stack and this feature reuses it. Wire detail lives in [`contracts/who-i-am-wire-format.md`](./contracts/who-i-am-wire-format.md).
+- The variant-byte-to-name mapping and the protocol command codes are firmware constants for this feature (the auto-address `WHO_I_AM` command code identifies the announcement; the variant byte decodes the panel); no fetched dictionary is consulted to drive any CAN-side decoding in this slice.
 
 ## Dependencies
 
