@@ -146,6 +146,7 @@ type MainWindow(services: IServiceProvider) as this =
 
     let service = services.GetRequiredService<IDictionaryService>()
     let canLinkService = services.GetRequiredService<ICanLinkService>()
+    let panelDiscovery = services.GetRequiredService<IPanelDiscoveryService>()
     let credentialStore = services.GetRequiredService<ICredentialStore>()
     let registrationClient = services.GetRequiredService<IRegistrationClient>()
     let descriptorProvider =
@@ -182,6 +183,12 @@ type MainWindow(services: IServiceProvider) as this =
     /// only after dictionary boot completes; see the `Opened`
     /// handler below).
     let mutable lastCanState: CanLinkState = Initializing
+
+    /// Latest Panels-on-bus snapshot observed via
+    /// `IPanelDiscoveryService.PanelsOnBusChanged`. Starts empty (the
+    /// pre-first-observation value); the subscription below advances it
+    /// on every observe / prune / link-loss clear and re-renders.
+    let mutable lastPanelsOnBus: PanelsOnBus = PanelsOnBus.empty
 
     // Active Avalonia theme. Initial value read once at construction
     // from `Application.Current.ActualThemeVariant`; every render
@@ -308,10 +315,12 @@ type MainWindow(services: IServiceProvider) as this =
         renderCombined <- fun () ->
             // Dictionary row (top) — placeholder until SourceChanged
             // fires for the first time. CAN row (middle) — always
-            // present, starts in `Initializing`. The PanelsOnBus row is
-            // reserved for spec-003 and not rendered yet; its data comes
-            // from `IPanelDiscoveryService` (#197), and the vertical
-            // stack leaves room for it as a third child.
+            // present, starts in `Initializing`. Panels-on-bus list
+            // (bottom) — rendered from `IPanelDiscoveryService`
+            // (#197 / spec-003): the third child re-renders on every
+            // `PanelsOnBusChanged` emission (observe / prune / link-loss
+            // clear) and uses `lastCanState` for the FR-006 empty-state
+            // explainer (link-down vs link-up-but-idle).
             let dictionaryRowView : IView =
                 DictionaryStatusRow.dictionaryView
                     cacheFilePath
@@ -328,6 +337,7 @@ type MainWindow(services: IServiceProvider) as this =
                     StackPanel.children [
                         dictionaryRowView
                         CanStatusRow.view lastCanState kickoffReconnect
+                        PanelsOnBusView.view lastPanelsOnBus lastCanState
                     ]
                 ]
                 :> IView
@@ -361,6 +371,17 @@ type MainWindow(services: IServiceProvider) as this =
             |> Observable.subscribe (fun state ->
                 Dispatcher.UIThread.Post(fun () ->
                     lastCanState <- state
+                    renderCombined ()))
+
+        // PanelsOnBusChanged → re-render on the UI thread. The discovery
+        // service fires from the CAN read-loop thread (production) or a
+        // synchronous test caller; marshal back to the UI thread the same
+        // way as LinkStateChanged so the third slot repaints safely.
+        let _ : IDisposable =
+            panelDiscovery.PanelsOnBusChanged
+            |> Observable.subscribe (fun panels ->
+                Dispatcher.UIThread.Post(fun () ->
+                    lastPanelsOnBus <- panels
                     renderCombined ()))
 
         ()
