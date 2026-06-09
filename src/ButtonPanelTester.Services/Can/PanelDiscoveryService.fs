@@ -49,43 +49,43 @@ module private DiscoveryObservable =
 /// spec-003 grows the discovery pipeline inside an independent spec
 /// without touching the CAN lifecycle service.
 ///
-/// The constructor subscribes to `ICanFrameStream.RawFramesReceived`
-/// and runs the live WHO_I_AM ingest pipeline: act only on a broadcast
-/// frame of the right size while `ICanLinkService.CurrentState` is
-/// `Connected`; parse; coalesce by UUID into the held `PanelsOnBus`;
-/// publish the new snapshot. Every other frame, a parse failure, or a
-/// non-Connected link is a silent drop (FR-007).
+/// The constructor subscribes to `IWhoIAmObserver.WhoIAmObserved` —
+/// the reassembly adapter (spec-003 R2, `WhoIAmReassemblyObserver`)
+/// owns reassembly of the segmented WHO_I_AM transport, the command
+/// filter, and the parse, so this service receives an already-decoded
+/// `WhoIAmFrame`. On each observation, while `ICanLinkService.CurrentState`
+/// is `Connected`, it coalesces by UUID into the held `PanelsOnBus` and
+/// publishes the new snapshot. An observation arriving while the link is
+/// not `Connected` is a silent drop (FR-007).
 ///
-/// B2 (this slice) adds the 1 s prune timer (FR-005): each tick drops rows older
-/// than the 15 s TTL and republishes only when the row count changed. The service
-/// now owns `IDisposable` (stops + disposes the timer and detaches the frame
-/// subscription). B3 adds the FR-008 link-loss clear: on leaving `Connected` the held
-/// map is cleared and an empty snapshot published immediately (independent of the
-/// prune TTL). The discovery pipeline is now complete.
-type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, clock: IClock) =
+/// B2 adds the 1 s prune timer (FR-005): each tick drops rows older than
+/// the 15 s TTL and republishes only when the row count changed. The service
+/// owns `IDisposable` (stops + disposes the timer and detaches the WHO_I_AM
+/// and link-state subscriptions). B3 adds the FR-008 link-loss clear: on
+/// leaving `Connected` the held map is cleared and an empty snapshot published
+/// immediately (independent of the prune TTL). The discovery pipeline is complete.
+type PanelDiscoveryService(observer: IWhoIAmObserver, link: ICanLinkService, clock: IClock) =
 
     let panelsSubject = DiscoveryObservable.SubjectFanOut<PanelsOnBus>()
     let panelsLock = obj ()
     let mutable panelsOnBus: PanelsOnBus = PanelsOnBus.empty
 
-    /// WHO_I_AM ingest: act only on a broadcast frame of the right size
-    /// while the link is `Connected`; parse; coalesce by UUID into the
-    /// held map; publish the new snapshot. Every other frame, a parse
-    /// failure, or a non-Connected link is a silent drop (FR-007). The
-    /// map mutation happens under `panelsLock`; the publish fires OUTSIDE
-    /// the lock so a slow subscriber can never stall an ingest thread.
-    let onFrame (frame: RawCanFrame) =
+    /// WHO_I_AM ingest: the reassembly adapter (spec-003 R2) already owns
+    /// reassembly, the command filter, and the parse, so this handler just
+    /// coalesces the decoded frame by UUID into the held map while the link
+    /// is `Connected` and publishes the new snapshot. An observation arriving
+    /// while the link is not `Connected` is a silent drop (FR-007). The map
+    /// mutation happens under `panelsLock`; the publish fires OUTSIDE the lock
+    /// so a slow subscriber can never stall an ingest thread.
+    let onWhoIAm (f: WhoIAmFrame) =
         match link.CurrentState with
-        | Connected _ when frame.CanId = 0x1FFFFFFFu && frame.Payload.Length = 15 ->
-            match WhoIAmFrame.parse frame.Payload with
-            | Some f ->
-                let updated =
-                    lock panelsLock (fun () ->
-                        panelsOnBus <- PanelsOnBus.observe (clock.UtcNow()) f panelsOnBus
-                        panelsOnBus)
+        | Connected _ ->
+            let updated =
+                lock panelsLock (fun () ->
+                    panelsOnBus <- PanelsOnBus.observe (clock.UtcNow()) f panelsOnBus
+                    panelsOnBus)
 
-                panelsSubject.OnNext updated // publish OUTSIDE the lock
-            | None -> ()
+            panelsSubject.OnNext updated // publish OUTSIDE the lock
         | _ -> ()
 
     /// One prune pass: drop rows older than the 15 s TTL (FR-005) as of `clock.UtcNow()`,
@@ -123,11 +123,11 @@ type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, 
 
             cleared |> Option.iter (fun snapshot -> panelsSubject.OnNext snapshot)
 
-    /// Held so the frame subscription outlives the constructor (mirrors
+    /// Held so the WHO_I_AM subscription outlives the constructor (mirrors
     /// `CanLinkService`'s `_linkSubscription`); detached in `Dispose`
     /// alongside the prune timer and the link-state subscription.
-    let _frameSubscription: IDisposable =
-        frameStream.RawFramesReceived |> Observable.subscribe onFrame
+    let _whoIAmSubscription: IDisposable =
+        observer.WhoIAmObserved |> Observable.subscribe onWhoIAm
 
     /// 1 s prune timer (research R4). Created + started in the ctor; each tick runs
     /// `pruneOnce`. A tick over the empty map is a no-op, so it self-quiesces when no
@@ -140,7 +140,7 @@ type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, 
             TimeSpan.FromSeconds 1.0)
 
     /// Held so the link-state subscription outlives the ctor; detached in `Dispose`
-    /// alongside the frame subscription and the prune timer. Drives the FR-008 clear
+    /// alongside the WHO_I_AM subscription and the prune timer. Drives the FR-008 clear
     /// on every `LinkStateChanged` emission (see `onLinkState`).
     let _linkSubscription: IDisposable =
         link.LinkStateChanged |> Observable.subscribe onLinkState
@@ -159,5 +159,5 @@ type PanelDiscoveryService(frameStream: ICanFrameStream, link: ICanLinkService, 
     interface IDisposable with
         member _.Dispose() =
             pruneTimer.Dispose()
-            _frameSubscription.Dispose()
+            _whoIAmSubscription.Dispose()
             _linkSubscription.Dispose()

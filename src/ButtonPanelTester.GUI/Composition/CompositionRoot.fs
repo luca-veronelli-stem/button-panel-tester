@@ -249,6 +249,15 @@ module CompositionRoot =
                 let clock = sp.GetRequiredService<IClock>()
                 let logger = sp.GetRequiredService<ILogger<PcanCanFrameStream>>()
                 new PcanCanFrameStream(share, clock, logger) :> ICanFrameStream)
+            // Reassembly adapter (spec-003 R2): reassembles the segmented
+            // WHO_I_AM transport off the bound `ICanFrameStream`, command-
+            // filters, and parses, exposing decoded `WhoIAmFrame`s on
+            // `IWhoIAmObserver`. The discovery service consumes this in
+            // place of the raw frame stream (below).
+            .AddSingleton<IWhoIAmObserver>(fun sp ->
+                let frameStream = sp.GetRequiredService<ICanFrameStream>()
+                let logger = sp.GetRequiredService<ILogger<WhoIAmReassemblyObserver>>()
+                new WhoIAmReassemblyObserver(frameStream, logger) :> IWhoIAmObserver)
             .AddSingleton<ICanLinkService>(fun sp ->
                 let link = sp.GetRequiredService<ICanLink>()
                 let clock = sp.GetRequiredService<IClock>()
@@ -256,17 +265,19 @@ module CompositionRoot =
                 CanLinkService(link, clock, logger) :> ICanLinkService)
             // Panel discovery (#197) — split out of CanLinkService so
             // spec-003 owns the discovery pipeline as an independent
-            // spec. The live WHO_I_AM ingest pipeline (filter → parse →
-            // coalesce → publish) is wired here: the service subscribes
-            // to `ICanFrameStream` and gates on `ICanLinkService`'s
-            // Connected state. `ICanFrameStream` now binds to the real
-            // `PcanCanFrameStream` above (T018), so WHO_I_AM frames flow
-            // once the link `OpenAsync` builds the shared PEAK port;
-            // nothing renders the surface yet (the third UI slot is
-            // Phase D, spec-003 too). The three dependencies are already
-            // bound earlier in this graph.
+            // spec. The service now consumes the reassembly adapter
+            // (`IWhoIAmObserver`) rather than the raw `ICanFrameStream`:
+            // `WhoIAmReassemblyObserver` reassembles the segmented WHO_I_AM
+            // transport off the bound `ICanFrameStream`, command-filters,
+            // and parses, so the service receives already-decoded
+            // `WhoIAmFrame`s, coalesces them by UUID while
+            // `ICanLinkService` is Connected, and publishes the snapshot.
+            // WHO_I_AM frames flow once the link `OpenAsync` builds the
+            // shared PEAK port; nothing renders the surface yet (the
+            // third UI slot is Phase D, spec-003 too). The dependencies
+            // are already bound earlier in this graph.
             .AddSingleton<IPanelDiscoveryService>(fun sp ->
-                let frameStream = sp.GetRequiredService<ICanFrameStream>()
+                let observer = sp.GetRequiredService<IWhoIAmObserver>()
                 let link = sp.GetRequiredService<ICanLinkService>()
                 let clock = sp.GetRequiredService<IClock>()
-                new PanelDiscoveryService(frameStream, link, clock) :> IPanelDiscoveryService)
+                new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService)
