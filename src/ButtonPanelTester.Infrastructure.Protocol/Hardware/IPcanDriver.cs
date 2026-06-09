@@ -21,6 +21,13 @@ public interface IPcanDriver
     /// </summary>
     Task<bool> SendMessageAsync(uint canId, byte[] data, bool isExtended);
 
+    /// <summary>
+    /// Starts the background receive loop that raises <see cref="PacketReceived"/>.
+    /// Idempotent — safe to call repeatedly; a call made while the loop is already
+    /// running is a no-op rather than spawning a second reader.
+    /// </summary>
+    void StartReading();
+
     /// <summary>Chiude il canale PCAN.</summary>
     void Disconnect();
 }

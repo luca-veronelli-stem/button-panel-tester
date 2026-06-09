@@ -75,6 +75,11 @@ public sealed class CanPort : ICommunicationPort
             ct.ThrowIfCancellationRequested();
             if (_driver.IsConnected)
             {
+                // The driver reports Connected after a clean open but does not
+                // start its receive loop on that path (only a reconnect does —
+                // PCANManager.cs:134,142). Kick it here so PacketReceived fires;
+                // StartReading is idempotent, so a later reconnect-restart is safe.
+                _driver.StartReading();
                 Transition(ConnectionState.Connected);
                 return;
             }

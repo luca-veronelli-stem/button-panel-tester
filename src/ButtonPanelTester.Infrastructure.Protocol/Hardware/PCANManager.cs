@@ -273,6 +273,9 @@ public class PCANManager : IPcanDriver, IAsyncDisposable
     public void StartReading()
     {
         if (_cts.IsCancellationRequested) return;
+        // Idempotent: a reader is already running, don't spawn a second
+        // PCANBasic.Read loop (would double-drain the receive queue).
+        if (_readTask is { IsCompleted: false }) return;
         _readTask = Task.Run(ReadCANMessagesAsync, _cts.Token);
     }
 
