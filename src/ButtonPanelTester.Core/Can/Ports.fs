@@ -82,3 +82,15 @@ type ICanFrameStream =
     /// of the `OnNext` callback — subscribers that need to retain the
     /// bytes MUST copy (`payload.Span.ToArray()` or `payload.ToArray()`).
     abstract member RawFramesReceived: IObservable<RawCanFrame>
+
+/// Reassembled-WHO_I_AM port, per
+/// `specs/003-panel-discovery/contracts/who-i-am-wire-format.md` §Receive + parse
+/// contract. The reassembly adapter (Infrastructure, T036) is the only production
+/// implementer; `PanelDiscoveryService` (T038) consumes this in place of the raw
+/// `ICanFrameStream`. Emits one `WhoIAmFrame` per reassembled + command-matched +
+/// parsed WHO_I_AM; every drop axis is a silent non-event (FR-007 — no Error surface).
+/// Receive-only (FR-009). (FR-001)
+type IWhoIAmObserver =
+    /// Hot observable of decoded WHO_I_AM frames. Fires on the vendored read thread;
+    /// subscribe at composition time (late subscribers do not replay).
+    abstract member WhoIAmObserved: IObservable<WhoIAmFrame>
