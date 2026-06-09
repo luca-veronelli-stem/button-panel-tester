@@ -31,21 +31,6 @@ open Stem.ButtonPanelTester.Services.Dictionary
 // launch path no longer goes through `IDictionaryProvider` (it
 // reads the cache directly).
 
-/// Placeholder `ICanFrameStream` for spec-002 PR-C — emits nothing
-/// and never raises. Bound to the DI graph so the container has a
-/// concrete binding for the port; the real `PcanCanFrameStream`
-/// replaces it in spec-002 PR-D (T044) when WHO_I_AM ingest goes
-/// live (T049 wires it into the composition root). Defined inline
-/// here because it has exactly one consumer (the DI graph itself)
-/// and exactly one use (this slice).
-type private NoOpCanFrameStream() =
-    interface ICanFrameStream with
-        member _.RawFramesReceived =
-            { new IObservable<RawCanFrame> with
-                member _.Subscribe(_: IObserver<RawCanFrame>) =
-                    { new IDisposable with
-                        member _.Dispose() = () } }
-
 /// `Microsoft.Extensions.DependencyInjection` wiring for the
 /// `ButtonPanelTester.GUI` host, per
 /// `specs/001-fetch-dictionary/contracts/ports.md` §Composition root.
@@ -236,47 +221,34 @@ module CompositionRoot =
                 HttpDictionaryServiceWarmUp(httpClient, logger) :> IDictionaryServiceWarmUp)
             .AddSingleton<DictionaryWarmUp>()
             .AddSingleton<IDictionaryService, DictionaryService>()
-            // CAN port + service graph, registered AFTER
-            // IDictionaryService so the FR-001 boot order
-            // (dictionary first, CAN second) is observable in the
-            // DI container's enumeration. Functional ordering is
-            // enforced by App.fs's Opened handler awaiting the
-            // dictionary InitializeAsync before invoking
+            // CAN port + service graph, registered AFTER IDictionaryService so the
+            // FR-001 boot order (dictionary first, CAN second) is observable in the
+            // DI container's enumeration. Functional ordering is enforced by App.fs's
+            // Opened handler awaiting the dictionary InitializeAsync before
             // `ICanLinkService.InitializeAsync`.
             //
-            // `PcanCanLink` takes a port factory rather than a
-            // pre-constructed `ICommunicationPort` so the vendored
-            // `PCANManager`'s P/Invoke into `pcanbasic.dll` does
-            // NOT execute until `OpenAsync` is first called. On
-            // hosts without the PEAK driver installed
-            // (`DllNotFoundException`) the failure surfaces as an
-            // observable `Error(Fatal …)` state on
-            // `LinkStateChanged` — the GUI shows the real cause in
-            // the row headline + tooltip — instead of crashing the
-            // composition root before MainWindow paints. Bench
-            // rigs with the driver get the real lifecycle.
-            //
-            // `IPcanDriver` and `ICommunicationPort` are NOT
-            // registered as separate singletons in PR-C: their
-            // only consumer is the factory below, and a separate
-            // DI binding would re-introduce the
-            // eager-PCANManager-construction problem. PR-D
-            // (T049 wiring of `PcanCanFrameStream`) re-evaluates
-            // when a second consumer of `ICommunicationPort`
-            // appears.
-            //
-            // `ICanFrameStream` binds to the no-op placeholder
-            // until T049 replaces it with `PcanCanFrameStream`.
-            .AddSingleton<ICanLink>(fun sp ->
-                let logger = sp.GetRequiredService<ILogger<PcanCanLink>>()
-
-                let portFactory () : ICommunicationPort =
+            // `CanPortShare` lazily builds ONE `ICommunicationPort` and shares it between
+            // the lifecycle adapter (`PcanCanLink`, via `GetOrBuild` as its port factory)
+            // and the receive adapter (`PcanCanFrameStream`, via `OnBuilt`). The vendored
+            // `PCANManager`'s P/Invoke into `pcanbasic.dll` does NOT execute until the
+            // first `OpenAsync` forces `GetOrBuild`, so a host without the PEAK driver
+            // (`DllNotFoundException`) surfaces an observable `Error(Fatal ...)` on
+            // `LinkStateChanged` rather than crashing the composition root before
+            // MainWindow paints. One PEAK handle now serves both lifecycle + receive —
+            // the holder is the single consumer of the port.
+            .AddSingleton<CanPortShare>(fun _ ->
+                new CanPortShare(fun () ->
                     let driver = new PCANManager(TPCANBaudrate.PCAN_BAUD_250K) :> IPcanDriver
-                    new CanPort(driver) :> ICommunicationPort
-
-                PcanCanLink(portFactory, logger) :> ICanLink)
-            .AddSingleton<ICanFrameStream>(fun _ ->
-                NoOpCanFrameStream() :> ICanFrameStream)
+                    new CanPort(driver) :> ICommunicationPort))
+            .AddSingleton<ICanLink>(fun sp ->
+                let share = sp.GetRequiredService<CanPortShare>()
+                let logger = sp.GetRequiredService<ILogger<PcanCanLink>>()
+                PcanCanLink((fun () -> share.GetOrBuild()), logger) :> ICanLink)
+            .AddSingleton<ICanFrameStream>(fun sp ->
+                let share = sp.GetRequiredService<CanPortShare>()
+                let clock = sp.GetRequiredService<IClock>()
+                let logger = sp.GetRequiredService<ILogger<PcanCanFrameStream>>()
+                new PcanCanFrameStream(share, clock, logger) :> ICanFrameStream)
             .AddSingleton<ICanLinkService>(fun sp ->
                 let link = sp.GetRequiredService<ICanLink>()
                 let clock = sp.GetRequiredService<IClock>()
@@ -287,11 +259,11 @@ module CompositionRoot =
             // spec. The live WHO_I_AM ingest pipeline (filter → parse →
             // coalesce → publish) is wired here: the service subscribes
             // to `ICanFrameStream` and gates on `ICanLinkService`'s
-            // Connected state. `ICanFrameStream` is still the
-            // `NoOpCanFrameStream` placeholder above until Phase C/T018
-            // swaps in `PcanCanFrameStream`, so no frames flow yet at
-            // runtime; nothing renders the surface either (the third UI
-            // slot is spec-003 too). The three dependencies are already
+            // Connected state. `ICanFrameStream` now binds to the real
+            // `PcanCanFrameStream` above (T018), so WHO_I_AM frames flow
+            // once the link `OpenAsync` builds the shared PEAK port;
+            // nothing renders the surface yet (the third UI slot is
+            // Phase D, spec-003 too). The three dependencies are already
             // bound earlier in this graph.
             .AddSingleton<IPanelDiscoveryService>(fun sp ->
                 let frameStream = sp.GetRequiredService<ICanFrameStream>()

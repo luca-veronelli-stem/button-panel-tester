@@ -33,6 +33,7 @@
         <Compile Include="Gui/DictionaryStatusRowRefreshTests.fs" />
         <Compile Include="Gui/RegistrationDialogTests.fs" />
         <Compile Include="Gui/Can/CanStatusRowTests.fs" />
+        <Compile Include="Integration/Can/CompositionRootCanTests.fs" />
         <Compile Include="Integration/Can/Hardware/PcanLifecycleTests.fs" />
     </ItemGroup>
 
