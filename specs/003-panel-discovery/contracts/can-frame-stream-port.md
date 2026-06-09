@@ -42,13 +42,16 @@ stack hand the tester a pooled buffer without a copy at the port boundary.
 
 ## Adapter contract
 
-### Production: `PcanCanFrameStream` — to be written (spec-003)
+### Production: `PcanCanFrameStream` — shipped (spec-003)
 
 `src/ButtonPanelTester.Infrastructure/Can/PcanCanFrameStream.fs`
-(`net10.0-windows`). Does **not** exist yet — today the composition root binds a
-private `NoOpCanFrameStream` placeholder that emits nothing
-(`src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs`). The spec-003
-discovery-pipeline slice writes the real adapter and swaps the binding:
+(`net10.0-windows`). Shipped in slice C1 (T017) and wired into the composition
+root in slice C2 (T018): the GUI host now binds `ICanFrameStream` to a real
+`PcanCanFrameStream` (`src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs`),
+the private `NoOpCanFrameStream` placeholder is deleted, and a single
+`CanPortShare` lazily builds the one PEAK `ICommunicationPort` shared between this
+receive adapter (via `share.OnBuilt`) and `PcanCanLink`'s lifecycle (via
+`share.GetOrBuild`). The adapter:
 
 - Subscribes to the vendored stack's `PacketReceived` event on the CAN port.
 - Translates the event args → `RawCanFrame`: `CanId` from the arbitration ID,
