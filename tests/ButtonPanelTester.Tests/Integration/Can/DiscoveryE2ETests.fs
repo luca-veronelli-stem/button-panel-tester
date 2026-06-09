@@ -11,25 +11,27 @@ open Stem.ButtonPanelTester.Services.Can
 open Stem.ButtonPanelTester.Tests.Fakes
 open Stem.ButtonPanelTester.Tests.Fakes.Can
 
-/// Example-based integration tests for the live WHO_I_AM ingest pipeline
-/// in `PanelDiscoveryService` (spec-003 B1, T010). Drives a real
-/// `CanLinkService` (wrapping `InMemoryCanLink`) + the synchronous
-/// `InMemoryCanFrameStream.Emit` + `FrozenClock` so the
-/// filter → parse → coalesce → publish path is exercised deterministically,
-/// one frame at a time, without touching real PEAK hardware.
+/// Example-based integration tests for the WHO_I_AM ingest pipeline in
+/// `PanelDiscoveryService` (spec-003 B1, T010; re-sourced onto the reassembly
+/// observer in R3, T040). Drives a real `CanLinkService` (wrapping
+/// `InMemoryCanLink`) + the synchronous `InMemoryWhoIAmObserver.Emit` +
+/// `FrozenClock` so the coalesce → publish path is exercised deterministically,
+/// one decoded frame at a time, without touching real PEAK hardware. The
+/// reassembly adapter (R2) owns reassembly/command/parse, so the service now
+/// receives already-decoded `WhoIAmFrame`s — the wrong-length / non-broadcast
+/// drop cases moved to `WhoIAmReassemblyObserverTests` (T037).
 ///
 /// Coverage:
-///   - (a) Connected + one broadcast → one decoded row, ≥1 change.
-///   - (b) re-broadcast of the same UUID after a clock advance coalesces
+///   - (a) Connected + one observation → one decoded row, ≥1 change.
+///   - (b) re-observation of the same UUID after a clock advance coalesces
 ///         in place and advances `LastSeen` (FR-002 / SC-002).
 ///   - (c) two distinct UUIDs → two rows.
-///   - (d) broadcast with a wrong-length payload is dropped silently and
-///         does NOT flip the link to Error (FR-007).
-///   - (e) a valid frame on a non-broadcast id is ignored.
-///   - (f) a valid broadcast while the link is not Connected is dropped
+///   - (f) a valid observation while the link is not Connected is dropped
 ///         (FR-007).
-///   - (g) one broadcast publishes exactly once, within the SC-001
+///   - (g) one observation publishes exactly once, within the SC-001
 ///         latency budget (trivial under `FrozenClock`).
+///   - (h) an adapter-drop (observer emits nothing) then a valid observation,
+///         over a real `CanLinkService`, never flips the link to Error (FR-007).
 
 // --- fixtures ---
 
@@ -40,10 +42,6 @@ let private fixedAdapter : AdapterIdentification =
     { ChannelName = "PCAN-USB (1)"
       DeviceId = "0x01"
       BaudrateBps = 250_000 }
-
-/// Broadcast arbitration id every WHO_I_AM frame rides, per
-/// `who-i-am-wire-format.md`.
-let private broadcastId = 0x1FFFFFFFu
 
 /// A real `CanLinkService` (wrapping `InMemoryCanLink`) driven to
 /// `Connected` via `InitializeAsync`.
@@ -62,19 +60,10 @@ let private notConnectedLink (clock: IClock) : ICanLinkService =
     CanLinkService(InMemoryCanLink(Seq.empty), clock, NullLogger<CanLinkService>.Instance)
     :> ICanLinkService
 
-/// Build a valid 15-byte WHO_I_AM frame via the real encoder. The
-/// machine-type byte is `0xFF` (virgin); the fwType is the 12 V
-/// `0x0004` hardware variant.
-let private whoIam (canId: uint32) (u0, u1, u2) : RawCanFrame =
-    let payload =
-        WhoIAmFrame.encode
-            { MachineType = MachineTypeByte 0xFFuy
-              FwType = FwType 0x0004us
-              Uuid = PanelUuid(u0, u1, u2) }
-
-    { CanId = canId
-      Payload = ReadOnlyMemory(payload)
-      ReceivedAt = fixedNow }
+/// Build a decoded WHO_I_AM frame for the observer feed. The machine-type
+/// byte is `0xFF` (virgin); the fwType is the 12 V `0x0004` hardware variant.
+let private whoIamFrame (u0, u1, u2) : WhoIAmFrame =
+    { MachineType = MachineTypeByte 0xFFuy; FwType = FwType 0x0004us; Uuid = PanelUuid(u0, u1, u2) }
 
 /// Subscribe to the change feed and accumulate every published snapshot.
 let private collect (svc: IPanelDiscoveryService) =
@@ -88,15 +77,15 @@ let private collect (svc: IPanelDiscoveryService) =
 let Ingest_ConnectedSingleBroadcast_AddsOneRowWithDecodedVariant () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
+    let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
 
     let changes = collect svc
 
     let uuid = (0x177Cu, 0x126Du, 0x7308u)
-    stream.Emit(whoIam broadcastId uuid)
+    observer.Emit(whoIamFrame uuid)
 
     Assert.Equal(1, svc.PanelsOnBus.Count)
     let row = svc.PanelsOnBus.[PanelUuid uuid]
@@ -109,17 +98,17 @@ let Ingest_ConnectedSingleBroadcast_AddsOneRowWithDecodedVariant () =
 let Ingest_SameUuidReBroadcastAfterAdvance_CoalescesAndAdvancesLastSeen () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
+    let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
 
     let uuid = (0x1u, 0x2u, 0x3u)
-    stream.Emit(whoIam broadcastId uuid)
+    observer.Emit(whoIamFrame uuid)
     Assert.Equal<DateTimeOffset>(fixedNow, svc.PanelsOnBus.[PanelUuid uuid].LastSeen)
 
     clock.Advance(TimeSpan.FromSeconds 3.0)
-    stream.Emit(whoIam broadcastId uuid)
+    observer.Emit(whoIamFrame uuid)
 
     Assert.Equal(1, svc.PanelsOnBus.Count)
     Assert.Equal<DateTimeOffset>(fixedNow.AddSeconds 3.0, svc.PanelsOnBus.[PanelUuid uuid].LastSeen)
@@ -130,55 +119,15 @@ let Ingest_SameUuidReBroadcastAfterAdvance_CoalescesAndAdvancesLastSeen () =
 let Ingest_TwoDistinctUuids_AddsTwoRows () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
+    let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
 
-    stream.Emit(whoIam broadcastId (0x1u, 0x2u, 0x3u))
-    stream.Emit(whoIam broadcastId (0x4u, 0x5u, 0x6u))
+    observer.Emit(whoIamFrame (0x1u, 0x2u, 0x3u))
+    observer.Emit(whoIamFrame (0x4u, 0x5u, 0x6u))
 
     Assert.Equal(2, svc.PanelsOnBus.Count)
-
-// --- (d) wrong-length broadcast dropped, link stays Connected ---
-
-[<Fact>]
-let Ingest_BroadcastWrongLengthPayload_DropsSilentlyKeepsLinkConnected () =
-    let clock = FrozenClock(fixedNow)
-    let link = connectedLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
-
-    let svc =
-        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
-
-    let malformed : RawCanFrame =
-        { CanId = broadcastId
-          Payload = ReadOnlyMemory(Array.zeroCreate<byte> 14)
-          ReceivedAt = fixedNow }
-
-    stream.Emit(malformed)
-
-    Assert.Equal(0, svc.PanelsOnBus.Count)
-    Assert.True(
-        match link.CurrentState with
-        | Connected _ -> true
-        | _ -> false
-    )
-
-// --- (e) valid frame on a non-broadcast id is ignored ---
-
-[<Fact>]
-let Ingest_ValidFrameOnNonBroadcastId_Ignored () =
-    let clock = FrozenClock(fixedNow)
-    let link = connectedLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
-
-    let svc =
-        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
-
-    stream.Emit(whoIam 0x123u (0x1u, 0x2u, 0x3u))
-
-    Assert.Equal(0, svc.PanelsOnBus.Count)
 
 // --- (f) broadcast while link not Connected is dropped ---
 
@@ -186,12 +135,12 @@ let Ingest_ValidFrameOnNonBroadcastId_Ignored () =
 let Ingest_LinkNotConnected_DropsBroadcastSilently () =
     let clock = FrozenClock(fixedNow)
     let link = notConnectedLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
+    let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
 
-    stream.Emit(whoIam broadcastId (0x1u, 0x2u, 0x3u))
+    observer.Emit(whoIamFrame (0x1u, 0x2u, 0x3u))
 
     Assert.Equal(0, svc.PanelsOnBus.Count)
 
@@ -201,16 +150,39 @@ let Ingest_LinkNotConnected_DropsBroadcastSilently () =
 let Ingest_ConnectedSingleBroadcast_PublishesOnceWithinLatencyBudget () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
+    let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(stream, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
 
     let changes = collect svc
 
     let uuid = (0x1u, 0x2u, 0x3u)
-    stream.Emit(whoIam broadcastId uuid)
+    observer.Emit(whoIamFrame uuid)
 
     Assert.Equal(1, changes.Count)
     let row = svc.PanelsOnBus.[PanelUuid uuid]
     Assert.True(row.LastSeen - fixedNow <= TimeSpan.FromSeconds 6.0)
+
+// --- (h) adapter-drop then valid observation never flips the link ---
+
+// (h) FR-007 no-Error-flip, end-to-end over a real CanLinkService. The reassembly adapter has no
+//     link-state surface, so neither a dropped input (modeled as the observer emitting nothing — the
+//     real-adapter malformed drop is proven in WhoIAmReassemblyObserverTests/T037) nor a valid
+//     observation flips the link to Error: the discovery path only READS link state.
+[<Fact>]
+let Ingest_DropThenObserveWhileConnected_LinkNeverFlips () =
+    let clock = FrozenClock(fixedNow)
+    let link = connectedLink (clock :> IClock)
+    let observer = InMemoryWhoIAmObserver()
+    use svc = new PanelDiscoveryService(observer, link, clock)
+    let view = svc :> IPanelDiscoveryService
+
+    // adapter-drop: nothing reaches the service -> no row, link untouched.
+    Assert.Equal(0, view.PanelsOnBus.Count)
+    Assert.True(match link.CurrentState with Connected _ -> true | _ -> false)
+
+    // a valid observation adds a row and STILL leaves the link Connected.
+    observer.Emit(whoIamFrame (0x1u, 0x2u, 0x3u))
+    Assert.Equal(1, view.PanelsOnBus.Count)
+    Assert.True(match link.CurrentState with Connected _ -> true | _ -> false)

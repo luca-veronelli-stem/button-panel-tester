@@ -17,15 +17,8 @@ let private fixedNow = DateTimeOffset(2026, 5, 24, 12, 0, 0, TimeSpan.Zero)
 let private fixedAdapter : AdapterIdentification =
     { ChannelName = "PCAN-USB (1)"; DeviceId = "0x01"; BaudrateBps = 250_000 }
 
-let private broadcastId = 0x1FFFFFFFu
-
-let private whoIam (canId: uint32) (u0, u1, u2) : RawCanFrame =
-    let payload =
-        WhoIAmFrame.encode
-            { MachineType = MachineTypeByte 0xFFuy
-              FwType = FwType 0x0004us
-              Uuid = PanelUuid(u0, u1, u2) }
-    { CanId = canId; Payload = ReadOnlyMemory(payload); ReceivedAt = fixedNow }
+let private whoIamFrame (u0, u1, u2) : WhoIAmFrame =
+    { MachineType = MachineTypeByte 0xFFuy; FwType = FwType 0x0004us; Uuid = PanelUuid(u0, u1, u2) }
 
 // A scripted link: Connected, then Disconnected. A second InitializeAsync re-Opens
 // the InMemoryCanLink, dequeuing the Disconnected step WITHOUT ReconnectAsync's
@@ -44,14 +37,14 @@ let private connectThenDisconnectLink (clock: IClock) : ICanLinkService =
 let LinkLoss_ConnectedObserveThenDisconnected_ClearsAndPublishesEmptyOnce () =
     let clock = FrozenClock(fixedNow)
     let canLink = connectThenDisconnectLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
+    let observer = InMemoryWhoIAmObserver()
     // Construct the service BEFORE driving the link, so its LinkStateChanged
     // subscription catches the disconnect transition.
-    use svc = new PanelDiscoveryService(stream, canLink, clock)
+    use svc = new PanelDiscoveryService(observer, canLink, clock)
     let view = svc :> IPanelDiscoveryService
 
     canLink.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()  // -> Connected
-    stream.Emit(whoIam broadcastId (0x1u, 0x2u, 0x3u))
+    observer.Emit(whoIamFrame (0x1u, 0x2u, 0x3u))
     Assert.Equal(1, view.PanelsOnBus.Count)
 
     // Subscribe AFTER the observe so we count only the clear publish; then advance
@@ -69,8 +62,8 @@ let LinkLoss_ConnectedObserveThenDisconnected_ClearsAndPublishesEmptyOnce () =
 let LinkLoss_DisconnectWithEmptyList_NoPublish () =
     let clock = FrozenClock(fixedNow)
     let canLink = connectThenDisconnectLink (clock :> IClock)
-    let stream = InMemoryCanFrameStream(Seq.empty)
-    use svc = new PanelDiscoveryService(stream, canLink, clock)
+    let observer = InMemoryWhoIAmObserver()
+    use svc = new PanelDiscoveryService(observer, canLink, clock)
     let view = svc :> IPanelDiscoveryService
 
     canLink.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()  // Connected, no panel
