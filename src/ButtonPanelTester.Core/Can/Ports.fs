@@ -63,18 +63,19 @@ type ICanLink =
     abstract member CurrentState: CanLinkState
 
 /// Receive port for the raw CAN frame stream, per
-/// `contracts/can-frame-stream-port.md` §Port definition. Implements
-/// FR-007 (receive side).
+/// `specs/003-panel-discovery/contracts/can-frame-stream-port.md` §Port
+/// definition. Implements FR-001 (receive side).
 ///
-/// Production adapter `PcanCanFrameStream` lands in T044 (US2 / PR-D);
-/// virtual adapter `InMemoryCanFrameStream` lands in T020 (commit 8
-/// of this PR-B).
+/// Production adapter `PcanCanFrameStream` (Infrastructure, spec-003 T017)
+/// translates the vendored stack's reassembled packets into `RawCanFrame`s;
+/// the virtual `InMemoryCanFrameStream` fake drives the test surface.
 ///
 /// Frames received while the link is down are dropped silently (no
 /// buffering across reconnects, per the contract's Adapter section).
-/// All filtering on `CanId` / `Payload.Length` happens in the service
-/// layer (`PanelDiscoveryService`); the port is a generic receive surface
-/// that later specs reuse for transmit-side responses.
+/// WHO_I_AM is a segmented multi-frame message, so `CanId = 0x1FFFFFFF`
+/// filtering and reassembly happen downstream in `WhoIAmReassemblyObserver`
+/// (Infrastructure, spec-003 T036), not in this port; the port is a generic
+/// receive surface that later specs reuse for transmit-side responses.
 type ICanFrameStream =
     /// Hot observable of every raw CAN frame received while the link
     /// is up. Fires on the vendored stack's read thread; the
