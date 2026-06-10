@@ -93,7 +93,7 @@ let private buildChain () : ICanLinkService * IPanelDiscoveryService * IDisposab
     let frameStream = new PcanCanFrameStream(share, clock, NullLogger<PcanCanFrameStream>.Instance)
     let observer = new WhoIAmReassemblyObserver(frameStream, NullLogger<WhoIAmReassemblyObserver>.Instance)
     let svc = CanLinkService(link, clock, NullLogger<CanLinkService>.Instance)
-    let discovery = new PanelDiscoveryService(observer, (svc :> ICanLinkService), clock)
+    let discovery = new PanelDiscoveryService(observer, (svc :> ICanLinkService), clock, NullLogger<PanelDiscoveryService>.Instance)
 
     let cleanup =
         { new IDisposable with

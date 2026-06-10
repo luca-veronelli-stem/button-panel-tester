@@ -40,7 +40,7 @@ let LinkLoss_ConnectedObserveThenDisconnected_ClearsAndPublishesEmptyOnce () =
     let observer = InMemoryWhoIAmObserver()
     // Construct the service BEFORE driving the link, so its LinkStateChanged
     // subscription catches the disconnect transition.
-    use svc = new PanelDiscoveryService(observer, canLink, clock)
+    use svc = new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let view = svc :> IPanelDiscoveryService
 
     canLink.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()  // -> Connected
@@ -63,7 +63,7 @@ let LinkLoss_DisconnectWithEmptyList_NoPublish () =
     let clock = FrozenClock(fixedNow)
     let canLink = connectThenDisconnectLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
-    use svc = new PanelDiscoveryService(observer, canLink, clock)
+    use svc = new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let view = svc :> IPanelDiscoveryService
 
     canLink.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()  // Connected, no panel

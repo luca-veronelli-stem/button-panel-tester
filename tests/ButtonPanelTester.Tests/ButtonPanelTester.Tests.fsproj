@@ -10,6 +10,7 @@
 
     <ItemGroup>
         <Compile Include="Fakes/Wiring.fs" />
+        <Compile Include="Fakes/RecordingLogger.fs" />
         <Compile Include="Fakes/Can/InMemoryCanLink.fs" />
         <Compile Include="Fakes/Can/InMemoryCanFrameStream.fs" />
         <Compile Include="Fakes/Can/InMemoryWhoIAmObserver.fs" />
@@ -37,6 +38,7 @@
         <Compile Include="Unit/WarmUpTests.fs" />
         <Compile Include="Unit/Can/WhoIAmFrameFixtureTests.fs" />
         <Compile Include="Unit/Can/CanLinkLoggingTests.fs" />
+        <Compile Include="Unit/Can/PanelDiscoveryLoggingTests.fs" />
     </ItemGroup>
 
     <ItemGroup>

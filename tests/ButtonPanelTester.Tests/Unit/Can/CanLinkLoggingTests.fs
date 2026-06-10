@@ -98,50 +98,6 @@ let SinceOf_TimestampedStates_AreSome () =
     Assert.Equal<DateTimeOffset option>(Some since, CanLinkLogging.sinceOf (Error(Recoverable "x", since)))
     Assert.Equal<DateTimeOffset option>(Some since, CanLinkLogging.sinceOf (Error(Fatal "x", since)))
 
-// --- recording logger ---
-
-/// One captured `ILogger.Log` call: its level and the structured
-/// key/value pairs of the message template (so tests can read the
-/// `State` field without parsing the rendered string).
-type private LogEntry =
-    { Level: LogLevel
-      Values: Map<string, obj> }
-
-/// Minimal recording `ILogger<'T>`. The net10.0 Tests project has no
-/// recording logger (existing CAN tests use `NullLogger`), so this one
-/// captures every `Log` call's level + structured values for assertion.
-type private RecordingLogger<'T>() =
-    let entries = ResizeArray<LogEntry>()
-
-    member _.Entries = entries
-
-    interface ILogger<'T>
-
-    interface ILogger with
-        member _.BeginScope<'TState when 'TState: not null>(_state: 'TState) =
-            { new IDisposable with
-                member _.Dispose() = () }
-
-        member _.IsEnabled(_level: LogLevel) = true
-
-        member _.Log<'TState>
-            (
-                level: LogLevel,
-                _eventId: EventId,
-                state: 'TState,
-                ex: exn,
-                formatter: Func<'TState, exn, string>
-            ) =
-            let _ = formatter.Invoke(state, ex)
-
-            let values =
-                match box state with
-                | :? IReadOnlyList<KeyValuePair<string, obj>> as kvs ->
-                    kvs |> Seq.map (fun kv -> kv.Key, kv.Value) |> Map.ofSeq
-                | _ -> Map.empty
-
-            entries.Add { Level = level; Values = values }
-
 // --- integration-style: exactly one State-bearing log per transition ---
 
 [<Fact>]
