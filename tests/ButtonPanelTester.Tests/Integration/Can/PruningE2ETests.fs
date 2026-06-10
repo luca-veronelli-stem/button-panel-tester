@@ -32,7 +32,7 @@ let Prune_RowExactlyAtTtl_StillPresentAfterTick () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
-    use svc = new PanelDiscoveryService(observer, link, clock)
+    use svc = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let view = svc :> IPanelDiscoveryService
     let uuid = (0x1u, 0x2u, 0x3u)
     observer.Emit(whoIamFrame uuid)
@@ -48,7 +48,7 @@ let Prune_RowPastTtl_PrunedAndPublishedOnce () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
-    use svc = new PanelDiscoveryService(observer, link, clock)
+    use svc = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let view = svc :> IPanelDiscoveryService
     let uuid = (0x1u, 0x2u, 0x3u)
     observer.Emit(whoIamFrame uuid)
@@ -70,7 +70,7 @@ let Prune_NothingExpired_EmitsNoDuplicate () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
-    use svc = new PanelDiscoveryService(observer, link, clock)
+    use svc = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let view = svc :> IPanelDiscoveryService
     observer.Emit(whoIamFrame (0x1u, 0x2u, 0x3u))
 

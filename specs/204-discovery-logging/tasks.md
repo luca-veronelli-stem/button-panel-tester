@@ -27,7 +27,7 @@ logger is **required**, no `?.`; templates + named params only (CA2254 clean); n
 
 ## Tasks
 
-- [ ] **T001** — `feat`: structured domain-event logging in `PanelDiscoveryService`
+- [X] **T001** — `feat`: structured domain-event logging in `PanelDiscoveryService`
   - RED: a capturing-`ILogger` test (new shared `Fakes/RecordingLogger.fs`) that (a) a first WHO_I_AM for a
     new UUID emits exactly one `Information` entry, and (b) a second WHO_I_AM for the **same** UUID emits **no
     further** `Information` entry. Fails before the impl (no `logger` param / no log calls).

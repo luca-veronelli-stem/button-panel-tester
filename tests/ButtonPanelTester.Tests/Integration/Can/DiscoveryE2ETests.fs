@@ -80,7 +80,7 @@ let Ingest_ConnectedSingleBroadcast_AddsOneRowWithDecodedVariant () =
     let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance) :> IPanelDiscoveryService
 
     let changes = collect svc
 
@@ -101,7 +101,7 @@ let Ingest_SameUuidReBroadcastAfterAdvance_CoalescesAndAdvancesLastSeen () =
     let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance) :> IPanelDiscoveryService
 
     let uuid = (0x1u, 0x2u, 0x3u)
     observer.Emit(whoIamFrame uuid)
@@ -122,7 +122,7 @@ let Ingest_TwoDistinctUuids_AddsTwoRows () =
     let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance) :> IPanelDiscoveryService
 
     observer.Emit(whoIamFrame (0x1u, 0x2u, 0x3u))
     observer.Emit(whoIamFrame (0x4u, 0x5u, 0x6u))
@@ -138,7 +138,7 @@ let Ingest_LinkNotConnected_DropsBroadcastSilently () =
     let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance) :> IPanelDiscoveryService
 
     observer.Emit(whoIamFrame (0x1u, 0x2u, 0x3u))
 
@@ -153,7 +153,7 @@ let Ingest_ConnectedSingleBroadcast_PublishesOnceWithinLatencyBudget () =
     let observer = InMemoryWhoIAmObserver()
 
     let svc =
-        new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService
+        new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance) :> IPanelDiscoveryService
 
     let changes = collect svc
 
@@ -175,7 +175,7 @@ let Ingest_DropThenObserveWhileConnected_LinkNeverFlips () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
-    use svc = new PanelDiscoveryService(observer, link, clock)
+    use svc = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let view = svc :> IPanelDiscoveryService
 
     // adapter-drop: nothing reaches the service -> no row, link untouched.

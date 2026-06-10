@@ -280,4 +280,5 @@ module CompositionRoot =
                 let observer = sp.GetRequiredService<IWhoIAmObserver>()
                 let link = sp.GetRequiredService<ICanLinkService>()
                 let clock = sp.GetRequiredService<IClock>()
-                new PanelDiscoveryService(observer, link, clock) :> IPanelDiscoveryService)
+                let logger = sp.GetRequiredService<ILogger<PanelDiscoveryService>>()
+                new PanelDiscoveryService(observer, link, clock, logger) :> IPanelDiscoveryService)
