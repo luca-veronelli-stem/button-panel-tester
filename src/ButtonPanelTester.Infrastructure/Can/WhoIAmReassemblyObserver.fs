@@ -54,7 +54,13 @@ type WhoIAmReassemblyObserver(frameStream: ICanFrameStream, logger: ILogger<WhoI
             // F# strict nullness (FS3261): Accept returns byte[]? — the `null` arm is the
             // buffering/too-short case; `merged` is narrowed non-null in the other arm.
             match reassembler.Accept(frame.Payload.Span) with
-            | null -> ()
+            | null ->
+                // The reassembler returns null for EVERY buffered fragment — this is normal
+                // mid-reassembly (the happy path buffers 4 fragments before the 5th completes),
+                // not necessarily a drop. Trace only (byte detail); Reason axis "incomplete".
+                logger.LogTrace(
+                    "WHO_I_AM fragment buffered; packet not yet complete (reason={Reason})",
+                    "incomplete")
             | merged ->
                 let payloadLen = merged.Length - applicationPayloadStart - crcTailLength
                 // && short-circuits: payloadLen >= 0 guarantees merged.Length >= 11, so the
@@ -65,7 +71,31 @@ type WhoIAmReassemblyObserver(frameStream: ICanFrameStream, logger: ILogger<WhoI
                     let payload = ReadOnlyMemory<byte>(merged, applicationPayloadStart, payloadLen)
                     match WhoIAmFrame.parse payload with
                     | Some f -> subject.OnNext f
-                    | None -> ()   // length <> 15 — silent (FR-007)
+                    | None ->
+                        logger.LogTrace(
+                            "Dropped reassembled WHO_I_AM: payload length {Length} <> 15 (reason={Reason})",
+                            payloadLen,
+                            "wrong-length")
+                elif payloadLen < 0 then
+                    // Too short to even hold the command bytes — do NOT index merged[7]/[8] here.
+                    logger.LogTrace(
+                        "Dropped reassembled packet: too short, {Length} bytes (reason={Reason})",
+                        merged.Length,
+                        "too-short")
+                else
+                    logger.LogTrace(
+                        "Dropped reassembled packet: command {CommandHigh:X2}{CommandLow:X2} != WHO_I_AM 0x0024 (reason={Reason})",
+                        merged[commandHighIndex],
+                        merged[commandLowIndex],
+                        "wrong-command")
+        else
+            // HOT PATH: fires for EVERY non-broadcast CAN frame on the bus. Guard with IsEnabled so
+            // there is zero arg-boxing overhead when Trace is off (the default). Reason axis "wrong-id".
+            if logger.IsEnabled(LogLevel.Trace) then
+                logger.LogTrace(
+                    "Ignored non-broadcast frame {CanId:X8} (reason={Reason})",
+                    frame.CanId,
+                    "wrong-id")
 
     let subscription = frameStream.RawFramesReceived |> Observable.subscribe onFrame
 

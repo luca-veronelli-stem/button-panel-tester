@@ -36,7 +36,7 @@ logger is **required**, no `?.`; templates + named params only (CA2254 clean); n
     construction sites listed above. Solution builds, all tests green.
   - Folds RED+GREEN into ONE bisect-safe commit.
 
-- [ ] **T002** — `feat`: per-drop-axis `Trace` logging in `WhoIAmReassemblyObserver`
+- [X] **T002** — `feat`: per-drop-axis `Trace` logging in `WhoIAmReassemblyObserver`
   - RED: a capturing-`ILogger` test asserting a `Trace` entry (with a reason) on each drop axis
     (wrong id / incomplete reassembly / wrong command / wrong length).
   - GREEN: add the `Trace` log calls at each drop point. Trace is off by default (min level Information) so no
