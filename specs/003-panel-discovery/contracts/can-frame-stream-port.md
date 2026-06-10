@@ -71,39 +71,49 @@ under #121).
 - Drives every `Property/Can/` and `Integration/Can/` discovery test, so service
   logic runs on CI with no PEAK hardware (Principle III + IV).
 
-## Frame filter (service layer, not the port)
+## Frame filter and reassembly (downstream of the port, not in it)
 
 The port is a **generic** receive surface — later specs reuse it for
-transmit-side responses — so it does no filtering. `PanelDiscoveryService` acts
-only on frames matching **both**:
+transmit-side responses — so it does no filtering. WHO_I_AM is a *segmented
+multi-frame* SP_APP message (see [who-i-am-wire-format.md](./who-i-am-wire-format.md)),
+so the reassembly adapter `WhoIAmReassemblyObserver`
+(`src/ButtonPanelTester.Infrastructure/Can/`, slice R2 / T036) consumes
+`RawFramesReceived` and, per frame:
 
-- `CanId = 0x1FFFFFFF` (extended-frame broadcast — `SRID_BROADCAST`), **and**
-- `Payload.Length = 15` (the WHO_I_AM wire size — see
-  [who-i-am-wire-format.md](./who-i-am-wire-format.md)).
+- keeps only `CanId = 0x1FFFFFFF` (extended-frame broadcast — `SRID_BROADCAST`);
+- feeds the payload to `Services.Protocol.PacketReassembler` until a complete
+  packet is assembled;
+- checks the reassembled command bytes are `0x00 0x24` (`SP_APP_CMD_AA_WHO_I_AM`);
+- extracts the application payload `packet[9 .. len-2]` and runs
+  `WhoIAmFrame.parse`, emitting the parsed `WhoIAmFrame` on `IWhoIAmObserver`.
 
-Every other frame is ignored at the service layer. A frame that matches the
-`CanId` but fails the length/parse check is a silent drop (FR-007) — it never
-flips the CAN status row to Error.
+Every drop axis (wrong id / incomplete reassembly / wrong command / wrong
+payload length) is a silent non-event (FR-007) — the adapter has no CAN-status
+surface, so a drop structurally cannot flip the CAN status row to Error.
+`PanelDiscoveryService` consumes the reassembled `IWhoIAmObserver` feed (slice
+R3 / T038), not the raw port, and only observes while the link is `Connected`.
 
 ## Threading
 
 ```mermaid
 flowchart LR
-    A[Vendored stack<br/>read thread] -->|RawCanFrame| B[PanelDiscoveryService<br/>filter + parse + observe]
+    A[Vendored stack<br/>read thread] -->|RawCanFrame| R[WhoIAmReassemblyObserver<br/>filter + reassemble + parse]
+    R -->|WhoIAmFrame| B[PanelDiscoveryService<br/>observe while Connected]
     T[1 s prune timer<br/>thread] -->|prune 15 s| B
     L[ICanLinkService<br/>LinkStateChanged] -->|Connected to not| B
     B -->|PanelsOnBusChanged| G[GUI thread<br/>via Cmd.ofSub]
 ```
 
 - `RawFramesReceived` fires on the vendored stack's read thread.
-  `PanelDiscoveryService` owns the merge of three inputs — frames, prune-timer
-  ticks, and link-state transitions — and marshals the resulting
-  `PanelsOnBus` to the GUI via FuncUI's `Cmd.ofSub`.
+  `WhoIAmReassemblyObserver` reassembles and parses on that thread, then
+  `PanelDiscoveryService` owns the merge of three inputs — observed
+  `WhoIAmFrame`s, prune-timer ticks, and link-state transitions — and marshals
+  the resulting `PanelsOnBus` to the GUI via FuncUI's `Cmd.ofSub`.
 - The `ReadOnlyMemory<byte>` payload is valid **only** for the duration of the
-  `OnNext` callback. The service parses inside the callback (the parsed
-  `WhoIAmFrame` is a value type holding `uint32`/`uint16`/`byte`, no buffer
-  reference), so nothing retains the span. Any future subscriber that needs the
-  raw bytes past the callback MUST copy (`payload.Span.ToArray()`).
+  `OnNext` callback. The reassembly adapter parses inside the callback (the
+  parsed `WhoIAmFrame` is a value type holding `uint32`/`uint16`/`byte`, no
+  buffer reference), so nothing retains the span. Any future subscriber that
+  needs the raw bytes past the callback MUST copy (`payload.Span.ToArray()`).
 
 ## Test coverage targets
 
