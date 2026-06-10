@@ -28,9 +28,9 @@ let private classify (v: VariantIdentity) : VariantClass =
     | Virgin -> VirginClass
     | Unknown _ -> UnknownClass
 
-/// FsCheck property covering `data-model.md` §3.2 (totality): for
+/// FsCheck property covering `data-model.md` §2.2 (totality): for
 /// every `byte`, `VariantDecoder.decode` produces exactly one of the
-/// six branches per FR-009. The wildcard-free `classify` `match`
+/// six branches per FR-003. The wildcard-free `classify` `match`
 /// above is load-bearing — a future seventh `VariantIdentity` case
 /// would break elaboration here AND in the Lean theorem
 /// `variant_decoding_total`.

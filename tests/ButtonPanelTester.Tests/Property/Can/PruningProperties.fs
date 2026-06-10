@@ -15,7 +15,7 @@ let private positiveMillis (raw: int) : float = float (max 1 (abs raw))
 let private positiveSeconds (raw: int) : float = float (max 1 (abs raw % 86400))
 
 /// FsCheck property covering `specs/003-panel-discovery/
-/// data-model.md` §5.4 (pruning correctness) / FR-011: post-prune
+/// data-model.md` §4.3 (pruning correctness) / FR-005: post-prune
 /// membership iff `now - lastSeen ≤ ttl`. Mechanises the kept-iff-
 /// within-window invariant at the value level; the Lean theorem
 /// `prune_partitions_by_threshold` in `Phase2/Pruning.lean` (T031)
@@ -55,7 +55,7 @@ let PruningCorrectness
 
     stillPresent = withinWindow
 
-/// FsCheck property covering the §5.4 boundary case: a row whose
+/// FsCheck property covering the §4.3 boundary case: a row whose
 /// `LastSeen` is exactly `ttl` old survives a prune (≤ ttl, not <
 /// ttl). Phrased as a single-row sanity check distinct from
 /// `PruningCorrectness` above so a regression that flipped `<=` to
@@ -80,8 +80,8 @@ let PruningBoundary_LastSeenEqualToTtl_StillPresent
 
 /// FsCheck property covering idempotence: pruning twice with the same
 /// `now` is the same as pruning once. Mechanises the operational
-/// expectation behind the 1-second pruning timer in `CanLinkService`
-/// (T046) — back-to-back ticks at the same clock instant don't drop
+/// expectation behind the 1-second pruning timer in `PanelDiscoveryService`
+/// — back-to-back ticks at the same clock instant don't drop
 /// extra rows.
 [<Property>]
 let Pruning_IdempotentAtSameNow
