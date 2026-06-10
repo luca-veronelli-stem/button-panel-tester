@@ -52,3 +52,23 @@ firmware `AutoAddressSlave.c` `TX_Values[15]` layout exactly:
 `machineType 0xFF` (virgin), `fwType 0x0004` (12 V, big-endian at offsets 1-2),
 UUID words `0x177C126D / 0x7308748F / 0x16092104` (big-endian at 3/7/11). Three
 byte-identical announcements in the trace confirm a stable read.
+
+## T032 bench-validation capture (2026-06-10)
+
+`virgin-12v_t032-validation.trc` is a second-channel PCAN-View capture of the
+`Category=Hardware` discovery validation run (spec-003 **T032** Done gate) against
+the same real virgin 12 V panel. **Evidence, not a fixture.**
+
+- **SC-003 / FR-009 (zero tool-originated frames):** every frame in the capture is
+  the panel's WHO_I_AM broadcast on `0x1FFFFFFF` (the 5-frame segmented pattern) —
+  not a single frame on any other CAN ID — so the tester transmitted **nothing**
+  across the session. Discovery is receive-only by construction (the
+  `ICanFrameStream` / `IWhoIAmObserver` ports have no send surface); this capture is
+  the empirical confirmation.
+- Backs the passing bench run on a PEAK PCAN-USB rig: SC-001
+  (`Discovery_RealVirginPanel_SurfacesVirginRowWithin6s`, virgin row <= 6 s) and
+  FR-005 (`Discovery_PanelPoweredOff_RowPrunesWithin16s`, power-off prune ~16 s),
+  both green under `BPT_HARDWARE=1` / `BPT_HARDWARE_INTERACTIVE=1`.
+- The ~11 s gap mid-capture (offsets ~17.8 s -> 28.8 s) is the adapter being
+  unplugged for the spec-002 `PhysicalReplug` attended case during an earlier
+  combined run; the panel otherwise broadcasts at a steady ~4 s cadence.
