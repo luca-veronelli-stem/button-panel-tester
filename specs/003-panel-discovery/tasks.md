@@ -207,7 +207,7 @@ loudly at the CAN boundary.
 - [X] T029 [P] `cd lean; lake build` — confirm the four Phase-2 discovery theorems compile with no `sorry`; `#print axioms parse_encode_roundtrip` (and the three unchanged theorems) shows only standard axioms.
 - [X] T030 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Passive CAN panel discovery — Panels-on-bus list (spec-003)."
 - [X] T031 [P] Update `README.md`: link `specs/003-panel-discovery/quickstart.md` and add a one-paragraph mention of the Panels-on-bus list.
-- [ ] T032 quickstart.md bench validation: confirm SC-001 (panel ≤6 s) and SC-002 (no duplicate rows on re-broadcast) on a real bench — the operator/bench follow-up that gates the "Done" claim (live-boundary-smoke Validation Gate; pairs with T024).
+- [X] T032 quickstart.md bench validation: confirm SC-001 (panel ≤6 s) and SC-002 (no duplicate rows on re-broadcast) on a real bench — the operator/bench follow-up that gates the "Done" claim (live-boundary-smoke Validation Gate; pairs with T024).
 
 ---
 
