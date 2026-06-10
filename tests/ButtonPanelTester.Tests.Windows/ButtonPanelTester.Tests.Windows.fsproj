@@ -12,6 +12,9 @@
     <ItemGroup>
         <Compile Include="TestApp.fs" />
         <Compile Include="Fixtures/HardwareFactAttribute.fs" />
+        <Compile Include="..\ButtonPanelTester.Tests\Fakes\RecordingLogger.fs">
+            <Link>Fakes\RecordingLogger.fs</Link>
+        </Compile>
         <Compile Include="Unit/StemAppDataTests.fs" />
         <Compile Include="Unit/JsonFileDictionaryCacheTests.fs" />
         <Compile Include="Unit/DpapiCredentialStoreTests.fs" />

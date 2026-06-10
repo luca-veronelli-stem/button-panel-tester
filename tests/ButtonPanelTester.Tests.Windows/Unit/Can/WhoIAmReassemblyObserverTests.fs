@@ -2,10 +2,12 @@ module Stem.ButtonPanelTester.Tests.Windows.Unit.Can.WhoIAmReassemblyObserverTes
 
 open System
 open System.Collections.Generic
+open Microsoft.Extensions.Logging                // LogLevel
 open Microsoft.Extensions.Logging.Abstractions
 open Xunit
 open Stem.ButtonPanelTester.Core.Can            // RawCanFrame, ICanFrameStream, WhoIAmFrame, IWhoIAmObserver, MachineTypeByte, FwType, PanelUuid
 open Stem.ButtonPanelTester.Infrastructure.Can  // WhoIAmReassemblyObserver
+open Stem.ButtonPanelTester.Tests.Fakes         // LogEntry, RecordingLogger (linked in .fsproj)
 
 /// File-private fake `ICanFrameStream`: `Emit` fans a `RawCanFrame` out on `RawFramesReceived`
 /// synchronously on the calling thread. (Tests.Windows does not reference the net10.0
@@ -35,6 +37,20 @@ let private wire () =
     let seen = List<WhoIAmFrame>()
     (observer :> IWhoIAmObserver).WhoIAmObserved |> Observable.subscribe (fun f -> seen.Add f) |> ignore
     (fake, observer, seen)
+
+// Sibling of `wire ()` that swaps in a capturing logger so the drop-axis Trace
+// lines (T002) can be asserted by their structured "Reason" value.
+let private wireWithLogger () =
+    let fake = FakeFrameStream()
+    let logger = RecordingLogger<WhoIAmReassemblyObserver>()
+    let observer = new WhoIAmReassemblyObserver(fake, logger)
+    (fake, observer, logger)
+
+let private traceReasons (logger: RecordingLogger<_>) =
+    logger.Entries
+    |> Seq.filter (fun e -> e.Level = LogLevel.Trace)
+    |> Seq.choose (fun e -> e.Values |> Map.tryFind "Reason" |> Option.map string)
+    |> List.ofSeq
 
 // (1) HAPPY PATH — the 5 real frames reassemble + decode to virgin_panel_12v.
 [<Fact>]
@@ -106,3 +122,44 @@ let InterleavedPacketIds_ReassembleIndependently () =
         fake.Emit(frame 0x1FFFFFFFu a)
         fake.Emit(frame 0x1FFFFFFFu b))
     Assert.Equal(2, seen.Count)
+
+// ---- T002: per-drop-axis Trace logging (one Reason per axis) ----
+
+// (7) WRONG ID — a non-broadcast frame never reaches the reassembler: Reason "wrong-id".
+[<Fact>]
+let WrongId_LogsTrace () =
+    let (fake, observer, logger) = wireWithLogger ()
+    use _ = observer :> IDisposable
+    for f in virginFrames do fake.Emit(frame 0x000A0441u f)
+    Assert.Contains("wrong-id", traceReasons logger)
+
+// (8) MISSING FRAGMENT — every buffered fragment returns null mid-reassembly: Reason "incomplete".
+[<Fact>]
+let MissingFragment_LogsTrace () =
+    let (fake, observer, logger) = wireWithLogger ()
+    use _ = observer :> IDisposable
+    for f in (virginFrames |> List.take 4) do fake.Emit(frame 0x1FFFFFFFu f)
+    Assert.Contains("incomplete", traceReasons logger)
+
+// (9) WRONG COMMAND — reassembles, cmd 0x0025 != 0x0024: Reason "wrong-command".
+[<Fact>]
+let WrongCommand_LogsTrace () =
+    let (fake, observer, logger) = wireWithLogger ()
+    use _ = observer :> IDisposable
+    let wrongCmd =
+        [ virginFrames.[0]
+          [| 0xC8uy; 0x00uy; 0x11uy; 0x00uy; 0x25uy; 0xFFuy; 0x00uy; 0x04uy |]   // cmd 0x0025
+          virginFrames.[2]; virginFrames.[3]; virginFrames.[4] ]
+    for f in wrongCmd do fake.Emit(frame 0x1FFFFFFFu f)
+    Assert.Contains("wrong-command", traceReasons logger)
+
+// (10) WRONG LENGTH — reassembles, payloadLen 16 -> parse None: Reason "wrong-length".
+[<Fact>]
+let WrongLength_LogsTrace () =
+    let (fake, observer, logger) = wireWithLogger ()
+    use _ = observer :> IDisposable
+    let wrongLen =
+        [ virginFrames.[0]; virginFrames.[1]; virginFrames.[2]; virginFrames.[3]
+          [| 0x08uy; 0x00uy; 0xEAuy; 0x69uy; 0xABuy |] ]   // one extra payload byte
+    for f in wrongLen do fake.Emit(frame 0x1FFFFFFFu f)
+    Assert.Contains("wrong-length", traceReasons logger)
