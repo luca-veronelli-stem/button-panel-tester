@@ -6,19 +6,19 @@ open FsCheck.Xunit
 open Stem.ButtonPanelTester.Core.Can
 
 /// Helper: build a well-formed `WhoIAmFrame` from arbitrary primitives.
-/// `fwType` is fixed at `0x04` so the frame is round-trippable through
-/// `WhoIAmFrame.parse`; the variant decoder runs against arbitrary
-/// `machineType` bytes.
+/// `fwType` is set to `0x0004us` (an arbitrary 12 V variant — post-Phase-A
+/// every `fwType` round-trips through `WhoIAmFrame.parse`); the variant
+/// decoder runs against arbitrary `machineType` bytes.
 let private mkFrame (machineType: byte) (u0: uint32) (u1: uint32) (u2: uint32) : WhoIAmFrame =
     { MachineType = MachineTypeByte machineType
       FwType = FwType 0x0004us
       Uuid = PanelUuid(u0, u1, u2) }
 
-/// FsCheck property covering `data-model.md` §5.4 (coalescing): for any
+/// FsCheck property covering `data-model.md` §4.3 (coalescing): for any
 /// sequence of `WhoIAmFrame`s observed against a fresh map, the
 /// resulting `PanelsOnBus.Count` equals the number of distinct UUIDs
 /// in the sequence — i.e. `observe` never produces duplicate rows.
-/// Mechanises FR-008 at the value level; the Lean theorem
+/// Mechanises FR-002 at the value level; the Lean theorem
 /// `observe_coalesces_by_uuid` in `Phase2/PanelsOnBus.lean` (T030)
 /// mechanises the same invariant at the type level.
 [<Property>]
@@ -33,7 +33,7 @@ let PanelsOnBusCoalescing (now: DateTimeOffset) (specs: (byte * uint32 * uint32 
 
     finalMap.Count = distinctUuids
 
-/// FsCheck property covering `data-model.md` §5.4 (monotonic last-seen):
+/// FsCheck property covering `data-model.md` §4.2 (monotonic last-seen):
 /// per-UUID `LastSeen` is non-decreasing across a sequence of observe
 /// calls whose timestamps are themselves non-decreasing. Phrased per-
 /// frame: for any two observations of the same UUID, the later
@@ -61,11 +61,11 @@ let PanelsOnBusLastSeenMonotonic
     | Some r0, Some r1 -> r1.LastSeen >= r0.LastSeen
     | _ -> false
 
-/// FsCheck property covering `data-model.md` §5.3 (re-derivation): a
+/// FsCheck property covering `data-model.md` §4.2 (re-derivation): a
 /// same-UUID re-observation with a different `machineType` byte
 /// updates the row in place, with both `VariantByte` and
 /// `VariantIdentity` reflecting the latest frame. Mechanises the
-/// "panel power-cycled out of `AAS_STAND_BY`" edge case from §5.3.
+/// "panel power-cycled out of `AAS_STAND_BY`" edge case from §4.2.
 [<Property>]
 let PanelsOnBusReObservation_UpdatesVariantInPlace
     (now: DateTimeOffset)
