@@ -15,6 +15,8 @@ ButtonPanelTester is a bench tool that exercises STEM button-panel hardware over
 
 A second **CAN status row** reports the live state of the PEAK CAN link over a four-family lifecycle (initializing, connected, disconnected — no adapter found or mid-session unplug — or faulted), with a colour-coded chip, a remediation-oriented headline, a detail tooltip, and a manual **Reconnect** control. It opens the configured PEAK PCAN-USB adapter at 250 kbps and surfaces bench realities: no adapter present, mid-session unplug, driver missing, bus-off, and transient PEAK faults (including a one-click driver-download link when the PEAK driver is absent). See [`specs/002-can-link-lifecycle/quickstart.md`](specs/002-can-link-lifecycle/quickstart.md) for the lifecycle walkthrough.
 
+A third **Panels-on-bus list** passively discovers the panels currently on the bus: while the CAN link is Connected it listens for STEM auto-address `WHO_I_AM` broadcasts and shows one row per panel — the UUID, the decoded variant (marketing name, virgin, or unknown with the raw machine-type byte on a detail tooltip), and the last-seen time — coalescing re-broadcasts by UUID, pruning a panel after 15 s of silence, and clearing the list when the link leaves Connected. Discovery is pure observation: the tool transmits no CAN frame. See [`specs/003-panel-discovery/quickstart.md`](specs/003-panel-discovery/quickstart.md) for the discovery walkthrough.
+
 ## Quick Start
 
 ```powershell
@@ -44,6 +46,7 @@ eng/                             build / release scripts
 
 - Dictionary fetch & registration walkthrough: [`specs/001-fetch-dictionary/quickstart.md`](./specs/001-fetch-dictionary/quickstart.md).
 - CAN-link lifecycle walkthrough: [`specs/002-can-link-lifecycle/quickstart.md`](./specs/002-can-link-lifecycle/quickstart.md).
+- Passive panel discovery walkthrough: [`specs/003-panel-discovery/quickstart.md`](./specs/003-panel-discovery/quickstart.md).
 - Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.15.0`.
 - Changelog: [`CHANGELOG.md`](./CHANGELOG.md).
 - Repo-specific notes: [`CLAUDE.md`](./CLAUDE.md).

@@ -4,6 +4,10 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 ## [Unreleased]
 
+### Added
+
+- **Passive CAN panel discovery** ([spec 003](specs/003-panel-discovery/spec.md)): a **Panels-on-bus list** on the main window that listens for STEM auto-address `WHO_I_AM` broadcasts while the CAN link is Connected and shows one row per panel — the UUID, the decoded variant (marketing name / virgin / unknown, with the raw machine-type byte on a detail tooltip for the latter two), and the last-seen time. Rows coalesce by UUID, prune after 15 s of silence, and clear immediately when the link leaves Connected; an empty-state line distinguishes "link down" from "link up, nothing announcing". The feature is pure observation — it transmits no CAN frame. The receive path starts the vendored read loop on connect and reassembles the segmented multi-frame `WHO_I_AM` SP_APP message before decoding ([#201](https://github.com/luca-veronelli-stem/button-panel-tester/issues/201)).
+
 ## [0.2.0] - 2026-06-04
 
 Ships spec 002 (CAN-link lifecycle) plus dictionary-status hardening and the STEM standards `v1.9.0 → v1.15.0` bump that landed since v0.1.0.
