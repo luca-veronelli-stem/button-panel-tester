@@ -43,7 +43,7 @@ logger is **required**, no `?.`; templates + named params only (CA2254 clean); n
     bench spam. Solution builds, all tests green.
   - Folds RED+GREEN into ONE bisect-safe commit.
 
-- [ ] **T003** — `docs` (orchestrator): `CHANGELOG.md` `[Unreleased]` gains a discovery-logging line so it
+- [X] **T003** — `docs` (orchestrator): `CHANGELOG.md` `[Unreleased]` gains a discovery-logging line so it
   rides into v0.3.0. (Docs commit — no `Tasks:` trailer required by the gate.)
 
 ## Out of scope (issue non-goals)
