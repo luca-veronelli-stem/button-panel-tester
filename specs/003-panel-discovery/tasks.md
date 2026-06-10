@@ -205,8 +205,8 @@ loudly at the CAN boundary.
 - [X] T027 [P] Principle V compliance grep over the discovery path: confirm **zero** OS-user / machine-name / SID / MAC fields cross to STEM-controlled storage — the discovery wire surface is panel-side `WHO_I_AM` payloads in volatile UI memory only (research R8). Expected zero hits.
 - [X] T028 [P] FR-009 / SC-003 zero-transmit audit: grep the discovery path (`PcanCanFrameStream`, the R2 reassembly adapter, `PanelDiscoveryService`) for any CAN send/write call; confirm the `ICanFrameStream` and `IWhoIAmObserver` ports have no send surface and nothing on the discovery path transmits.
 - [X] T029 [P] `cd lean; lake build` — confirm the four Phase-2 discovery theorems compile with no `sorry`; `#print axioms parse_encode_roundtrip` (and the three unchanged theorems) shows only standard axioms.
-- [ ] T030 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Passive CAN panel discovery — Panels-on-bus list (spec-003)."
-- [ ] T031 [P] Update `README.md`: link `specs/003-panel-discovery/quickstart.md` and add a one-paragraph mention of the Panels-on-bus list.
+- [X] T030 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Passive CAN panel discovery — Panels-on-bus list (spec-003)."
+- [X] T031 [P] Update `README.md`: link `specs/003-panel-discovery/quickstart.md` and add a one-paragraph mention of the Panels-on-bus list.
 - [ ] T032 quickstart.md bench validation: confirm SC-001 (panel ≤6 s) and SC-002 (no duplicate rows on re-broadcast) on a real bench — the operator/bench follow-up that gates the "Done" claim (live-boundary-smoke Validation Gate; pairs with T024).
 
 ---
