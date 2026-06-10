@@ -71,6 +71,35 @@ Expected behaviour on a clean bench, once the CAN status row is Connected:
 Throughout, a bus capture shows **zero** frames originating from the tool
 (FR-009 / SC-003).
 
+## Bench validation (the Done gate)
+
+The walkthrough above is encoded as the `Category=Hardware` E2E in
+`DiscoveryHardwareTests.fs`. Those cases are env-gated and excluded from CI by
+the default `Category!=Hardware` filter, so they run **only** on a bench rig.
+Per the Validation Gate, spec-003 is **code-complete on CI-green but not "Done"**
+until this run passes against a powered virgin panel:
+
+```powershell
+# Unattended: SC-001 (virgin row <= 6 s) + SC-003 (zero tool-originated frames).
+$env:BPT_HARDWARE = "1"
+dotnet test tests\ButtonPanelTester.Tests.Windows\ButtonPanelTester.Tests.Windows.fsproj `
+    -c Release --filter "Category=Hardware"
+
+# Add the attended FR-005 power-off prune (~16 s) - power the panel off when prompted:
+$env:BPT_HARDWARE_INTERACTIVE = "1"
+dotnet test tests\ButtonPanelTester.Tests.Windows\ButtonPanelTester.Tests.Windows.fsproj `
+    -c Release --filter "Category=Hardware"
+```
+
+For SC-003, run a second PCAN channel (PCAN-View, or a `.trc` capture) alongside
+the test and confirm **zero** frames originate from the tool - discovery is
+receive-only by construction, and the capture is the attended evidence.
+
+The live `Category=Hardware` bench suite is tracked in
+[#112](https://github.com/luca-veronelli-stem/button-panel-tester/issues/112);
+impl ticket [#201](https://github.com/luca-veronelli-stem/button-panel-tester/issues/201)
+stays open (validation-pending) until this run passes.
+
 ## File map for spec-003 work
 
 | Task type | Where the code lives |
