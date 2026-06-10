@@ -76,6 +76,10 @@ module PanelsOnBusView =
         ]
         :> IView
 
+    /// Render the Panels-on-bus list: one `rowView` per panel in `PanelUuid`
+    /// key order, or the FR-006 empty-state explainer (`emptyStateText
+    /// linkState`) when the map is empty. Pure — the host re-invokes it on
+    /// every `PanelsOnBusChanged` / `LinkStateChanged`.
     let view (panels: PanelsOnBus) (linkState: CanLinkState) : IView =
         if Map.isEmpty panels then
             TextBlock.create [

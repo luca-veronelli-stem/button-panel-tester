@@ -63,7 +63,7 @@ phase and in §Dependencies.
 **Purpose**: establish the green baseline this branch builds on, so every later commit can be
 checked bisect-safe.
 
-- [ ] T001 Verify the green baseline on `docs/153-spec-003-respec`: `dotnet build Stem.ButtonPanelTester.slnx -c Release`; `dotnet test tests\ButtonPanelTester.Tests\ButtonPanelTester.Tests.fsproj -c Release` and `dotnet test tests\ButtonPanelTester.Tests.Windows\ButtonPanelTester.Tests.Windows.fsproj -c Release --filter "Category!=Hardware"`; `cd lean; lake build; cd ..`. Record the result as the bisect-safe anchor (worktrees baseline discipline). Note: the shipped WHO_I_AM unit/property/Lean suites are green against the **wrong** codec (firmware-verification §Impact) — Phase A turns them red-then-green against the real wire format.
+- [X] T001 Verify the green baseline on `docs/153-spec-003-respec`: `dotnet build Stem.ButtonPanelTester.slnx -c Release`; `dotnet test tests\ButtonPanelTester.Tests\ButtonPanelTester.Tests.fsproj -c Release` and `dotnet test tests\ButtonPanelTester.Tests.Windows\ButtonPanelTester.Tests.Windows.fsproj -c Release --filter "Category!=Hardware"`; `cd lean; lake build; cd ..`. Record the result as the bisect-safe anchor (worktrees baseline discipline). Note: the shipped WHO_I_AM unit/property/Lean suites are green against the **wrong** codec (firmware-verification §Impact) — Phase A turns them red-then-green against the real wire format.
 
 ---
 
@@ -200,11 +200,11 @@ loudly at the CAN boundary.
 
 ## Phase F: Polish & cross-cutting concerns
 
-- [ ] T025 [P] **[NEW]** XML-doc the new public surfaces per COMMENTS / stem-fp-discipline §10: `PcanCanFrameStream`, `PanelsOnBusView`; confirm the corrected `WhoIAmFrame` / `FwType` docs (T007) cite the re-stated Lean theorem + corrected contract (Lean-citation format: path + `parse_encode_roundtrip` + task number).
-- [ ] T026 [P] **[NEW]** Logging audit per LOGGING / stem-logging over `PcanCanFrameStream` and the discovery branches of `PanelDiscoveryService`: typed `ILogger<T>`, template messages with named params (no string interpolation), exception-as-first-arg, no `Console.WriteLine` / `Debug.WriteLine` on the production path.
-- [ ] T027 [P] Principle V compliance grep over the discovery path: confirm **zero** OS-user / machine-name / SID / MAC fields cross to STEM-controlled storage — the discovery wire surface is panel-side `WHO_I_AM` payloads in volatile UI memory only (research R8). Expected zero hits.
-- [ ] T028 [P] FR-009 / SC-003 zero-transmit audit: grep the discovery path (`PcanCanFrameStream`, the R2 reassembly adapter, `PanelDiscoveryService`) for any CAN send/write call; confirm the `ICanFrameStream` and `IWhoIAmObserver` ports have no send surface and nothing on the discovery path transmits.
-- [ ] T029 [P] `cd lean; lake build` — confirm the four Phase-2 discovery theorems compile with no `sorry`; `#print axioms parse_encode_roundtrip` (and the three unchanged theorems) shows only standard axioms.
+- [X] T025 [P] **[NEW]** XML-doc the new public surfaces per COMMENTS / stem-fp-discipline §10: `PcanCanFrameStream`, `PanelsOnBusView`; confirm the corrected `WhoIAmFrame` / `FwType` docs (T007) cite the re-stated Lean theorem + corrected contract (Lean-citation format: path + `parse_encode_roundtrip` + task number).
+- [X] T026 [P] **[NEW]** Logging audit per LOGGING / stem-logging over `PcanCanFrameStream` and the discovery branches of `PanelDiscoveryService`: typed `ILogger<T>`, template messages with named params (no string interpolation), exception-as-first-arg, no `Console.WriteLine` / `Debug.WriteLine` on the production path.
+- [X] T027 [P] Principle V compliance grep over the discovery path: confirm **zero** OS-user / machine-name / SID / MAC fields cross to STEM-controlled storage — the discovery wire surface is panel-side `WHO_I_AM` payloads in volatile UI memory only (research R8). Expected zero hits.
+- [X] T028 [P] FR-009 / SC-003 zero-transmit audit: grep the discovery path (`PcanCanFrameStream`, the R2 reassembly adapter, `PanelDiscoveryService`) for any CAN send/write call; confirm the `ICanFrameStream` and `IWhoIAmObserver` ports have no send surface and nothing on the discovery path transmits.
+- [X] T029 [P] `cd lean; lake build` — confirm the four Phase-2 discovery theorems compile with no `sorry`; `#print axioms parse_encode_roundtrip` (and the three unchanged theorems) shows only standard axioms.
 - [ ] T030 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Passive CAN panel discovery — Panels-on-bus list (spec-003)."
 - [ ] T031 [P] Update `README.md`: link `specs/003-panel-discovery/quickstart.md` and add a one-paragraph mention of the Panels-on-bus list.
 - [ ] T032 quickstart.md bench validation: confirm SC-001 (panel ≤6 s) and SC-002 (no duplicate rows on re-broadcast) on a real bench — the operator/bench follow-up that gates the "Done" claim (live-boundary-smoke Validation Gate; pairs with T024).
