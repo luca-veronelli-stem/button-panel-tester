@@ -313,4 +313,4 @@ review surface to scale with the actual debt.
   carries the cross-repo standards. This constitution carries only the
   principles that govern *how this project plans and ships work*.
 
-**Version**: 1.0.1 | **Ratified**: 2026-05-13 | **Last Amended**: 2026-05-14
+**Version**: 1.0.2 | **Ratified**: 2026-05-13 | **Last Amended**: 2026-05-14
