@@ -10,6 +10,16 @@
 
 **Input**: User description: "Baptism workflow: claim a virgin panel on the bus as one of the four BoardVariants, or reset a claimed panel back to virgin, via the three-step auto-address master sequence"
 
+## Clarifications
+
+### Session 2026-06-11
+
+- Q: Re-baptism of a claimed panel (A → B): how, given claimed panels are silent and invisible to the list? → A: Reset-first only — the tool never aims a claim at a panel it cannot observe (direct A→B is wire-possible but deliberately not offered; FR-011).
+- Q: What does the Panels-on-bus list show for a just-baptized (now silent) panel? → A: Natural prune — the row ages out via the existing 15 s pruning; the success message explains the silence; discovery semantics untouched (FR-006).
+- Q: Which destructive actions get an explicit confirmation step? → A: Reset only — it erases machine identity and can reach silent panels the list cannot show; Baptize transmits on the deliberate variant pick (FR-009).
+- Q: How is a re-announcement wait-timeout presented? → A: Structured failure with recovery guidance (claim incomplete, panel may re-announce late with the target variant, re-run Baptize to complete). The briefing's pre-audit "likely succeeded" wording is rejected as factually wrong under the C2 three-step sequence (FR-005; late-re-announcement edge case).
+- Q: What does the audit trail record, given no operator-identity concept exists yet? → A: Structured log without operator attribution — action, variant, panel UUID when known, outcome, timestamps; operator naming joins session orchestration (spec-007) (FR-012; Assumptions).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Baptizing a virgin panel as a chosen machine variant (Priority: P1)
