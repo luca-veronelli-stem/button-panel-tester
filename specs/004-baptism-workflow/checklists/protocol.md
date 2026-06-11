@@ -12,106 +12,135 @@ context and requirements. Items test the requirements writing, not the implement
 
 ## Sequence & Protocol Framing Requirement Quality
 
-- [ ] CHK001 Are all three steps of the master sequence individually named, with the condition
+- [x] CHK001 Are all three steps of the master sequence individually named, with the condition
       that advances each step explicitly stated? [Completeness, Spec §FR-003]
-- [ ] CHK002 Is the step-2 → step-3 validation rule complete — both the selected panel's UUID
+- [x] CHK002 Is the step-2 → step-3 validation rule complete — both the selected panel's UUID
       **and** the chosen variant identity must match before address assignment? [Completeness,
       Spec §FR-004]
-- [ ] CHK003 Is the rejected single-shot claim (the firmware no-op the original briefing
+- [x] CHK003 Is the rejected single-shot claim (the firmware no-op the original briefing
       described) explicitly excluded, so no reader can reintroduce it as a "simplification"?
       [Clarity, Spec §FR-003]
-- [ ] CHK004 Is the wire-level distinction between a claim and a reset (virgin identity marker +
+- [x] CHK004 Is the wire-level distinction between a claim and a reset (virgin identity marker +
       reset flag, same command) specified rather than implied? [Clarity, Spec §FR-008]
-- [ ] CHK005 Is the assigned protocol address pinned (board number 1 of the chosen variant) and
+- [x] CHK005 Is the assigned protocol address pinned (board number 1 of the chosen variant) and
       the multi-board case explicitly out of scope, with no contradicting acceptance scenario?
       [Consistency, Spec §Assumptions / §Out of Scope]
-- [ ] CHK006 Are the four variant identity values and the virgin marker traceable to audited
+- [x] CHK006 Are the four variant identity values and the virgin marker traceable to audited
       firmware constants (citation present and current)? [Traceability, Spec §Key Entities /
       §Assumptions]
-- [ ] CHK007 The firmware gates every claim/reset on a firmware-type (12 V / 24 V) match
+- [x] CHK007 The firmware gates every claim/reset on a firmware-type (12 V / 24 V) match
       (research R2), yet the spec never mentions firmware type. Is that abstraction deliberate
       and safe at spec level — i.e. do the spec's outcome requirements still hold when a
       broadcast is silently ignored by a non-matching panel? [Gap, research §R2]
-- [ ] CHK008 Are requirements clear that neither sequence step ever receives a synchronous
+      - **Disposed 2026-06-11 (`/speckit-analyze`)**: deliberate and safe — plan-level pin, no
+        spec edit. The mechanism lives below spec altitude: baptize **echoes the selected
+        panel's announced fwType** (research R2, data-model §3, tasks T018/T021), so the claim
+        aimed at the selected panel can never be gated out; reset broadcasts once per known
+        fwType class (R2). If a broadcast is silently ignored regardless, the spec's outcome
+        requirements still hold: no re-announcement → the FR-005 wait-timeout failure; no
+        matching panel on reset → acceptance 2.5's honest success message.
+- [x] CHK008 Are requirements clear that neither sequence step ever receives a synchronous
       protocol reply, so every "success" the spec promises is defined in terms of write
       completion or observed re-announcement only? [Consistency, Spec §FR-006 / §FR-010]
 
 ## State Machine & Outcome Requirement Quality
 
-- [ ] CHK009 Are the six baptism outcomes enumerated exhaustively and mutually exclusively
+- [x] CHK009 Are the six baptism outcomes enumerated exhaustively and mutually exclusively
       ("exactly one of"), leaving no unnamed terminal state? [Completeness, Spec §FR-005]
-- [ ] CHK010 Is the 6-second wait bound measurable — is the starting event of the window
+- [x] CHK010 Is the 6-second wait bound measurable — is the starting event of the window
       (claim-broadcast write completion vs. button press) unambiguous? [Measurability,
       Ambiguity, Spec §FR-005]
-- [ ] CHK011 For each failure outcome, is the required message content (step that failed,
+      - **Disposed 2026-06-11 (`/speckit-analyze`)**: pinned at **claim-write completion** —
+        the FSM enters `AwaitingAnnounce` on WHO_ARE_YOU write completion and the deadline is
+        that instant + 6 s (data-model §4.1; tasks T017/T019/T023). SC-001's "from pressing
+        Baptize" phrasing adds only the claim-write latency (milliseconds) to the envelope —
+        operator-level slack, not a measurement ambiguity. Plan-level pin, no spec edit.
+- [x] CHK011 For each failure outcome, is the required message content (step that failed,
       panel's likely state, recommended next action) specified concretely enough to review,
       rather than delegated wholesale to implementation? [Clarity, Spec §FR-005]
-- [ ] CHK012 Is the success-reporting moment for baptism (write completion of the
+- [x] CHK012 Is the success-reporting moment for baptism (write completion of the
       address-assignment step) consistent with the reset success rule (write completion of the
       broadcast), with the difference between them explained? [Consistency, Spec §FR-006 /
       §FR-010]
-- [ ] CHK013 Is concurrent-attempt behaviour specified — what the surface offers while an
+- [x] CHK013 Is concurrent-attempt behaviour specified — what the surface offers while an
       attempt is in flight (re-entry, cancel, second press)? [Gap]
-- [ ] CHK014 Is the FR-007 post-success warning window quantified (the list-pruning window) and
+      - **Disposed 2026-06-11 (`/speckit-analyze`)**: pinned — **at most one attempt runs at a
+        time; the baptism surface is modal while an attempt is in flight** (no re-entry, no
+        second press; no cancel affordance in this feature — every run terminates within the
+        6 s budget by `baptize_outcome_total`) (data-model §4; tasks T021/T034/T035).
+        Design-level pin, no spec edit.
+- [x] CHK014 Is the FR-007 post-success warning window quantified (the list-pruning window) and
       its lifecycle defined (what cancels the watch: new attempt, link loss, window expiry)?
       [Clarity, Gap, Spec §FR-007]
-- [ ] CHK015 Are link-loss requirements complete across **every** sequence step (claim send,
+- [x] CHK015 Are link-loss requirements complete across **every** sequence step (claim send,
       wait, assignment send), not only the wait? [Coverage, Spec §FR-005, Acceptance 1.8]
-- [ ] CHK016 Does the never-flip rule (a reported failure is never silently upgraded to success)
+- [x] CHK016 Does the never-flip rule (a reported failure is never silently upgraded to success)
       appear as a requirement-level constraint consistent with the late-re-announcement edge
       case? [Consistency, Spec §Edge Cases / §FR-005]
 
 ## Guard & Enablement Requirement Quality
 
-- [ ] CHK017 Are Baptize enablement conditions stated as an exact conjunction (Connected ∧
+- [x] CHK017 Are Baptize enablement conditions stated as an exact conjunction (Connected ∧
       exactly one announcing ∧ that panel selected) with a required explanation for every unmet
       condition? [Measurability, Spec §FR-002]
-- [ ] CHK018 Is Reset enablement (at most one announcing) consistent between FR-008 and
+- [x] CHK018 Is Reset enablement (at most one announcing) consistent between FR-008 and
       acceptance scenarios 2.3/2.4, including the rationale that the broadcast reaches every
       panel? [Consistency, Spec §FR-008]
-- [ ] CHK019 Is the counting rule "guards count announcing panels only" stated where the guards
+- [x] CHK019 Is the counting rule "guards count announcing panels only" stated where the guards
       are defined (not only in Assumptions), so silent-panel invisibility cannot be misread as a
       guard defect? [Clarity, Spec §Assumptions / §FR-002 / §FR-008]
-- [ ] CHK020 With exactly one panel announcing, is the selection interaction defined (explicit
+- [x] CHK020 With exactly one panel announcing, is the selection interaction defined (explicit
       selection required vs. auto-selected), so FR-002's "that panel is selected" is testable?
       [Ambiguity, Spec §FR-002]
-- [ ] CHK021 Can SC-005 ("unreachable in 100 % of renders") be objectively verified from the
+      - *2026-06-11*: explicit selection — FR-001's "selecting an announcing panel activates
+        it" is the interaction model; no auto-select. Testable via the T035 enable matrix.
+- [x] CHK021 Can SC-005 ("unreachable in 100 % of renders") be objectively verified from the
       requirements as written — is "unreachable" defined (disabled control vs. absent control)?
       [Measurability, Spec §SC-005]
+      - *2026-06-11*: defined — **disabled control with the unmet-condition explanation**
+        (FR-002/FR-008 "disabled with an explanation"); verified by `EnablementGuards`
+        (T028) + the Headless enable matrices (T035/T037).
 
 ## Recovery & Edge-Case Coverage
 
-- [ ] CHK022 Are half-baptized panel requirements complete: how it presents (announcing the
+- [x] CHK022 Are half-baptized panel requirements complete: how it presents (announcing the
       target variant), and that both Baptize-again and Reset recover it? [Coverage, Spec §Edge
       Cases / Acceptance 1.3]
-- [ ] CHK023 Is the two-claimed-panels reset hazard (both reset, identity loss unavoidable)
+- [x] CHK023 Is the two-claimed-panels reset hazard (both reset, identity loss unavoidable)
       documented as accepted behaviour with the confirmation step named as the guard?
       [Coverage, Spec §Edge Cases / §FR-009]
-- [ ] CHK024 Is the mid-baptism second-panel scenario fully specified — wait keyed to the
+- [x] CHK024 Is the mid-baptism second-panel scenario fully specified — wait keyed to the
       selected UUID, guard state applying only to the next action? [Coverage, Spec §Edge Cases]
-- [ ] CHK025 Is the no-panel-attached reset outcome ("honest success") specified with observable
+- [x] CHK025 Is the no-panel-attached reset outcome ("honest success") specified with observable
       criteria (what the message must and must not claim)? [Clarity, Acceptance 2.5 /
       Spec §FR-010]
-- [ ] CHK026 The firmware findings note a reboot-dependent deep edge (a claimed-origin,
+- [x] CHK026 The firmware findings note a reboot-dependent deep edge (a claimed-origin,
       half-baptized panel reboots silent with old board number). Is its exclusion from the spec
       deliberate and recorded, or an unexamined gap? [Gap, Assumption,
       `.llm/issue-212-baptism-firmware-findings.md`]
+      - **Disposed 2026-06-11 (`/speckit-analyze`)**: accepted exclusion, recorded here. The
+        reboot edge leaves a panel either announcing (claimable — acceptance 1.7) or silent
+        (recoverable via Reset: the WHO_ARE_YOU handler runs in any state, wire contract
+        §Slave semantics; FR-008/FR-011 reset-first). Both recovery paths are ones the spec
+        already requires; the edge needs no spec-level requirement of its own.
 
 ## Non-Functional, TX Discipline & Audit Requirement Quality
 
-- [ ] CHK027 Is the FR-014 transmission whitelist exhaustive and testable — only the three
+- [x] CHK027 Is the FR-014 transmission whitelist exhaustive and testable — only the three
       master-sequence commands, technician-initiated, link Connected — with "no other feature
       traffic" verifiable as a negative requirement? [Measurability, Spec §FR-014]
-- [ ] CHK028 Are audit-record requirements complete: exactly one record per attempt (including
+- [x] CHK028 Are audit-record requirements complete: exactly one record per attempt (including
       declined confirmations), fields enumerated, and no operator attribution by design?
       [Completeness, Spec §FR-012 / §SC-006]
-- [ ] CHK029 Is the boundary between the action-scoped audit log (FR-012) and the forbidden
+- [x] CHK029 Is the boundary between the action-scoped audit log (FR-012) and the forbidden
       per-panel persistence (FR-013) drawn sharply enough that an auditor could not read the log
       as a panel registry? [Consistency, Spec §FR-012 / §FR-013]
-- [ ] CHK030 Are SC-002's verification means (bus capture showing first silence within one
+- [x] CHK030 Are SC-002's verification means (bus capture showing first silence within one
       announcement period) defined with owner and tooling assumptions, so the criterion is
       executable at validation time? [Measurability, Spec §SC-002]
-- [ ] CHK031 Is SC-003's 95 % threshold grounded — is the worst-case announcement-cadence basis
+      - *2026-06-11*: executable — PEAK trace on the spec-002/003 bench rig; owner = the
+        T039 operator follow-up, automated half in T038 (`BaptismHardwareTests`, #112).
+- [x] CHK031 Is SC-003's 95 % threshold grounded — is the worst-case announcement-cadence basis
       (and the ~2–3 % near-budget UUID tail from research R4) documented as the accepted reason
       the target is not 100 %? [Measurability, Assumption, Spec §SC-003 / research §R4]
 
@@ -121,3 +150,11 @@ context and requirements. Items test the requirements writing, not the implement
 - Items deliberately test the spec's writing; resolutions belong in `/speckit-analyze` follow-ups
   or (for genuine spec defects) a corrective ticket — never in silent inline rewrites of the
   frozen spec.
+- **All 31 items disposed 2026-06-11 by `/speckit-analyze`** (cross-artifact pass over spec /
+  plan / data-model / contracts / tasks). No genuine spec defect found — no corrective ticket,
+  no spec edit. Three items resolved as plan-level pins (CHK007 fwType echo, CHK010 window
+  start = claim-write completion, CHK013 modal surface), one as an accepted exclusion (CHK026
+  reboot edge). One design-level refinement noted for the record: data-model §5 splits the
+  reset outcome `ResetLinkLost` out of the spec Key Entity's coarser "transmission failure"
+  bucket (spec §Edge Cases groups link-drop-at-send under transmission failure) — a
+  refinement, not a contradiction; the audit `Outcome` field carries all four reset outcomes.
