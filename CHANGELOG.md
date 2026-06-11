@@ -4,6 +4,10 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 ## [Unreleased]
 
+### Added
+
+- Living roadmap at [`docs/ROADMAP.md`](docs/ROADMAP.md): shipped state, the committed next spec (004 — baptism workflow), the provisional order through spec-008, the v1.0 definition of done, the debt ledger, and the per-release maintenance protocol. Renumbers the frozen `bpt-rollout` briefing after the [#151](https://github.com/luca-veronelli-stem/button-panel-tester/issues/151) split and folds in the `CORRECTIONS.md` audit where it changes a spec's shape ([#210](https://github.com/luca-veronelli-stem/button-panel-tester/issues/210)).
+
 ## [0.3.0] - 2026-06-10
 
 Ships spec 003 (passive CAN panel discovery — the Panels-on-bus list) plus the structured discovery logging that landed with it.

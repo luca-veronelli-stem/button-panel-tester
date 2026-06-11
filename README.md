@@ -47,6 +47,7 @@ eng/                             build / release scripts
 - Dictionary fetch & registration walkthrough: [`specs/001-fetch-dictionary/quickstart.md`](./specs/001-fetch-dictionary/quickstart.md).
 - CAN-link lifecycle walkthrough: [`specs/002-can-link-lifecycle/quickstart.md`](./specs/002-can-link-lifecycle/quickstart.md).
 - Passive panel discovery walkthrough: [`specs/003-panel-discovery/quickstart.md`](./specs/003-panel-discovery/quickstart.md).
+- Roadmap: [`docs/ROADMAP.md`](./docs/ROADMAP.md) — shipped state, next spec, provisional order, v1.0 definition.
 - Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.15.0`.
 - Changelog: [`CHANGELOG.md`](./CHANGELOG.md).
 - Repo-specific notes: [`CLAUDE.md`](./CLAUDE.md).
