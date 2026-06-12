@@ -194,7 +194,7 @@ B3 = {T016} (composition wiring + smoke extension).
       contract's adapter table — enough to assert payload fields and ordering); scriptable
       per-call fault injection (for every `TransmissionFailure` path in Phases C/D); honors
       `ct` cooperatively. Lands with T012 (B1 commit). (Constitution III/IV)
-- [ ] T014 **[NEW]** Add `src/ButtonPanelTester.Infrastructure/Can/ProtocolMasterSequenceTransmitter.fs`
+- [X] T014 **[NEW]** Add `src/ButtonPanelTester.Infrastructure/Can/ProtocolMasterSequenceTransmitter.fs`
       (`net10.0-windows`): synthesize the two built-in `Command` records (`0x00:0x23`
       WHO_ARE_YOU, `0x00:0x25` SET_ADDRESS — extending the existing hardcoded
       protocol-metadata set, fetch migration is #156/out of scope); encode app payloads via
@@ -205,7 +205,7 @@ B3 = {T016} (composition wiring + smoke extension).
       with no built port faults, which is the `TransmissionFailure` path — FR-014 gates sends
       on `Connected` anyway). Adapter exceptions propagate per the port contract (mapping is
       the service's job). (Constitution III; FR-003/FR-014; R1/R5)
-- [ ] T015 **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Unit/Can/ProtocolMasterSequenceTransmitterTests.fs`:
+- [X] T015 **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Unit/Can/ProtocolMasterSequenceTransmitterTests.fs`:
       drive the adapter through `CanPortShare` over a file-private fake `ICommunicationPort`
       capturing the exact wire frames (the shipped `FakeCommunicationPort` pattern — spec-003
       Phase-C precedent): `SendWhoAreYouAsync` → **3** CAN frames on broadcast arbId
