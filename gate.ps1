@@ -29,9 +29,9 @@ lake build
 if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
 Pop-Location
 
-# Ticket-specific proof (extended once C3 lands baptism tests):
-# dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj -c Release --no-build --filter "FullyQualifiedName~Baptism"
-# if ($LASTEXITCODE -ne 0) { $failures += 'focused baptism filter' }
+# Ticket-specific proof: the focused baptism suite (active since slice C3)
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj -c Release --no-build --filter "FullyQualifiedName~Baptism"
+if ($LASTEXITCODE -ne 0) { $failures += 'focused baptism filter' }
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
