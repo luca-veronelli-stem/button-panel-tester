@@ -91,19 +91,19 @@ the contract bytes, and the **live-boundary proof that real panels accept them i
 A2 = {T005, T006, T007, T008} (WHO_ARE_YOU vertical: impl + fixtures + tests, one commit).
 A3 = {T009, T010, T011} (SET_ADDRESS vertical: impl + fixtures + tests, one commit).
 
-- [ ] T002 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase3/WhoAreYouFrame.lean`: model the
+- [X] T002 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase3/WhoAreYouFrame.lean`: model the
       4-byte codec per [data-model.md](./data-model.md) §2.1 (machineType, fwType, reset);
       prove `parse_encode_roundtrip` and `encode_length`; model `encodeVariant`
       (variant → identity byte, §1) and prove `encode_decode_inverse` against the shipped
       Phase 2 decoder model (the partial inverse of `variant_decoding_total`). `sorry`-free,
       axioms ⊆ {`propext`, `Classical.choice`, `Quot.sound`}. (Constitution I; FR-003/FR-008)
-- [ ] T003 [P] **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase3/SetAddressFrame.lean`: model
+- [X] T003 [P] **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase3/SetAddressFrame.lean`: model
       the 16-byte codec per [data-model.md](./data-model.md) §2.2 (3 × uint32 UUID words +
       spAddress); prove `parse_encode_roundtrip` and `encode_length`. State the round-trip in
       the byte direction too (`encode (parse b) = b` — total on 16-byte inputs), which **is**
       the contract's byte-echo invariant: encoding the UUID parsed from a WHO_I_AM reproduces
       the announced bytes verbatim (contract §SET_ADDRESS, R1). (Constitution I; FR-003/FR-004)
-- [ ] T004 **[NEW]** Add the umbrella `lean/Stem/ButtonPanelTester/Phase3.lean` (mirroring
+- [X] T004 **[NEW]** Add the umbrella `lean/Stem/ButtonPanelTester/Phase3.lean` (mirroring
       `Phase2.lean` — imports the Phase3 modules as they land) and register the new lib in
       `lean/lakefile.toml`: `[[lean_lib]] name = "Stem.ButtonPanelTester.Phase3"` + append to
       `defaultTargets`. `cd lean; lake build` green. Rides in the A1 commit.
