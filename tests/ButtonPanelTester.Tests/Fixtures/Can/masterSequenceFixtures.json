@@ -1,0 +1,75 @@
+{
+    "$schema-description": "Master-sequence TX fixture set per specs/004-baptism-workflow/contracts/master-sequence-wire-format.md §WHO_ARE_YOU app payload (4 B): [0] machineType u8, [1..2] fwType u16 big-endian, [3] reset flag (non-zero = set), length-only reject. Payload bytes are NORMATIVE synthesis targets verified against the slave parser (AutoAddressSlave.c:230-235) — TX fixtures, not bench captures; the live-boundary proof is Phase F. Each parseable entry carries name, 4-byte hex payload, expectsParse, expectedMachineType/expectedFwType/expectedReset, and a provenance source. SET_ADDRESS entries land in commit group A3. Loaded by Tests/Unit/Can/MasterSequenceFixtureTests.fs (T008).",
+    "fixtures": [
+        {
+            "name": "claim_eden_xp_12v",
+            "source": "Synthesis per contract §WHO_ARE_YOU — claim EDEN-XP (machineType 0x03) at 12V fwType 0x0004, reset set; slave parse cited at AutoAddressSlave.c:230-235.",
+            "payload": "03000401",
+            "expectsParse": true,
+            "expectedMachineType": 3,
+            "expectedFwType": 4,
+            "expectedReset": true
+        },
+        {
+            "name": "claim_optimus_xp_12v",
+            "source": "Synthesis per contract §WHO_ARE_YOU — claim OPTIMUS-XP (machineType 0x0A) at 12V fwType 0x0004, reset set; slave parse cited at AutoAddressSlave.c:230-235.",
+            "payload": "0A000401",
+            "expectsParse": true,
+            "expectedMachineType": 10,
+            "expectedFwType": 4,
+            "expectedReset": true
+        },
+        {
+            "name": "claim_r3l_xp_12v",
+            "source": "Synthesis per contract §WHO_ARE_YOU — claim R-3L XP (machineType 0x0B) at 12V fwType 0x0004, reset set; slave parse cited at AutoAddressSlave.c:230-235.",
+            "payload": "0B000401",
+            "expectsParse": true,
+            "expectedMachineType": 11,
+            "expectedFwType": 4,
+            "expectedReset": true
+        },
+        {
+            "name": "claim_eden_bs8_12v",
+            "source": "Synthesis per contract §WHO_ARE_YOU — claim EDEN-BS8 (machineType 0x0C) at 12V fwType 0x0004, reset set; slave parse cited at AutoAddressSlave.c:230-235.",
+            "payload": "0C000401",
+            "expectsParse": true,
+            "expectedMachineType": 12,
+            "expectedFwType": 4,
+            "expectedReset": true
+        },
+        {
+            "name": "claim_eden_xp_24v",
+            "source": "Synthesis per contract §WHO_ARE_YOU — claim EDEN-XP (machineType 0x03) at 24V fwType 0x000F, reset set; slave parse cited at AutoAddressSlave.c:230-235.",
+            "payload": "03000F01",
+            "expectsParse": true,
+            "expectedMachineType": 3,
+            "expectedFwType": 15,
+            "expectedReset": true
+        },
+        {
+            "name": "reset_12v",
+            "source": "Synthesis per contract §WHO_ARE_YOU — reset broadcast (virgin marker 0xFF) at 12V fwType 0x0004, reset set; slave parse cited at AutoAddressSlave.c:230-235.",
+            "payload": "FF000401",
+            "expectsParse": true,
+            "expectedMachineType": 255,
+            "expectedFwType": 4,
+            "expectedReset": true
+        },
+        {
+            "name": "reset_24v",
+            "source": "Synthesis per contract §WHO_ARE_YOU — reset broadcast (virgin marker 0xFF) at 24V fwType 0x000F, reset set; slave parse cited at AutoAddressSlave.c:230-235.",
+            "payload": "FF000F01",
+            "expectsParse": true,
+            "expectedMachineType": 255,
+            "expectedFwType": 15,
+            "expectedReset": true
+        },
+        {
+            "name": "malformed_too_short_3b",
+            "source": "Synthesis — claim_eden_xp_12v minus its last byte (3 bytes). Length-only reject.",
+            "payload": "030004",
+            "expectsParse": false,
+            "reason": "Length is 3 bytes — wire contract requires exactly 4."
+        }
+    ]
+}

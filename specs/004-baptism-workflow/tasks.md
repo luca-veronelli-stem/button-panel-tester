@@ -107,7 +107,7 @@ A3 = {T009, T010, T011} (SET_ADDRESS vertical: impl + fixtures + tests, one comm
       `Phase2.lean` — imports the Phase3 modules as they land) and register the new lib in
       `lean/lakefile.toml`: `[[lean_lib]] name = "Stem.ButtonPanelTester.Phase3"` + append to
       `defaultTargets`. `cd lean; lake build` green. Rides in the A1 commit.
-- [ ] T005 **[NEW]** Add `src/ButtonPanelTester.Core/Can/BoardVariant.fs`: the encode inverse
+- [X] T005 **[NEW]** Add `src/ButtonPanelTester.Core/Can/BoardVariant.fs`: the encode inverse
       `encode : MarketingVariant -> byte` over the **shipped** `MarketingVariant` DU
       (`EdenXp → 0x03uy | OptimusXp → 0x0Auy | R3LXp → 0x0Buy | EdenBs8 → 0x0Cuy`, total by
       construction) plus the virgin marker constant `0xFFuy` (reset target **only** — never a
@@ -115,21 +115,21 @@ A3 = {T009, T010, T011} (SET_ADDRESS vertical: impl + fixtures + tests, one comm
       `Phase3/WhoAreYouFrame.lean` `encode_decode_inverse` (T002) + data-model §1. Insert in
       `ButtonPanelTester.Core.fsproj` **after** `PanelObservation.fs` (uses
       `MarketingVariant`). (FR-001; FR-008)
-- [ ] T006 **[NEW]** Add `src/ButtonPanelTester.Core/Can/WhoAreYouFrame.fs`: record
+- [X] T006 **[NEW]** Add `src/ButtonPanelTester.Core/Can/WhoAreYouFrame.fs`: record
       (`MachineType: byte`, `FwType: uint16`, `Reset: bool`); `encode : WhoAreYouFrame ->
       byte[]` writing 4 B (`[0]` machineType, `[1..2]` fwType **big-endian** via
       `BinaryPrimitives.WriteUInt16BigEndian`, `[3]` `0x01`/`0x00`); `parse : ReadOnlySpan ->
       WhoAreYouFrame option` (length-only reject, house codec style; non-zero `[3]` = reset
       set). XML docs cite the contract §WHO_ARE_YOU + Lean `parse_encode_roundtrip` (T002).
       Insert after `BoardVariant.fs`. (FR-003/FR-008; contract §WHO_ARE_YOU)
-- [ ] T007 **[NEW]** Add `tests/ButtonPanelTester.Tests/Fixtures/Can/masterSequenceFixtures.json`
+- [X] T007 **[NEW]** Add `tests/ButtonPanelTester.Tests/Fixtures/Can/masterSequenceFixtures.json`
       (WHO_ARE_YOU entries; T010 extends with SET_ADDRESS): `claim_eden_xp_12v`
       (`03 00 04 01`), `claim_optimus_xp_12v` (`0A 00 04 01`), `claim_r3l_xp_12v`
       (`0B 00 04 01`), `claim_eden_bs8_12v` (`0C 00 04 01`), `claim_eden_xp_24v`
       (`03 00 0F 01`), `reset_12v` (`FF 00 04 01`), `reset_24v` (`FF 00 0F 01`),
       `malformed_too_short_3b`. Bytes are the contract's normative TX payloads
       (firmware-parser-verified, see Phase A preamble). (FR-003/FR-008)
-- [ ] T008 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/WhoAreYouFrameProperties.fs`
+- [X] T008 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/WhoAreYouFrameProperties.fs`
       (`WhoAreYouFrameRoundtrip` over arbitrary machineType/fwType/reset;
       `WhoAreYouFrameRejectsWrongLength` — length-only),
       `tests/ButtonPanelTester.Tests/Property/Can/BoardVariantProperties.fs`

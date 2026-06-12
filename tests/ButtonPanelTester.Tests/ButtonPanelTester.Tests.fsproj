@@ -22,6 +22,8 @@
         <Compile Include="Property/Can/CanLinkStateTransitionsProperties.fs" />
         <Compile Include="Property/Can/WhoIAmFrameProperties.fs" />
         <Compile Include="Property/Can/VariantDecoderProperties.fs" />
+        <Compile Include="Property/Can/WhoAreYouFrameProperties.fs" />
+        <Compile Include="Property/Can/BoardVariantProperties.fs" />
         <Compile Include="Property/Can/PanelsOnBusProperties.fs" />
         <Compile Include="Property/Can/PruningProperties.fs" />
         <Compile Include="Integration/Can/CanLinkServiceLifecycleTests.fs" />
@@ -37,6 +39,7 @@
         <Compile Include="Integration/DictionaryServiceRefreshTests.fs" />
         <Compile Include="Unit/WarmUpTests.fs" />
         <Compile Include="Unit/Can/WhoIAmFrameFixtureTests.fs" />
+        <Compile Include="Unit/Can/MasterSequenceFixtureTests.fs" />
         <Compile Include="Unit/Can/CanLinkLoggingTests.fs" />
         <Compile Include="Unit/Can/PanelDiscoveryLoggingTests.fs" />
     </ItemGroup>
@@ -46,6 +49,9 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
         <Content Include="Fixtures/Can/whoIAmFixtures.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+        <Content Include="Fixtures/Can/masterSequenceFixtures.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
