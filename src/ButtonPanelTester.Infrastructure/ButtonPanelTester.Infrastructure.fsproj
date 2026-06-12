@@ -14,6 +14,7 @@
         <Compile Include="Can/CanPortShare.fs" />
         <Compile Include="Can/PcanCanFrameStream.fs" />
         <Compile Include="Can/WhoIAmReassemblyObserver.fs" />
+        <Compile Include="Can/ProtocolMasterSequenceTransmitter.fs" />
         <Compile Include="Persistence/JsonFileDictionaryCache.fs" />
         <Compile Include="Persistence/EmbeddedSeedExtractor.fs" />
         <Compile Include="Persistence/DpapiCredentialStore.fs" />
