@@ -8,6 +8,8 @@
         <Compile Include="Can/CanLinkState.fs" />
         <Compile Include="Can/WhoIAmFrame.fs" />
         <Compile Include="Can/PanelObservation.fs" />
+        <Compile Include="Can/BoardVariant.fs" />
+        <Compile Include="Can/WhoAreYouFrame.fs" />
         <Compile Include="Can/PanelsOnBus.fs" />
         <Compile Include="Can/Pruning.fs" />
         <Compile Include="Can/Ports.fs" />
