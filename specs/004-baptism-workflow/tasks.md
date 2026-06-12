@@ -138,7 +138,7 @@ A3 = {T009, T010, T011} (SET_ADDRESS vertical: impl + fixtures + tests, one comm
       WHO_ARE_YOU facts: for each T007 fixture assert `encode frame = fixture bytes` (TX
       direction) and the parse round-trip; `malformed_too_short_3b` → `None`. Lands with
       T005–T007 (A2 commit). (Constitution II; FR-003/FR-008)
-- [ ] T009 **[NEW]** Add `src/ButtonPanelTester.Core/Can/SetAddressFrame.fs`: record
+- [X] T009 **[NEW]** Add `src/ButtonPanelTester.Core/Can/SetAddressFrame.fs`: record
       (`Uuid: PanelUuid`, `SpAddress: uint32`); `encode` writing 16 B (UUID words at
       `[0..11]` in the same convention `WhoIAmFrame.parse` reads them — the byte-echo
       invariant; spAddress `[12..15]` **big-endian**); `parse` (length-only reject). Plus the
@@ -148,12 +148,12 @@ A3 = {T009, T010, T011} (SET_ADDRESS vertical: impl + fixtures + tests, one comm
       `spAddress 0uy variantByte announcedFwType 1uy`, spec assumption: board 1). XML docs
       cite contract §SET_ADDRESS (byte-echo normative) + Lean theorems (T003). Insert after
       `WhoAreYouFrame.fs` (needs `PanelUuid`). (FR-003/FR-004; contract §SET_ADDRESS)
-- [ ] T010 **[NEW]** Extend `masterSequenceFixtures.json` with SET_ADDRESS entries:
+- [X] T010 **[NEW]** Extend `masterSequenceFixtures.json` with SET_ADDRESS entries:
       `set_address_eden_xp_12v_board1` — a fixed UUID triple + spAddress `00 03 01 01`
       (the R3 worked example: EDEN-XP/12 V/board 1 → `0x00030101` = the shipped
       `DeviceVariantConfig` "Keyboard 1" constant), one entry with a distinct UUID/variant,
       `malformed_too_short_15b`. Rides in the A3 commit. (FR-003)
-- [ ] T011 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/SetAddressFrameProperties.fs`:
+- [X] T011 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/SetAddressFrameProperties.fs`:
       `SetAddressFrameRoundtrip` (both directions — frame-level and `encode (parse b) = b` on
       16-byte inputs), `SetAddressFrameRejectsWrongLength`, and
       `SetAddressEchoesAnnouncedUuidBytes` — generate a valid 15-byte WHO_I_AM payload, parse

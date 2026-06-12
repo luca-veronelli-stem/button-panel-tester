@@ -1,5 +1,5 @@
 {
-    "$schema-description": "Master-sequence TX fixture set per specs/004-baptism-workflow/contracts/master-sequence-wire-format.md §WHO_ARE_YOU app payload (4 B): [0] machineType u8, [1..2] fwType u16 big-endian, [3] reset flag (non-zero = set), length-only reject. Payload bytes are NORMATIVE synthesis targets verified against the slave parser (AutoAddressSlave.c:230-235) — TX fixtures, not bench captures; the live-boundary proof is Phase F. Each parseable entry carries name, 4-byte hex payload, expectsParse, expectedMachineType/expectedFwType/expectedReset, and a provenance source. SET_ADDRESS entries land in commit group A3. Loaded by Tests/Unit/Can/MasterSequenceFixtureTests.fs (T008).",
+    "$schema-description": "Master-sequence TX fixture set per specs/004-baptism-workflow/contracts/master-sequence-wire-format.md §WHO_ARE_YOU app payload (4 B): [0] machineType u8, [1..2] fwType u16 big-endian, [3] reset flag (non-zero = set), length-only reject. Payload bytes are NORMATIVE synthesis targets verified against the slave parser (AutoAddressSlave.c:230-235) — TX fixtures, not bench captures; the live-boundary proof is Phase F. Each parseable entry carries name, 4-byte hex payload, expectsParse, expectedMachineType/expectedFwType/expectedReset, and a provenance source. SET_ADDRESS entries are present (commit group A3) per §SET_ADDRESS app payload (16 B): [0..11] the three UUID words as a byte-echo of the validated WHO_I_AM, [12..15] SP_Address u32 big-endian, length-only reject; slave parse cited at AutoAddressSlave.c:263-292. SET_ADDRESS parseable entries carry expectedUuid (array of 3 numbers) and expectedSpAddress (number). Loaded by Tests/Unit/Can/MasterSequenceFixtureTests.fs (T008).",
     "fixtures": [
         {
             "name": "claim_eden_xp_12v",
@@ -70,6 +70,29 @@
             "payload": "030004",
             "expectsParse": false,
             "reason": "Length is 3 bytes — wire contract requires exactly 4."
+        },
+        {
+            "name": "set_address_eden_xp_12v_board1",
+            "source": "Synthesis per contract §SET_ADDRESS — EDEN-XP 12V board 1, spAddress 0x00030101 (R3 worked example = vendored DeviceVariantConfig 'Keyboard 1' constant); UUID words lifted from the real bench-capture WHO_I_AM in whoIAmFixtures.json virgin_panel_12v, so the echoed bytes have real provenance; slave parse cited at AutoAddressSlave.c:263-292.",
+            "payload": "177C126D7308748F1609210400030101",
+            "expectsParse": true,
+            "expectedUuid": [394007149, 1929933967, 369697028],
+            "expectedSpAddress": 196865
+        },
+        {
+            "name": "set_address_optimus_xp_24v_board1",
+            "source": "Synthesis per contract §SET_ADDRESS — OPTIMUS-XP 24V board 1, spAddress 0x000A03C1 (machineType 0x0A<<16 | (0x000F & 0x3FF)<<6 | 1); synthetic UUID 0xA2A2A2A2/0xB2B2B2B2/0xC2C2C2C2 matching the whoIAmFixtures.json optimus_xp UUID; slave parse cited at AutoAddressSlave.c:263-292.",
+            "payload": "A2A2A2A2B2B2B2B2C2C2C2C2000A03C1",
+            "expectsParse": true,
+            "expectedUuid": [2728567458, 2998055602, 3267543746],
+            "expectedSpAddress": 656321
+        },
+        {
+            "name": "malformed_too_short_15b",
+            "source": "Synthesis — set_address_eden_xp_12v_board1 minus its last byte (15 bytes). Length-only reject.",
+            "payload": "177C126D7308748F16092104000301",
+            "expectsParse": false,
+            "reason": "Length is 15 bytes — wire contract requires exactly 16."
         }
     ]
 }
