@@ -13,6 +13,7 @@ open Microsoft.Extensions.Options
 open NReco.Logging.File
 open Peak.Can.Basic.BackwardCompatibility
 open Core.Interfaces
+open Core.Models
 open Infrastructure.Protocol.Hardware
 open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Core.Dictionary
@@ -282,3 +283,16 @@ module CompositionRoot =
                 let clock = sp.GetRequiredService<IClock>()
                 let logger = sp.GetRequiredService<ILogger<PanelDiscoveryService>>()
                 new PanelDiscoveryService(observer, link, clock, logger) :> IPanelDiscoveryService)
+            // Master-sequence TX boundary (spec-004): the production adapter
+            // rides the SAME `CanPortShare` instance the RX stream taps
+            // (contract adapter table), so one PEAK handle serves both
+            // directions. Lazy PEAK preserved — the adapter registers an
+            // `OnBuilt` callback and never forces `GetOrBuild`, so no
+            // P/Invoke happens before the user-initiated `OpenAsync`. The
+            // senderId is the vendored `DeviceVariantConfig.DefaultSenderId`
+            // (the protocol-metadata fetch migration is #156, out of scope).
+            .AddSingleton<IMasterSequenceTransmitter>(fun sp ->
+                let share = sp.GetRequiredService<CanPortShare>()
+                let logger = sp.GetRequiredService<ILogger<ProtocolMasterSequenceTransmitter>>()
+                new ProtocolMasterSequenceTransmitter(share, DeviceVariantConfig.DefaultSenderId, logger)
+                :> IMasterSequenceTransmitter)

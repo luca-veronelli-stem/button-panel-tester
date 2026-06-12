@@ -28,7 +28,9 @@ let Composition_ResolvesCanGraph_BindsRealPcanFrameStream () =
         sp.GetRequiredService<ICanLinkService>() |> ignore
         let observer = sp.GetRequiredService<IWhoIAmObserver>()
         sp.GetRequiredService<IPanelDiscoveryService>() |> ignore
+        let transmitter = sp.GetRequiredService<IMasterSequenceTransmitter>()
         Assert.IsType<PcanCanFrameStream>(frameStream) |> ignore
         Assert.IsType<WhoIAmReassemblyObserver>(observer) |> ignore
+        Assert.IsType<ProtocolMasterSequenceTransmitter>(transmitter) |> ignore
     finally
         (sp :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult()

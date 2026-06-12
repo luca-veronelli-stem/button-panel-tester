@@ -213,7 +213,7 @@ B3 = {T016} (composition wiring + smoke extension).
       captured chunks and assert the embedded app payload equals the matching
       `masterSequenceFixtures.json` bytes; a port write fault propagates as the task's
       exception. Lands with T014 (B2 commit). (FR-003/FR-014; contract §Transport)
-- [ ] T016 **[EXTEND]** Extend `src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs`:
+- [X] T016 **[EXTEND]** Extend `src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs`:
       construct the vendored `IProtocolService` over the shared `CanPortShare` (same port
       instance the RX stream taps — contract adapter table) and register
       `IMasterSequenceTransmitter → ProtocolMasterSequenceTransmitter`; preserve the lazy
