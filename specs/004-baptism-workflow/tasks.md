@@ -256,7 +256,7 @@ watch + test). C6 = {T026} (audit + test).
       outcomes), `no_assignment_without_match` (the SET_ADDRESS action is unreachable without
       a validated match — FR-004). Extend the `Phase3.lean` umbrella; `lake build` green,
       `sorry`-free, standard axioms only. (Constitution I; FR-003/004/005)
-- [ ] T018 [US1] **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/PanelObservation.fs` with
+- [X] T018 [US1] **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/PanelObservation.fs` with
       the additive `FwType: uint16` field (R2 — the claim must echo the selected panel's
       announced fwType; data-model §3), carried through from the already-parsed
       `WhoIAmFrame` at the `PanelsOnBus.observe` construction site

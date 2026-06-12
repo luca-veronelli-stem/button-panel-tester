@@ -23,15 +23,20 @@ module PanelsOnBus =
     ///   * existing rows have their `LastSeen` advanced to `now`;
     ///   * `VariantByte` and `VariantIdentity` are re-derived from the
     ///     latest frame so a panel that power-cycled out of
-    ///     `AAS_STAND_BY` mid-session is reflected accurately.
+    ///     `AAS_STAND_BY` mid-session is reflected accurately;
+    ///   * `FwType` is carried through from the latest frame (spec-004
+    ///     `data-model.md` §3 — latest announcement wins).
     /// The `count` invariant of `data-model.md` §4.3 is mechanised by
     /// the Lean theorem `observe_coalesces_by_uuid` in
     /// `Phase2/PanelsOnBus.lean` (T030).
     let observe (now: DateTimeOffset) (frame: WhoIAmFrame) (m: PanelsOnBus) : PanelsOnBus =
+        let (FwType announcedFwType) = frame.FwType
+
         let observation =
             { Uuid = frame.Uuid
               VariantByte = frame.MachineType
               VariantIdentity = VariantDecoder.decode frame.MachineType
+              FwType = announcedFwType
               LastSeen = now }
 
         Map.add frame.Uuid observation m

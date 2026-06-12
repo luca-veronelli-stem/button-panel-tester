@@ -40,10 +40,16 @@ type VariantIdentity =
 /// the decoded `VariantIdentity` so the GUI's detail affordance can
 /// render it for the `Unknown` and `Virgin` cases without re-deriving
 /// it from the identity).
+/// `FwType` is the raw announced fwType word carried through from the
+/// already-parsed `WhoIAmFrame`, per spec-004 `data-model.md` §3 and
+/// research R2: the `WHO_ARE_YOU` claim must echo this value or the
+/// slave ignores it. Additive — latest announcement wins under
+/// coalescing, same as every other field.
 type PanelObservation =
     { Uuid: PanelUuid
       VariantByte: MachineTypeByte
       VariantIdentity: VariantIdentity
+      FwType: uint16
       LastSeen: DateTimeOffset }
 
 module VariantDecoder =

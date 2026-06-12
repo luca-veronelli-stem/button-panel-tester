@@ -85,3 +85,32 @@ let PanelsOnBusReObservation_UpdatesVariantInPlace
     && Map.containsKey first.Uuid afterSecond
     && (afterSecond[first.Uuid].VariantByte = MachineTypeByte updatedMachineType)
     && (afterSecond[first.Uuid].VariantIdentity = VariantDecoder.decode(MachineTypeByte updatedMachineType))
+
+/// FsCheck property covering spec-004 `data-model.md` §3 (additive
+/// `FwType` carry-through): after `observe`, the stored row's `FwType`
+/// equals the frame's announced fwType; and a same-UUID re-observation
+/// with a different fwType leaves the latest value — latest
+/// announcement wins, same as every other field under coalescing
+/// (research R2: the WHO_ARE_YOU claim must echo this value).
+[<Property>]
+let ObserveCarriesAnnouncedFwType
+    (now: DateTimeOffset)
+    (machineType: byte)
+    (firstFwType: uint16)
+    (secondFwType: uint16)
+    (u0: uint32)
+    (u1: uint32)
+    (u2: uint32)
+    =
+    let first =
+        { MachineType = MachineTypeByte machineType
+          FwType = FwType firstFwType
+          Uuid = PanelUuid(u0, u1, u2) }
+
+    let second = { first with FwType = FwType secondFwType }
+
+    let afterFirst = PanelsOnBus.observe now first PanelsOnBus.empty
+    let afterSecond = PanelsOnBus.observe now second afterFirst
+
+    afterFirst[first.Uuid].FwType = firstFwType
+    && afterSecond[first.Uuid].FwType = secondFwType
