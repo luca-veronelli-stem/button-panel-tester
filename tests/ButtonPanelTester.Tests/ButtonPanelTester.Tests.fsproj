@@ -24,6 +24,7 @@
         <Compile Include="Property/Can/VariantDecoderProperties.fs" />
         <Compile Include="Property/Can/WhoAreYouFrameProperties.fs" />
         <Compile Include="Property/Can/BoardVariantProperties.fs" />
+        <Compile Include="Property/Can/SetAddressFrameProperties.fs" />
         <Compile Include="Property/Can/PanelsOnBusProperties.fs" />
         <Compile Include="Property/Can/PruningProperties.fs" />
         <Compile Include="Integration/Can/CanLinkServiceLifecycleTests.fs" />

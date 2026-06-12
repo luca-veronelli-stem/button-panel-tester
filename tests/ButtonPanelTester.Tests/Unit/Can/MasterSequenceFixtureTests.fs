@@ -125,3 +125,73 @@ let ``Fixture reset_24v encodes the virgin-marker reset at fwType 0x000F`` () =
 [<Fact>]
 let ``Fixture malformed_too_short_3b silently drops on length mismatch`` () =
     assertWhoAreYouFixture "malformed_too_short_3b"
+
+/// In-memory shape of one SET_ADDRESS fixture entry (commit group
+/// A3). Mirrors the JSON schema in
+/// `Fixtures/Can/masterSequenceFixtures.json`; the expected fields
+/// are absent on the malformed entry. Layered over the same generic
+/// `loadEntry` projection the WHO_ARE_YOU shape uses.
+type private SetAddressFixture =
+    { Name: string
+      Payload: string
+      ExpectsParse: bool
+      ExpectedUuid: PanelUuid option
+      ExpectedSpAddress: uint32 option }
+
+let private loadSetAddressFixture (name: string) : SetAddressFixture =
+    loadEntry name (fun element ->
+        { Name = name
+          Payload = requireString element "payload"
+          ExpectsParse = element.GetProperty("expectsParse").GetBoolean()
+          ExpectedUuid =
+            tryGet element "expectedUuid"
+            |> Option.map (fun v ->
+                let words = v.EnumerateArray() |> Seq.map (fun w -> w.GetUInt32()) |> Seq.toArray
+                PanelUuid(words[0], words[1], words[2]))
+          ExpectedSpAddress = tryGet element "expectedSpAddress" |> Option.map (fun v -> v.GetUInt32()) })
+
+/// Combined TX + round-trip assertion for one SET_ADDRESS fixture:
+/// build the frame from the expected fields and check `encode`
+/// reproduces the normative wire bytes verbatim (TX direction — the
+/// load-bearing assert; payloads are synthesis targets per contract
+/// §"SET_ADDRESS app payload (16 B)", slave parse at
+/// `AutoAddressSlave.c:263-292`), then check `parse` recovers the
+/// same frame from those bytes. Non-parseable entries assert the
+/// silent `None` drop instead — length is the only rejection axis.
+let private assertSetAddressFixture (fixtureName: string) =
+    let fixture = loadSetAddressFixture fixtureName
+    let bytes = hexToBytes fixture.Payload
+    let parsed = SetAddressFrame.parse(ReadOnlyMemory bytes)
+
+    match fixture.ExpectsParse, parsed with
+    | true, Some frame ->
+        let expected: SetAddressFrame =
+            { Uuid = fixture.ExpectedUuid.Value
+              SpAddress = fixture.ExpectedSpAddress.Value }
+
+        Assert.Equal<byte[]>(bytes, SetAddressFrame.encode expected)
+        Assert.Equal(expected, frame)
+    | false, None -> () // expected silent drop — length-only reject
+    | true, None -> Assert.Fail $"Fixture {fixtureName}: expected parse Some, got None"
+    | false, Some _ -> Assert.Fail $"Fixture {fixtureName}: expected parse None, got Some"
+
+[<Fact>]
+let ``Fixture set_address_eden_xp_12v_board1 echoes the captured UUID with spAddress 0x00030101`` () =
+    assertSetAddressFixture "set_address_eden_xp_12v_board1"
+
+[<Fact>]
+let ``Fixture set_address_optimus_xp_24v_board1 encodes the OPTIMUS-XP 24V assignment`` () =
+    assertSetAddressFixture "set_address_optimus_xp_24v_board1"
+
+[<Fact>]
+let ``Fixture malformed_too_short_15b silently drops on length mismatch`` () =
+    assertSetAddressFixture "malformed_too_short_15b"
+
+/// Worked-example cross-check for the SP_Address formula (research
+/// R3; contract §"SP_Address computation"; data-model §2.3):
+/// EDEN-XP (machineType 0x03) / 12 V (fwType 0x0004) / board 1 →
+/// `0x00030101`, the shipped vendored `DeviceVariantConfig`
+/// "Keyboard 1" constant.
+[<Fact>]
+let ``spAddress for EDEN-XP 12V board 1 equals the vendored DeviceVariantConfig Keyboard 1 constant`` () =
+    Assert.Equal(0x00030101u, SetAddressFrame.spAddress 0uy 0x03uy 0x0004us 1uy)
