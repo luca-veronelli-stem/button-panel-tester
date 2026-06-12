@@ -267,7 +267,7 @@ watch + test). C6 = {T026} (audit + test).
       coalesce, prune, clear unchanged — the Phase 2 Lean models key on uuid/lastSeen and are
       unaffected (no Lean change); the shipped discovery suites stay green as the regression
       proof (FR-006 "list semantics NOT modified"). (FR-006; R2; data-model §3)
-- [ ] T019 [US1] **[NEW]** Add `src/ButtonPanelTester.Core/Can/Baptism.fs`: the FSM types —
+- [X] T019 [US1] **[NEW]** Add `src/ButtonPanelTester.Core/Can/Baptism.fs`: the FSM types —
       `BaptismState`, `BaptismEvent` (`AnnouncementHeard | Tick | PanelsChanged | LinkChanged
       | WriteCompleted | WriteFaulted`, data-model §4.3), `BaptismOutcome` (the exact six-case
       DU of §4.2 incl. `UnexpectedVariant of announced: VariantIdentity` and
@@ -280,7 +280,7 @@ watch + test). C6 = {T026} (audit + test).
       leaves `Connected` in any non-terminal state → `Failed_LinkLost`. XML docs cite
       `Phase3/BaptismSequence.lean` (T017) + data-model §4. Insert after `SetAddressFrame.fs`
       + `CanLinkState.fs` in the fsproj. (FR-003/004/005; stem-fp closed-DU triple)
-- [ ] T020 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/BaptismSequenceProperties.fs`
+- [X] T020 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/BaptismSequenceProperties.fs`
       (custom `Arbitrary` for scripted announcement/link/tick event sequences, stem-fp §9):
       `BaptismOutcomeTotal` (any event sequence long enough to pass the deadline terminates
       in exactly one of the six outcomes), `BaptismSucceedsIffMatchingAnnouncement` (mirrors
