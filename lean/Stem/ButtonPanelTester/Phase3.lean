@@ -16,6 +16,7 @@
 
 import Stem.ButtonPanelTester.Phase3.WhoAreYouFrame
 import Stem.ButtonPanelTester.Phase3.SetAddressFrame
+import Stem.ButtonPanelTester.Phase3.BaptismSequence
 
 namespace Stem.ButtonPanelTester.Phase3
 end Stem.ButtonPanelTester.Phase3

@@ -246,7 +246,7 @@ C3 = {T019, T020} (pure FSM + its properties, one commit). C4 = {T021, T022, T02
 (service + composition + the three integration suites, one commit). C5 = {T025} (FR-007
 watch + test). C6 = {T026} (audit + test).
 
-- [ ] T017 [US1] **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase3/BaptismSequence.lean`:
+- [X] T017 [US1] **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase3/BaptismSequence.lean`:
       states, events, and transition relation exactly per data-model §4.1/§4.3 (foreign-UUID
       announcements never transition; terminal states absorb all events; deadline =
       `AwaitingAnnounce` entry + 6 s). Prove the three theorems of data-model §8:
