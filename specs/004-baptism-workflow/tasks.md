@@ -54,7 +54,7 @@ in dependency order — noted inline per task (F# forward references are compile
 **Purpose**: establish the green baseline this branch builds on, so every later commit can be
 checked bisect-safe.
 
-- [ ] T001 Verify the green baseline on `004-baptism-workflow`: `dotnet build
+- [X] T001 Verify the green baseline on `004-baptism-workflow`: `dotnet build
       Stem.ButtonPanelTester.slnx -c Release`; `dotnet test
       tests\ButtonPanelTester.Tests\ButtonPanelTester.Tests.fsproj -c Release`; `dotnet test
       tests\ButtonPanelTester.Tests.Windows\ButtonPanelTester.Tests.Windows.fsproj -c Release
