@@ -15,21 +15,28 @@ $failures = @()
 git diff --check
 if ($LASTEXITCODE -ne 0) { $failures += 'git diff --check' }
 
-# STEM .NET default - uncomment + adjust per repo:
-# dotnet build -c Release
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
-# dotnet test Tests/Tests.csproj --framework net10.0
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test' }
-# dotnet format --verify-no-changes
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet format' }
+dotnet build Stem.ButtonPanelTester.slnx -c Release
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
 
-# Lean formalization (for repos with specs/ Lean projects):
-# lake build
-# if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj -c Release --no-build
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test (Tests)' }
 
-# Ticket-specific proof (extend per ticket, same capture pattern):
-# dotnet test Tests/Tests.csproj --filter FullyQualifiedName~<focused-pattern>
-# if ($LASTEXITCODE -ne 0) { $failures += '<focused-pattern>' }
+dotnet test tests/ButtonPanelTester.Tests.Windows/ButtonPanelTester.Tests.Windows.fsproj -c Release --no-build --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test (Tests.Windows, Category!=Hardware)' }
+
+Push-Location lean
+lake build
+if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+Pop-Location
+
+# Ticket-specific proof (spec-004 #214, Phase B): the Phase A baptism codec suites
+# (regression anchor, 19 tests at branch point) plus the Phase B TX-boundary suites.
+# Zero matches exits 0, so each check is green before its suites land (bisect-safe).
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj -c Release --no-build --filter "FullyQualifiedName~WhoAreYouFrame|FullyQualifiedName~BoardVariant|FullyQualifiedName~SetAddressFrame|FullyQualifiedName~MasterSequenceFixture"
+if ($LASTEXITCODE -ne 0) { $failures += 'focused baptism codec filter' }
+
+dotnet test tests/ButtonPanelTester.Tests.Windows/ButtonPanelTester.Tests.Windows.fsproj -c Release --no-build --filter "FullyQualifiedName~ProtocolMasterSequenceTransmitter|FullyQualifiedName~CompositionRootCan"
+if ($LASTEXITCODE -ne 0) { $failures += 'focused TX-boundary filter' }
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
