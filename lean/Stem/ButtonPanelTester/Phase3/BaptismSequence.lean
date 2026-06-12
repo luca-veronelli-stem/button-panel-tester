@@ -34,10 +34,10 @@ The three §8 theorems ride over this exact state space: `baptize_progress`
 deadline terminates in exactly one of the six outcomes), and
 `no_assignment_without_match` (FR-004).
 
-The F# surface lives at `src/ButtonPanelTester.Core/Can/BaptismSequence.fs`
+The F# surface lives at `src/ButtonPanelTester.Core/Can/Baptism.fs`
 (T019) and MIRRORS the type names and case order here exactly (stem-fp
 discipline §10); the FsCheck properties live at
-`tests/.../Property/Can/BaptismSequenceProperties.fs` (T018). This Lean
+`tests/.../Property/Can/BaptismSequenceProperties.fs` (T020). This Lean
 re-statement lands in commit group C1, ahead of the F# surface, per
 Constitution Principle I (Lean spec → test → impl).
 
