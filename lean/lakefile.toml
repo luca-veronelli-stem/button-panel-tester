@@ -1,8 +1,11 @@
 name = "stem-button-panel-tester"
-defaultTargets = ["Stem.ButtonPanelTester.Phase1", "Stem.ButtonPanelTester.Phase2"]
+defaultTargets = ["Stem.ButtonPanelTester.Phase1", "Stem.ButtonPanelTester.Phase2", "Stem.ButtonPanelTester.Phase3"]
 
 [[lean_lib]]
 name = "Stem.ButtonPanelTester.Phase1"
 
 [[lean_lib]]
 name = "Stem.ButtonPanelTester.Phase2"
+
+[[lean_lib]]
+name = "Stem.ButtonPanelTester.Phase3"
