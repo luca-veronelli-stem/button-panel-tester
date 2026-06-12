@@ -15,21 +15,23 @@ $failures = @()
 git diff --check
 if ($LASTEXITCODE -ne 0) { $failures += 'git diff --check' }
 
-# STEM .NET default - uncomment + adjust per repo:
-# dotnet build -c Release
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
-# dotnet test Tests/Tests.csproj --framework net10.0
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test' }
-# dotnet format --verify-no-changes
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet format' }
+dotnet build Stem.ButtonPanelTester.slnx -c Release
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
 
-# Lean formalization (for repos with specs/ Lean projects):
-# lake build
-# if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj -c Release --no-build
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test (Tests)' }
 
-# Ticket-specific proof (extend per ticket, same capture pattern):
-# dotnet test Tests/Tests.csproj --filter FullyQualifiedName~<focused-pattern>
-# if ($LASTEXITCODE -ne 0) { $failures += '<focused-pattern>' }
+dotnet test tests/ButtonPanelTester.Tests.Windows/ButtonPanelTester.Tests.Windows.fsproj -c Release --no-build --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test (Tests.Windows, Category!=Hardware)' }
+
+Push-Location lean
+lake build
+if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+Pop-Location
+
+# Ticket-specific proof (extended once C3 lands baptism tests):
+# dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj -c Release --no-build --filter "FullyQualifiedName~Baptism"
+# if ($LASTEXITCODE -ne 0) { $failures += 'focused baptism filter' }
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
