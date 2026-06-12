@@ -95,3 +95,37 @@ type IWhoIAmObserver =
     /// Hot observable of decoded WHO_I_AM frames. Fires on the vendored read thread;
     /// subscribe at composition time (late subscribers do not replay).
     abstract member WhoIAmObserved: IObservable<WhoIAmFrame>
+
+/// Transmits the auto-address master-sequence commands this tool is allowed to send
+/// (FR-014: claim / reset via WHO_ARE_YOU, address assignment via SET_ADDRESS — nothing
+/// else). The product's first CAN transmit port and the single TX entry point — not a
+/// general-purpose CAN TX surface: adding any new command to the bus requires a spec that
+/// amends FR-014 and the port contract, never a new method here "while we're at it".
+///
+/// Contract of record:
+/// `specs/004-baptism-workflow/contracts/master-sequence-transmitter-port.md`; wire shapes
+/// per `specs/004-baptism-workflow/contracts/master-sequence-wire-format.md`.
+///
+/// Semantics (contract §Semantics):
+///   - Write-completion contract: a completed task means the message was written to the
+///     bus (driver accepted all frames), NOT that any panel acted on it. Success/failure
+///     of the *sequence* is the `BaptismService`'s judgement (FSM), never the port's.
+///   - Fault mapping: any adapter exception maps to the service's `TransmissionFailure`
+///     outcome, naming the step (FR-005). The port does not retry; the service does not
+///     retry.
+///   - No queuing/coalescing: each call is one SP_APP message, sent immediately. Callers
+///     serialize (the FSM runs at most one attempt; reset's two fwType broadcasts are
+///     awaited sequentially).
+///   - Cancellation: honors `ct` co-operatively before/between frame writes; cancellation
+///     surfaces as `OperationCanceledException`, never a transmission failure.
+type IMasterSequenceTransmitter =
+    /// Broadcasts WHO_ARE_YOU(machineType, fwType, reset). Completes when the write
+    /// has been handed to the bus driver successfully; faults on transmission failure.
+    abstract member SendWhoAreYouAsync:
+        machineType: byte * fwType: uint16 * reset: bool * ct: CancellationToken -> Task
+
+    /// Broadcasts SET_ADDRESS(uuid, spAddress). The uuid is re-encoded byte-identically
+    /// to the announcement it was parsed from (byte-echo invariant). Completes on write
+    /// completion; faults on transmission failure. The slave never replies (FR-006/FR-010).
+    abstract member SendSetAddressAsync:
+        uuid: PanelUuid * spAddress: uint32 * ct: CancellationToken -> Task

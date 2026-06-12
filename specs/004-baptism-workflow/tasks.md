@@ -180,7 +180,7 @@ Core, the recording fake for CI, the production adapter over the vendored protoc
 on). B2 = {T014, T015} (production adapter + its frame-synthesis tests, one commit).
 B3 = {T016} (composition wiring + smoke extension).
 
-- [ ] T012 **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/Ports.fs` with
+- [X] T012 **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/Ports.fs` with
       `IMasterSequenceTransmitter` exactly per the port contract: `SendWhoAreYouAsync
       (machineType, fwType, reset, ct) : Task` and `SendSetAddressAsync (uuid, spAddress, ct)
       : Task`; XML docs carry the contract's semantics verbatim — write-completion contract
@@ -189,7 +189,7 @@ B3 = {T016} (composition wiring + smoke extension).
       `OperationCanceledException` (never a transmission failure), FR-014 whitelist note.
       `Ports.fs` already sits after the frame modules in the fsproj (uses `PanelUuid`).
       (Constitution III; FR-014)
-- [ ] T013 **[NEW]** Add `tests/ButtonPanelTester.Tests/Fakes/Can/InMemoryMasterSequenceTransmitter.fs`:
+- [X] T013 **[NEW]** Add `tests/ButtonPanelTester.Tests/Fakes/Can/InMemoryMasterSequenceTransmitter.fs`:
       records every send in order (`Sent : (command × fields × timestamp) list` per the
       contract's adapter table — enough to assert payload fields and ordering); scriptable
       per-call fault injection (for every `TransmissionFailure` path in Phases C/D); honors
