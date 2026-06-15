@@ -1,5 +1,7 @@
 namespace Stem.ButtonPanelTester.GUI.Can
 
+open System.Threading
+open System.Threading.Tasks
 open Avalonia.Controls
 open Avalonia.Layout
 open Avalonia.Media
@@ -8,17 +10,20 @@ open Avalonia.FuncUI.Types
 open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Services.Can
 
-/// FuncUI view for the spec-004 BAPTIZE surface (Phase E, T034/T035, FR-002 /
-/// FR-005 / FR-006 / FR-007 / FR-009). Pure render: the host (`App.fs`) passes
-/// the already-computed `Baptism.baptizeEnablement` verdict, the latest
-/// `IBaptismService.StateChanged` state, the picked variant, the in-flight /
-/// last attempt's `(variant, uuid)`, and the latest FR-007 warning uuid, then
+/// FuncUI view for the spec-004 BAPTIZE + RESET surfaces (Phase E, T034–T037,
+/// FR-002 / FR-005 / FR-006 / FR-007 / FR-008 / FR-009 / FR-010). Pure render:
+/// the host (`App.fs`) passes the already-computed `Baptism.baptizeEnablement`
+/// and `Baptism.resetEnablement` verdicts, the latest `IBaptismService`
+/// state, the picked variant, the in-flight / last attempt's `(variant, uuid)`,
+/// the latest FR-007 warning uuid, and the latest `ResetOutcome`, then
 /// re-renders on every observable emission. The GUI renders enablement and
 /// outcomes; it decides nothing — every guard verdict and outcome is consumed
 /// from Core / the service, never re-derived here.
 ///
-/// Reset is a SEPARATE surface (Phase E, E3) — this view never renders a Reset
-/// affordance.
+/// The reset surface (E3) consumes the `IBaptismService.ResetAsync` confirmation
+/// SEAM via `runReset`: the caller supplies the already-decided confirmation
+/// (the host's FR-009 modal dialog or a scripted test bool). There is no
+/// confirmation logic in this view — only the seam.
 [<RequireQualifiedAccess>]
 module BaptismView =
 
@@ -105,20 +110,84 @@ module BaptismView =
             "The just-claimed panel %s re-announced while still unclaimed, so the claim may not have taken. Re-run Baptize or Reset."
             (PanelsOnBusView.uuidText uuid)
 
-    /// Pure render of the baptize surface. The host supplies the
-    /// already-computed enablement verdict, the latest FSM state, the picked
-    /// variant, the in-flight / last attempt's `(variant, uuid)` (for the
-    /// terminal rendering), the latest FR-007 warning uuid, and the two
-    /// callbacks. No confirmation dialog — clicking Baptize invokes `onBaptize`
-    /// directly (FR-009).
+    /// Whether the Reset button is active. Reset needs NO list selection
+    /// (FR-008): it is a broadcast, not anchored to a selected row. Active iff
+    /// the `Baptism.resetEnablement` guard says `Enabled` AND no baptize attempt
+    /// is running — the two surfaces gate each other so a reset can never race a
+    /// baptize claim/assign in flight (and vice versa via `isRunning`).
+    let resetEnabled (resetEnablement: Enablement) (state: BaptismState) : bool =
+        resetEnablement = Enabled && not (isRunning state)
+
+    /// The reason the Reset button is disabled, for rendering under the button.
+    /// A `Disabled` reset guard carries its own explanation (the unmet FR-008
+    /// conjunct — link down or two-or-more announcing); `Enabled` yields `None`.
+    let resetDisabledHint (resetEnablement: Enablement) : string option =
+        match resetEnablement with
+        | Disabled e -> Some e
+        | Enabled -> None
+
+    /// The FR-009 confirmation prompt the host's modal dialog shows before a
+    /// reset broadcasts. It names the two facts a technician must understand to
+    /// give informed consent: reset ERASES a panel's machine identity (back to
+    /// virgin), and it is a BROADCAST that reaches EVERY matching panel on the
+    /// bus — including SILENT (already-baptized) panels the list cannot show.
+    let resetConfirmationMessage : string =
+        "Reset to virgin erases the panel's machine identity, returning it to the unbaptized state. "
+        + "This is a broadcast: it reaches every matching panel on the bus, including silent (already-baptized) "
+        + "panels the list cannot show — not just the ones you can see. Continue only if you mean to reset all of them."
+
+    /// One human-readable line per `ResetOutcome` (FR-010). Wildcard-free —
+    /// adding a `ResetOutcome` case makes this a compile error.
+    ///   * `Sent` — the honest acceptance-2.5 message: the reset commands were
+    ///     written to the bus; a matching panel, if present, re-announces as
+    ///     virgin within ~6 s; otherwise the list simply stays empty (the
+    ///     firmware never replies, so write completion is the only signal).
+    ///   * `Declined` — cancelled at confirmation; nothing was sent.
+    ///   * `ResetLinkLost` — the link was not connected (or dropped
+    ///     mid-broadcast); reconnect the adapter and retry.
+    ///   * `ResetTransmissionFailure` — a reset broadcast write failed; check
+    ///     the link and retry.
+    let describeResetOutcome (outcome: ResetOutcome) : string =
+        match outcome with
+        | Sent ->
+            "Reset written to the bus. A matching panel, if present, re-announces as virgin within ~6 s and "
+            + "its row reappears; if no panel matched, the list simply stays empty (the firmware sends no reply)."
+        | Declined -> "Reset was cancelled at confirmation; nothing was sent."
+        | ResetLinkLost ->
+            "The CAN link was not connected, or dropped mid-broadcast, so the reset did not complete. Reconnect the adapter and retry."
+        | ResetTransmissionFailure ->
+            "A reset broadcast write failed. Check the link and retry."
+
+    /// The confirmation SEAM for reset (FR-009 / FR-010). `confirm` shows the
+    /// host's FR-009 modal dialog (production) or is scripted to a bool (tests);
+    /// its decision feeds `IBaptismService.ResetAsync`. This single orchestration
+    /// is what the host's `onReset` and the T037 wired-service tests both drive —
+    /// the GUI decides nothing, it only relays the technician's confirmation.
+    let runReset (confirm: unit -> Task<bool>) (service: IBaptismService) (ct: CancellationToken) : Task<ResetOutcome> =
+        task {
+            let! ok = confirm ()
+            return! service.ResetAsync(ok, ct)
+        }
+
+    /// Pure render of the combined baptize + reset surface. The host supplies
+    /// the already-computed `baptizeEnablement` / `resetEnablement` verdicts, the
+    /// latest FSM state, the picked variant, the in-flight / last attempt's
+    /// `(variant, uuid)` (for the terminal rendering), the latest FR-007 warning
+    /// uuid, the latest `ResetOutcome`, and the three callbacks. No confirmation
+    /// dialog inline: clicking Baptize invokes `onBaptize` directly (FR-009);
+    /// clicking Reset invokes `onReset`, which drives the host's FR-009 modal
+    /// confirmation seam (`runReset`).
     let view
-        (enablement: Enablement)
+        (baptizeEnablement: Enablement)
+        (resetEnablement: Enablement)
         (state: BaptismState)
         (selectedVariant: MarketingVariant option)
         (attempt: (MarketingVariant * PanelUuid) option)
         (warning: PanelUuid option)
+        (resetOutcome: ResetOutcome option)
         (onVariantSelected: MarketingVariant -> unit)
         (onBaptize: MarketingVariant -> unit)
+        (onReset: unit -> unit)
         : IView =
         let running = isRunning state
 
@@ -152,7 +221,7 @@ module BaptismView =
             Button.create [
                 Button.name "BaptizeButton"
                 Button.content "Baptize"
-                Button.isEnabled (baptizeEnabled enablement selectedVariant state)
+                Button.isEnabled (baptizeEnabled baptizeEnablement selectedVariant state)
                 Button.onClick (fun _ ->
                     match selectedVariant with
                     | Some v -> onBaptize v
@@ -163,7 +232,7 @@ module BaptismView =
         // Conditional children, assembled by `@` of optional singletons — never
         // a `match -> ()` inside the children list.
         let disabledReason: IView list =
-            match (if running then None else disabledHint enablement selectedVariant) with
+            match (if running then None else disabledHint baptizeEnablement selectedVariant) with
             | Some hint ->
                 [ TextBlock.create [
                       TextBlock.name "BaptizeDisabledReason"
@@ -205,8 +274,50 @@ module BaptismView =
                   :> IView ]
             | None -> []
 
+        // Reset-to-virgin surface (E3, FR-008 / FR-009 / FR-010). A separate
+        // section: the Reset button gated by `resetEnabled` (no list selection,
+        // disabled while a baptize attempt runs), its disabled reason, and the
+        // last `ResetOutcome` line. Assembled by `@` of optional singletons.
+        let resetButton: IView =
+            Button.create [
+                Button.name "ResetButton"
+                Button.content "Reset to virgin"
+                Button.isEnabled (resetEnabled resetEnablement state)
+                Button.onClick (fun _ -> onReset ())
+            ]
+            :> IView
+
+        let resetDisabledReason: IView list =
+            match (if running then None else resetDisabledHint resetEnablement) with
+            | Some hint ->
+                [ TextBlock.create [
+                      TextBlock.name "ResetDisabledReason"
+                      TextBlock.text hint
+                      TextBlock.textWrapping TextWrapping.Wrap
+                  ]
+                  :> IView ]
+            | None -> []
+
+        let resetOutcomeView: IView list =
+            match resetOutcome with
+            | Some o ->
+                [ TextBlock.create [
+                      TextBlock.name "ResetOutcome"
+                      TextBlock.text (describeResetOutcome o)
+                      TextBlock.textWrapping TextWrapping.Wrap
+                  ]
+                  :> IView ]
+            | None -> []
+
         let children: IView list =
-            [ picker; baptizeButton ] @ disabledReason @ progress @ outcome @ warningView
+            [ picker; baptizeButton ]
+            @ disabledReason
+            @ progress
+            @ outcome
+            @ warningView
+            @ [ resetButton ]
+            @ resetDisabledReason
+            @ resetOutcomeView
 
         StackPanel.create [
             StackPanel.name "BaptismSurface"

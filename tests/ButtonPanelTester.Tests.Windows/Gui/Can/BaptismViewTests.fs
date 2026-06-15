@@ -1,22 +1,28 @@
 module Stem.ButtonPanelTester.Tests.Windows.Gui.Can.BaptismViewTests
 
 open System
+open System.Threading
+open System.Threading.Tasks
 open Avalonia.Controls
 open Avalonia.Interactivity
 open Avalonia.Media
 open Avalonia.Headless.XUnit
 open Avalonia.FuncUI.VirtualDom
+open Microsoft.Extensions.Logging.Abstractions
 open Xunit
 open Stem.ButtonPanelTester.Core.Can
+open Stem.ButtonPanelTester.Core.Dictionary
+open Stem.ButtonPanelTester.Services.Can
+open Stem.ButtonPanelTester.Tests.Fakes.Can
 open Stem.ButtonPanelTester.GUI.Can
 
 /// `Avalonia.Headless.XUnit` tests for `BaptismView` per spec-004 Phase E
-/// (T034/T035, the SC-005 matrix surface). The pure helpers are asserted
+/// (T034/T035 baptize, T036/T037 reset). The pure helpers are asserted
 /// directly; the rendered tree is materialised through `VirtualDom.create`
 /// and walked the same way `PanelsOnBusViewTests` / `CanStatusRowTests` do.
 ///
-/// The GUI renders enablement and outcomes; it decides nothing. This slice
-/// is the BAPTIZE surface only — no Reset affordance is asserted here.
+/// The GUI renders enablement and outcomes; it decides nothing. The baptize
+/// surface (T034/T035) and the reset surface (T036/T037) share one `view`.
 
 // --- helpers ---
 
@@ -71,19 +77,32 @@ let private buttonText (b: Button) : string =
         | s -> s
 
 // Default render with sensible defaults; callers override what they pin.
+// The reset inputs default to the inert pass-through (`resetEnablement =
+// Enabled`, `resetOutcome = None`, `onReset = no-op`) so the baptize tests
+// stay focused on the baptize surface.
 let private render
-    (enablement: Enablement)
+    (baptizeEnablement: Enablement)
     (state: BaptismState)
     (selectedVariant: MarketingVariant option)
     (attempt: (MarketingVariant * PanelUuid) option)
     (warning: PanelUuid option)
     : Control =
     VirtualDom.create (
-        BaptismView.view enablement state selectedVariant attempt warning (fun _ -> ()) (fun _ -> ())
+        BaptismView.view
+            baptizeEnablement
+            Enabled
+            state
+            selectedVariant
+            attempt
+            warning
+            None
+            (fun _ -> ())
+            (fun _ -> ())
+            (fun () -> ())
     )
 
 let private renderWith
-    (enablement: Enablement)
+    (baptizeEnablement: Enablement)
     (state: BaptismState)
     (selectedVariant: MarketingVariant option)
     (attempt: (MarketingVariant * PanelUuid) option)
@@ -92,7 +111,38 @@ let private renderWith
     (onBaptize: MarketingVariant -> unit)
     : Control =
     VirtualDom.create (
-        BaptismView.view enablement state selectedVariant attempt warning onVariantSelected onBaptize
+        BaptismView.view
+            baptizeEnablement
+            Enabled
+            state
+            selectedVariant
+            attempt
+            warning
+            None
+            onVariantSelected
+            onBaptize
+            (fun () -> ())
+    )
+
+// Render the full surface pinning the reset inputs (E3, T037).
+let private renderReset
+    (resetEnablement: Enablement)
+    (state: BaptismState)
+    (resetOutcome: ResetOutcome option)
+    (onReset: unit -> unit)
+    : Control =
+    VirtualDom.create (
+        BaptismView.view
+            Enabled
+            resetEnablement
+            state
+            None
+            None
+            None
+            resetOutcome
+            (fun _ -> ())
+            (fun _ -> ())
+            onReset
     )
 
 // Render a terminal outcome for the failure/success matrix.
@@ -296,11 +346,161 @@ let Warning_Renders_WhenRaised () =
     Assert.Contains(sampleUuidHex, warning.Text)
     Assert.Contains("claim", warning.Text)
 
-// (11) no confirmation dialog on baptize — no extra buttons beyond the picker + baptize
+// (11) no confirmation dialog on baptize — no extra buttons beyond the picker,
+// baptize, and the (separate-surface) reset button. The FR-009 confirmation
+// for RESET lives in the host's modal dialog (App.fs `confirmReset`), not in
+// this in-pane view, so it adds no inline buttons here.
 [<AvaloniaFact>]
 let NoConfirmationDialogOnBaptize () =
     let root = render Enabled Idle (Some EdenXp) None None
     let other =
         allButtons root
-        |> List.filter (fun b -> b.Name <> "VariantOption" && b.Name <> "BaptizeButton")
+        |> List.filter (fun b ->
+            b.Name <> "VariantOption"
+            && b.Name <> "BaptizeButton"
+            && b.Name <> "ResetButton")
     Assert.Empty(other)
+
+// === E3 (T036 / T037): the RESET-to-virgin surface ===========================
+//
+// The GUI renders `Baptism.resetEnablement` + the `ResetOutcome` and drives the
+// `IBaptismService.ResetAsync` confirmation seam through `BaptismView.runReset`;
+// it decides nothing. The wired-service tests assemble the `ResetE2ETests`
+// harness (a real `BaptismService` over the in-memory fakes) and assert the
+// recorded transmitter sends, exactly as `ResetE2ETests` does.
+
+// A frozen clock for the wired harness (local 2-liner; Wiring.fs is not linked).
+let private frozenClock (now: DateTimeOffset) =
+    { new IClock with member _.UtcNow() = now }
+
+/// Assembles a real `BaptismService` over a `CanLinkService` driven `Connected`
+/// (the `ResetE2ETests.connectedLink` precedent), returning the service AND the
+/// recording transmitter so a test can assert `.Sent` on the wired fake.
+let private connectedService () : IBaptismService * InMemoryMasterSequenceTransmitter =
+    let clock = frozenClock fixedNow
+    let link = InMemoryCanLink(seq { (Connected(fixedAdapter, fixedNow), TimeSpan.Zero) })
+    let canLink = CanLinkService(link, clock, NullLogger<CanLinkService>.Instance) :> ICanLinkService
+    canLink.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
+    let observer = InMemoryWhoIAmObserver()
+    let discovery =
+        new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
+    let transmitter = InMemoryMasterSequenceTransmitter(clock)
+
+    let service =
+        new BaptismService(
+            transmitter,
+            observer,
+            discovery,
+            canLink,
+            clock,
+            NullLogger<BaptismService>.Instance)
+
+    (service :> IBaptismService, transmitter)
+
+// (E3-1) FR-008 enable matrix (acceptance 2.3 / 2.4, SC-005): reset needs no
+// selection; Enabled at 0/1 announcing, Disabled at >=2; the render mirrors it.
+[<AvaloniaFact>]
+let Reset_EnableMatrix_FollowsResetEnablement () =
+    let connected = Connected(fixedAdapter, fixedNow)
+
+    // Pure predicate at 0 / 1 announcing — Enabled, no list selection needed.
+    Assert.True(BaptismView.resetEnabled (Baptism.resetEnablement connected 0) Idle)
+    Assert.True(BaptismView.resetEnabled (Baptism.resetEnablement connected 1) Idle)
+
+    // At >=2 the guard is Disabled and reset is inactive.
+    let twoEnablement = Baptism.resetEnablement connected 2
+    let explanation =
+        match twoEnablement with
+        | Disabled e -> e
+        | Enabled -> failwith "expected Disabled for >=2 announcing"
+    Assert.False(BaptismView.resetEnabled twoEnablement Idle)
+
+    // Render: count-2 → ResetButton disabled AND a ResetDisabledReason renders it.
+    let disabledRoot = renderReset twoEnablement Idle None (fun () -> ())
+    let disabledButton = buttonsNamed "ResetButton" disabledRoot |> List.exactlyOne
+    Assert.False(disabledButton.IsEnabled)
+    let reason = byName "ResetDisabledReason" disabledRoot |> List.exactlyOne
+    Assert.Equal(explanation, reason.Text)
+
+    // Render: count-0 / count-1 → ResetButton enabled.
+    for count in [ 0; 1 ] do
+        let root = renderReset (Baptism.resetEnablement connected count) Idle None (fun () -> ())
+        let button = buttonsNamed "ResetButton" root |> List.exactlyOne
+        Assert.True(button.IsEnabled)
+
+// (E3-2) the two surfaces gate each other: reset disabled while a baptize
+// attempt runs, even when the reset guard itself says Enabled.
+[<Fact>]
+let Reset_Disabled_WhileBaptizeAttemptRunning () =
+    Assert.False(BaptismView.resetEnabled Enabled ClaimSent)
+
+// (E3-3) FR-009 confirmation wording (identity + broadcast + silent panels).
+[<Fact>]
+let ResetConfirmation_CarriesFr009Wording () =
+    let message = BaptismView.resetConfirmationMessage
+    Assert.Contains("identity", message)
+    Assert.Contains("every", message)
+    Assert.Contains("silent", message)
+
+// (E3-4) confirmed → ResetAsync transmits exactly the dual-fwType pair, Sent.
+[<Fact>]
+let Reset_Confirmed_InvokesServiceAndBroadcasts () =
+    let service, transmitter = connectedService ()
+
+    let outcome =
+        BaptismView.runReset (fun () -> Task.FromResult true) service CancellationToken.None
+        |> _.GetAwaiter().GetResult()
+
+    Assert.Equal(Sent, outcome)
+    Assert.Equal<(MasterSequenceSend * DateTimeOffset) list>(
+        [ (WhoAreYouSent(0xFFuy, 0x0004us, true), fixedNow)
+          (WhoAreYouSent(0xFFuy, 0x000Fus, true), fixedNow) ],
+        transmitter.Sent)
+
+// (E3-5) declined → ResetAsync transmits nothing, Declined (acceptance 2.2).
+[<Fact>]
+let Reset_Declined_InvokesNothing () =
+    let service, transmitter = connectedService ()
+
+    let outcome =
+        BaptismView.runReset (fun () -> Task.FromResult false) service CancellationToken.None
+        |> _.GetAwaiter().GetResult()
+
+    Assert.Equal(Declined, outcome)
+    Assert.Empty(transmitter.Sent)
+
+// (E3-6) honest FR-010 / acceptance-2.5 success message: written to the bus,
+// re-announces as virgin within ~6 s, otherwise the list stays empty.
+[<AvaloniaFact>]
+let ResetOutcome_Sent_RendersHonestMessage () =
+    let root = renderReset Enabled Idle (Some Sent) (fun () -> ())
+    let text =
+        match (byName "ResetOutcome" root |> List.exactlyOne).Text with
+        | null -> ""
+        | s -> s
+
+    let assertHonest (s: string) =
+        Assert.True(
+            s.Contains("written") || s.Contains("sent"),
+            sprintf "missing written/sent in: %s" s)
+        Assert.True(
+            s.Contains("re-announce") || s.Contains("re-announces"),
+            sprintf "missing re-announce in: %s" s)
+        Assert.Contains("virgin", s)
+        Assert.Contains("6 s", s)
+        Assert.Contains("empty", s)
+
+    assertHonest text
+    assertHonest (BaptismView.describeResetOutcome Sent)
+
+// (E3-7) clicking the enabled ResetButton fires onReset exactly once.
+[<AvaloniaFact>]
+let ResetButtonClick_FiresOnReset () =
+    let mutable calls = 0
+    let onReset () = calls <- calls + 1
+
+    let root = renderReset Enabled Idle None onReset
+    let button = buttonsNamed "ResetButton" root |> List.exactlyOne
+    button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))
+
+    Assert.Equal(1, calls)

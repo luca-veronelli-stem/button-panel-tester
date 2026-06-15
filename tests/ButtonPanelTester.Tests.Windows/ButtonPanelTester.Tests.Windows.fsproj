@@ -15,6 +15,15 @@
         <Compile Include="..\ButtonPanelTester.Tests\Fakes\RecordingLogger.fs">
             <Link>Fakes\RecordingLogger.fs</Link>
         </Compile>
+        <Compile Include="..\ButtonPanelTester.Tests\Fakes\Can\InMemoryCanLink.fs">
+            <Link>Fakes\Can\InMemoryCanLink.fs</Link>
+        </Compile>
+        <Compile Include="..\ButtonPanelTester.Tests\Fakes\Can\InMemoryWhoIAmObserver.fs">
+            <Link>Fakes\Can\InMemoryWhoIAmObserver.fs</Link>
+        </Compile>
+        <Compile Include="..\ButtonPanelTester.Tests\Fakes\Can\InMemoryMasterSequenceTransmitter.fs">
+            <Link>Fakes\Can\InMemoryMasterSequenceTransmitter.fs</Link>
+        </Compile>
         <Compile Include="Unit/StemAppDataTests.fs" />
         <Compile Include="Unit/JsonFileDictionaryCacheTests.fs" />
         <Compile Include="Unit/DpapiCredentialStoreTests.fs" />

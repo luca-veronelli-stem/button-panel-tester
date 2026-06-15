@@ -462,7 +462,7 @@ slice). E3 = {T036, T037} (reset surface slice). Each lands impl + Headless test
       rendering carries the silence explainer; each failure rendering names step / likely
       state / next action; FR-007 warning renders; no confirmation dialog appears on Baptize.
       Lands with T034 (E2 commit). (FR-002/005/006/007/009; SC-005)
-- [ ] T036 [US2] **[EXTEND]** Extend `BaptismView.fs` with the Reset-to-virgin surface:
+- [X] T036 [US2] **[EXTEND]** Extend `BaptismView.fs` with the Reset-to-virgin surface:
       button requiring **no** list selection, rendering `resetEnablement` (disabled at ≥ 2
       announcing with the broadcast-reaches-every-panel explanation, FR-008); the explicit
       confirmation dialog with the FR-009 wording — the reset erases a panel's machine
@@ -471,7 +471,7 @@ slice). E3 = {T036, T037} (reset surface slice). Each lands impl + Headless test
       per FR-010/acceptance 2.5 — command(s) written to the bus; a matching panel, if
       present, re-announces as virgin within ~6 s; otherwise the list simply stays empty.
       (FR-008/009/010)
-- [ ] T037 [US2] **[NEW]** Extend `BaptismViewTests.fs`: the FR-008 enable matrix (enabled at
+- [X] T037 [US2] **[NEW]** Extend `BaptismViewTests.fs`: the FR-008 enable matrix (enabled at
       zero and exactly one announcing — acceptance 2.3; disabled at ≥ 2 with explanation —
       acceptance 2.4, SC-005); Reset shows the confirmation dialog with the FR-009 wording;
       confirming invokes the service reset; **declining invokes nothing** (zero recorded
