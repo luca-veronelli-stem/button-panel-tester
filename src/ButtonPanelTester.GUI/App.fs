@@ -147,6 +147,7 @@ type MainWindow(services: IServiceProvider) as this =
     let service = services.GetRequiredService<IDictionaryService>()
     let canLinkService = services.GetRequiredService<ICanLinkService>()
     let panelDiscovery = services.GetRequiredService<IPanelDiscoveryService>()
+    let baptismService = services.GetRequiredService<IBaptismService>()
     let credentialStore = services.GetRequiredService<ICredentialStore>()
     let registrationClient = services.GetRequiredService<IRegistrationClient>()
     let descriptorProvider =
@@ -197,6 +198,27 @@ type MainWindow(services: IServiceProvider) as this =
     /// so a stale selection never reaches `Baptism.baptizeEnablement`. Read
     /// by `renderCombined` to drive the selected-row highlight.
     let mutable selectedPanel: PanelUuid option = None
+
+    /// The variant the technician picked in the baptize surface (spec-004 E2,
+    /// FR-002). `None` until a picker button is clicked (see `onSelectVariant`);
+    /// feeds `BaptismView.baptizeEnabled` and rides the in-flight attempt config.
+    let mutable selectedVariant: MarketingVariant option = None
+
+    /// Latest `IBaptismService.StateChanged` FSM state (spec-004 E2). Starts
+    /// `Idle`; the `StateChanged` subscription advances it (claim / await /
+    /// assign / terminal) and re-renders so the surface tracks progress + the
+    /// terminal outcome rendering.
+    let mutable lastBaptismState: BaptismState = Idle
+
+    /// The `(variant, uuid)` of the in-flight / last baptism attempt (spec-004
+    /// E2). Set at Baptize-press time so `BaptismView.view` can render the
+    /// terminal outcome against the variant + panel that were actually attempted.
+    let mutable lastAttempt: (MarketingVariant * PanelUuid) option = None
+
+    /// Latest FR-007 "claim did not take" warning uuid (spec-004 E2), observed
+    /// via `IBaptismService.WarningRaised`. Cleared at the start of a new
+    /// attempt; rendered by `BaptismView.view` into the operator message.
+    let mutable lastBaptismWarning: PanelUuid option = None
 
     // Active Avalonia theme. Initial value read once at construction
     // from `Application.Current.ActualThemeVariant`; every render
@@ -283,6 +305,55 @@ type MainWindow(services: IServiceProvider) as this =
         selectedPanel <- Some uuid
         renderCombined ()
 
+    /// Variant-picker callback wired into `BaptismView.view` (spec-004 E2,
+    /// FR-002). Records the picked variant and re-renders so the picker
+    /// highlight + the Baptize-button enablement repaint; the GUI decides
+    /// nothing — the variant only feeds `BaptismView.baptizeEnabled` and the
+    /// attempt config.
+    let onSelectVariant (v: MarketingVariant) =
+        selectedVariant <- Some v
+        renderCombined ()
+
+    /// Baptize-button callback wired into `BaptismView.view` (spec-004 E2,
+    /// FR-002). Fires ONE attempt against the selected panel for the picked
+    /// variant — fire-and-forget, mirroring `kickoffReconnect`: the outcome
+    /// surfaces via the `StateChanged` subscription, so the task body only has
+    /// to swallow cancellation and log any other fault. No confirmation dialog
+    /// (FR-009). A no-op when no panel is selected.
+    let onBaptize (v: MarketingVariant) =
+        match selectedPanel with
+        | None -> ()
+        | Some uuid ->
+            lastAttempt <- Some(v, uuid)
+            lastBaptismWarning <- None
+
+            // Enter the running state synchronously on THIS UI turn so the
+            // surface is modal the instant Baptize is pressed — the picker
+            // and Baptize disable now, not on the later dispatcher turn when
+            // the StateChanged post lands. This closes the re-entrancy window
+            // (a second press can no longer reach BaptizeAsync) and clears any
+            // stale prior terminal outcome immediately. Mirrors BaptismService
+            // entering Idle -> ClaimSent atomically (`fst Baptism.start`); the
+            // service's own StateChanged(ClaimSent) is an idempotent repaint.
+            lastBaptismState <- fst Baptism.start
+            renderCombined ()
+
+            let _ : Task =
+                task {
+                    try
+                        let! _ = baptismService.BaptizeAsync(uuid, v, CancellationToken.None)
+                        ()
+                    with
+                    | :? OperationCanceledException -> ()
+                    | ex ->
+                        mainLogger.LogWarning(
+                            ex,
+                            "BaptizeAsync raised; ignored at the UI layer"
+                        )
+                }
+
+            ()
+
     // Re-register: wipe local install state (credential + install.guid
     // sidecar) so the next /register POST is treated server-side as a
     // fresh installation, then re-open the registration dialog.
@@ -346,6 +417,15 @@ type MainWindow(services: IServiceProvider) as this =
                     kickoffRefresh
                     kickoffReregister
 
+            // Baptize surface (spec-004 E2, FR-002): the enablement verdict is
+            // computed in Core from the live link + announcing count + selection
+            // (`announcingCount` ranges over the announcing panels — the whole
+            // Panels-on-bus map, which only holds announcing panels). The GUI
+            // renders that verdict + the latest FSM state / attempt / warning; it
+            // decides nothing.
+            let baptizeEnablement =
+                Baptism.baptizeEnablement lastCanState (Map.count lastPanelsOnBus) selectedPanel
+
             let combinedView : IView =
                 StackPanel.create [
                     StackPanel.orientation Orientation.Vertical
@@ -354,6 +434,14 @@ type MainWindow(services: IServiceProvider) as this =
                         dictionaryRowView
                         CanStatusRow.view lastCanState kickoffReconnect
                         PanelsOnBusView.view lastPanelsOnBus lastCanState selectedPanel onSelectPanel
+                        BaptismView.view
+                            baptizeEnablement
+                            lastBaptismState
+                            selectedVariant
+                            lastAttempt
+                            lastBaptismWarning
+                            onSelectVariant
+                            onBaptize
                     ]
                 ]
                 :> IView
@@ -402,6 +490,30 @@ type MainWindow(services: IServiceProvider) as this =
                     // (spec-004 E1, FR-002) so a stale selection never reaches
                     // `Baptism.baptizeEnablement` before the re-render.
                     selectedPanel <- PanelsOnBusView.pruneSelection panels selectedPanel
+                    renderCombined ()))
+
+        // Baptism StateChanged → re-render on the UI thread. The service's
+        // subject fires from whatever thread drove the transition (the write
+        // continuation / deadline timer in production, a synchronous test
+        // caller); marshal back to the UI thread the same way as
+        // PanelsOnBusChanged so the baptize surface repaints its progress +
+        // terminal-outcome rendering safely (spec-004 E2).
+        let _ : IDisposable =
+            baptismService.StateChanged
+            |> Observable.subscribe (fun st ->
+                Dispatcher.UIThread.Post(fun () ->
+                    lastBaptismState <- st
+                    renderCombined ()))
+
+        // Baptism WarningRaised → re-render on the UI thread (FR-007). Fires the
+        // claimed uuid when a just-claimed panel re-announces within the
+        // post-success window; marshal back like StateChanged so the
+        // claim-did-not-take warning repaints (spec-004 E2).
+        let _ : IDisposable =
+            baptismService.WarningRaised
+            |> Observable.subscribe (fun uuid ->
+                Dispatcher.UIThread.Post(fun () ->
+                    lastBaptismWarning <- Some uuid
                     renderCombined ()))
 
         ()

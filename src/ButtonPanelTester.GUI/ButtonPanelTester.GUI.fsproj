@@ -39,6 +39,7 @@
         <Compile Include="Dictionary/RegistrationDialog.fs" />
         <Compile Include="Can/CanStatusRow.fs" />
         <Compile Include="Can/PanelsOnBusView.fs" />
+        <Compile Include="Can/BaptismView.fs" />
         <Compile Include="App.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
