@@ -375,7 +375,7 @@ commit). D3 = {T029, T030} (reset flow + its integration tests, one commit). D4 
       announcing — FR-008); the count ranges over **announcing** panels only (silent panels
       are invisible by construction — spec assumption, CHK019). Extend the `Phase3.lean`
       umbrella; `lake build` green. (Constitution I; FR-002/FR-008)
-- [ ] T028 **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/Baptism.fs` with the
+- [X] T028 **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/Baptism.fs` with the
       enablement surface (data-model §6): `type Enablement = Enabled | Disabled of
       explanation: string`; `baptizeEnablement : CanLinkState -> int -> PanelUuid option ->
       Enablement`; `resetEnablement : CanLinkState -> int -> Enablement` — `Disabled` always
