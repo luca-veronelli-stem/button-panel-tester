@@ -58,3 +58,21 @@ type IBaptismService =
     /// composition time. The GUI (Phase E) renders the uuid into the operator
     /// message.
     abstract member WarningRaised: IObservable<PanelUuid>
+
+    /// FR-008/FR-009/FR-010 Reset-button entrypoint, behind the confirmation
+    /// SEAM: the caller supplies the already-decided `confirmed` result (the
+    /// GUI confirmation dialog is Phase E). Reset is a LINEAR flow, not an
+    /// attempt FSM (`data-model.md` §5):
+    ///   * `confirmed = false` → nothing is transmitted; completes `Declined`
+    ///     (FR-009). The declined attempt still logs one audit record (SC-006).
+    ///   * `confirmed = true` → broadcasts `WHO_ARE_YOU(0xFF, fwType, reset=1)`
+    ///     once per known fwType (`0x0004` then `0x000F`, research R2), awaited
+    ///     SEQUENTIALLY as one technician action; completes `Sent` when ALL
+    ///     writes complete (write completion is the success signal — the
+    ///     firmware never replies, FR-010). The link not `Connected` at entry
+    ///     or leaving `Connected` between the two broadcasts completes
+    ///     `ResetLinkLost`; a write fault completes `ResetTransmissionFailure`
+    ///     with NO retry and no further send. There is no announcement wait.
+    /// Cancellation surfaces as `OperationCanceledException`, never a
+    /// `ResetTransmissionFailure`.
+    abstract member ResetAsync: confirmed: bool * cancellationToken: CancellationToken -> Task<ResetOutcome>

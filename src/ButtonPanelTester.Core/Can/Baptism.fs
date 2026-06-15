@@ -110,6 +110,29 @@ type Enablement =
     | Enabled
     | Disabled of explanation: string
 
+/// Outcome of a reset-to-virgin attempt, per `data-model.md` §5 (FR-008,
+/// FR-009, FR-010). Reset is a LINEAR flow, not an FSM: its guards are the
+/// `Enablement` theorems (T027), its wire bytes the WHO_ARE_YOU codec
+/// theorems (T002) — so this DU is RENDERED, never transitioned, and carries
+/// NO Lean theorem of its own (data-model §8 lists no reset theorem). The
+/// four cases are pinned by the integration suite `ResetE2ETests` (T030):
+///   * `Sent` — the confirmation was given and BOTH dual-fwType broadcasts
+///     completed (write completion is the success signal; the firmware never
+///     replies, FR-010);
+///   * `Declined` — the technician declined at confirmation; nothing was
+///     transmitted (FR-009, SC-006-logged);
+///   * `ResetLinkLost` — the link was not `Connected` at entry or left
+///     `Connected` mid-broadcast;
+///   * `ResetTransmissionFailure` — a broadcast write faulted (no retry).
+/// The `Reset`-prefixed names avoid colliding with `BaptismOutcome.LinkLost`
+/// / `TransmissionFailure` in this open namespace. Wildcard-free projection
+/// in `BaptismLogging` (T031) makes a fifth case a compile error.
+type ResetOutcome =
+    | Sent
+    | Declined
+    | ResetLinkLost
+    | ResetTransmissionFailure
+
 module Baptism =
 
     /// The announce-wait budget: 6 s, per research R4 — a settled scope
@@ -283,3 +306,14 @@ module Baptism =
         if not (isConnected link) then Disabled LinkNotConnectedExplanation
         elif announcingCount >= 2 then Disabled MultipleAnnouncingResetExplanation
         else Enabled
+
+    /// The known firmware-type classes a reset-to-virgin broadcast must cover,
+    /// in transmit order, per research R2: `0x0004` (12 V) and `0x000F`
+    /// (24 V). A reset cannot know the silent target panel's fwType, so it
+    /// broadcasts WHO_ARE_YOU(`0xFF`, fwType, reset=1) once per class as ONE
+    /// technician action — each broadcast only matches panels of its hardware
+    /// class; the non-matching one is ignored by the slave's fwType gate
+    /// (research R2). Reset succeeds when ALL of these writes complete
+    /// (FR-010). 12 V leads 24 V to match the `ResetE2ETests` fixture order
+    /// (the T007 payloads `FF 00 04 01` then `FF 00 0F 01`).
+    let resetFwTypes: uint16 list = [ 0x0004us; 0x000Fus ]

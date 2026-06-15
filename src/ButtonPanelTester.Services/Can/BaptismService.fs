@@ -458,12 +458,56 @@ type BaptismService
             commit startState startAction cfg Idle attemptTcs cancellationToken
             attemptTcs.Task
 
+    /// FR-008/FR-009/FR-010 Reset-button entrypoint — see
+    /// `IBaptismService.ResetAsync`. Linear flow, no FSM, no lock: the only
+    /// shared state it touches is `link.CurrentState` (a thread-safe pull
+    /// accessor) and the `transmitter` writes; nothing of the baptism
+    /// attempt's mutable state is read or written, so no `stateLock` is taken
+    /// (stem-async-discipline: no lock means none can span the awaits).
+    /// Serializing a reset broadcast against a concurrently-running baptize
+    /// attempt's writes is the GUI surface's modality concern (the surfaces
+    /// gate each other via enablement, Phase E), not this method's.
+    member _.ResetAsync(confirmed: bool, cancellationToken: CancellationToken) : Task<ResetOutcome> =
+        // Broadcast WHO_ARE_YOU(0xFF, fwType, reset=1) once per known fwType
+        // (`Baptism.resetFwTypes`, research R2), awaited SEQUENTIALLY. The link
+        // is re-read BEFORE each write so a drop between the two broadcasts
+        // ends the flow in `ResetLinkLost`; a write fault ends it in
+        // `ResetTransmissionFailure` with NO retry and no further send; `Sent`
+        // only when every write completes (FR-010). Defined OUTSIDE the
+        // entry `task` so the recursion is a plain `Task`-returning function
+        // rather than a `let rec` inside resumable code (FS3511).
+        let rec broadcast (remaining: uint16 list) : Task<ResetOutcome> =
+            task {
+                match remaining with
+                | [] -> return Sent
+                | fwType :: rest ->
+                    match link.CurrentState with
+                    | Connected _ ->
+                        try
+                            do! transmitter.SendWhoAreYouAsync(BoardVariant.virginMarker, fwType, true, cancellationToken)
+                            return! broadcast rest
+                        with ex when not (ex :? OperationCanceledException) ->
+                            // A fault on EITHER write ends the flow; the `when`
+                            // filter lets cancellation propagate as OCE rather
+                            // than masking it as a `ResetTransmissionFailure`.
+                            return ResetTransmissionFailure
+                    | _ -> return ResetLinkLost
+            }
+
+        if not confirmed then
+            // Declined at confirmation (FR-009): transmit nothing.
+            Task.FromResult Declined
+        else
+            broadcast Baptism.resetFwTypes
+
     interface IBaptismService with
         member this.CurrentState = this.CurrentState
         member this.StateChanged = this.StateChanged
         member this.WarningRaised = this.WarningRaised
         member this.BaptizeAsync(selected, variant, cancellationToken) =
             this.BaptizeAsync(selected, variant, cancellationToken)
+        member this.ResetAsync(confirmed, cancellationToken) =
+            this.ResetAsync(confirmed, cancellationToken)
 
     interface IDisposable with
         member _.Dispose() =
