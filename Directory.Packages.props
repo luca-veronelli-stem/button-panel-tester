@@ -65,7 +65,7 @@
 
     <!-- Driver-only (Windows TFM, see PORTABILITY Pattern A) -->
     <PackageVersion Include="System.IO.Ports" Version="10.0.7" />
-    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.8" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <PackageVersion Include="InTheHand.Net.Bluetooth" Version="4.2.21" />
     <!-- Pinned to match stem-device-manager (vendored protocol stack, spec-002). -->
     <PackageVersion Include="Peak.PCANBasic.NET" Version="5.0.1.1131" />
