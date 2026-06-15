@@ -441,7 +441,7 @@ slice). E3 = {T036, T037} (reset surface slice). Each lands impl + Headless test
       selecting a row renders the selected state; the selected row pruning from the map
       clears the selection and deactivates the surface with the panel-disappeared
       explanation. Lands with T032 (E1 commit). (FR-002; spec edge case)
-- [ ] T034 [US1] **[NEW]** Add `src/ButtonPanelTester.GUI/Can/BaptismView.fs` + wire the
+- [X] T034 [US1] **[NEW]** Add `src/ButtonPanelTester.GUI/Can/BaptismView.fs` + wire the
       surface slot in `App.fs` (subscribe to `IBaptismService` state/outcome changes
       marshalled onto `Dispatcher.UIThread` — spec-003 T021 pattern): variant picker offering
       **exactly the four** marketed variants (never the virgin marker — data-model §1);
@@ -453,7 +453,7 @@ slice). E3 = {T036, T037} (reset surface slice). Each lands impl + Headless test
       failures names the step that failed, the panel's likely state, and the recommended next
       action (FR-005), incl. the wait-timeout recovery guidance (clarification 4); the FR-007
       claim-did-not-take warning surfaces when raised. (FR-001/002/005/006/007/009)
-- [ ] T035 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Gui/Can/BaptismViewTests.fs`
+- [X] T035 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Gui/Can/BaptismViewTests.fs`
       (`Avalonia.Headless.XUnit`): the FR-002 enable matrix over (link, announcing count,
       selection) — disabled at zero and at ≥ 2 announcing with the explanation rendered
       (SC-005, acceptance 1.6), enabled for **any** announcing selected panel regardless of
