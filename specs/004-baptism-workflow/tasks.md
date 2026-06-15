@@ -430,14 +430,14 @@ rendering. All service-backed; the GUI renders enablement and outcomes, it decid
 **Commit grouping**: E1 = {T032, T033} (selection slice). E2 = {T034, T035} (baptize surface
 slice). E3 = {T036, T037} (reset surface slice). Each lands impl + Headless tests together.
 
-- [ ] T032 [US1] **[EXTEND]** Extend `src/ButtonPanelTester.GUI/Can/PanelsOnBusView.fs` with
+- [X] T032 [US1] **[EXTEND]** Extend `src/ButtonPanelTester.GUI/Can/PanelsOnBusView.fs` with
       the row-selection affordance (spec-004-owned addition; row rendering and empty states
       untouched — plan §Consumed surfaces) and `src/ButtonPanelTester.GUI/App.fs` with the
       selection state (`PanelUuid option`, cleared when the selected row leaves the map —
       the "selected row prunes during interaction" edge case: the baptism surface deactivates
       with the panel-disappeared explanation, never a stale send). Selection feeds
       `baptizeEnablement` (T028). (FR-001/FR-002; spec edge case)
-- [ ] T033 [US1] **[NEW]** Extend `tests/ButtonPanelTester.Tests.Windows/Gui/Can/PanelsOnBusViewTests.fs`:
+- [X] T033 [US1] **[NEW]** Extend `tests/ButtonPanelTester.Tests.Windows/Gui/Can/PanelsOnBusViewTests.fs`:
       selecting a row renders the selected state; the selected row pruning from the map
       clears the selection and deactivates the surface with the panel-disappeared
       explanation. Lands with T032 (E1 commit). (FR-002; spec edge case)
