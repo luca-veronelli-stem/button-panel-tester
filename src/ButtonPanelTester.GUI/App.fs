@@ -190,6 +190,14 @@ type MainWindow(services: IServiceProvider) as this =
     /// on every observe / prune / link-loss clear and re-renders.
     let mutable lastPanelsOnBus: PanelsOnBus = PanelsOnBus.empty
 
+    /// The Panels-on-bus row selected for baptism (spec-004 E1, FR-002).
+    /// Starts unselected; a row click sets it (see `onSelectPanel`). Cleared
+    /// when the selected row prunes out of the snapshot (via
+    /// `PanelsOnBusView.pruneSelection` in the `PanelsOnBusChanged` handler)
+    /// so a stale selection never reaches `Baptism.baptizeEnablement`. Read
+    /// by `renderCombined` to drive the selected-row highlight.
+    let mutable selectedPanel: PanelUuid option = None
+
     // Active Avalonia theme. Initial value read once at construction
     // from `Application.Current.ActualThemeVariant`; every render
     // reads from this cell so a future `ActualThemeVariantChanged`
@@ -267,6 +275,14 @@ type MainWindow(services: IServiceProvider) as this =
 
         ()
 
+    /// Row-selection callback wired into `PanelsOnBusView.view` (spec-004 E1,
+    /// FR-002). Records the clicked panel as the baptism selection and
+    /// re-renders so the row highlight repaints; the GUI decides nothing — the
+    /// selection only feeds `Baptism.baptizeEnablement`.
+    let onSelectPanel (uuid: PanelUuid) =
+        selectedPanel <- Some uuid
+        renderCombined ()
+
     // Re-register: wipe local install state (credential + install.guid
     // sidecar) so the next /register POST is treated server-side as a
     // fresh installation, then re-open the registration dialog.
@@ -337,7 +353,7 @@ type MainWindow(services: IServiceProvider) as this =
                     StackPanel.children [
                         dictionaryRowView
                         CanStatusRow.view lastCanState kickoffReconnect
-                        PanelsOnBusView.view lastPanelsOnBus lastCanState
+                        PanelsOnBusView.view lastPanelsOnBus lastCanState selectedPanel onSelectPanel
                     ]
                 ]
                 :> IView
@@ -382,6 +398,10 @@ type MainWindow(services: IServiceProvider) as this =
             |> Observable.subscribe (fun panels ->
                 Dispatcher.UIThread.Post(fun () ->
                     lastPanelsOnBus <- panels
+                    // Clear the selection if its row pruned out of the snapshot
+                    // (spec-004 E1, FR-002) so a stale selection never reaches
+                    // `Baptism.baptizeEnablement` before the re-render.
+                    selectedPanel <- PanelsOnBusView.pruneSelection panels selectedPanel
                     renderCombined ()))
 
         ()

@@ -2,6 +2,7 @@ namespace Stem.ButtonPanelTester.GUI.Can
 
 open Avalonia.Controls
 open Avalonia.Layout
+open Avalonia.Media
 open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Types
 open Stem.ButtonPanelTester.Core.Can
@@ -76,11 +77,29 @@ module PanelsOnBusView =
         ]
         :> IView
 
-    /// Render the Panels-on-bus list: one `rowView` per panel in `PanelUuid`
-    /// key order, or the FR-006 empty-state explainer (`emptyStateText
-    /// linkState`) when the map is empty. Pure — the host re-invokes it on
-    /// every `PanelsOnBusChanged` / `LinkStateChanged`.
-    let view (panels: PanelsOnBus) (linkState: CanLinkState) : IView =
+    /// Drop the current selection when its panel is no longer on the bus.
+    /// The host calls this on every `PanelsOnBusChanged` before re-rendering:
+    /// when the selected row prunes out of the map (the "selected row prunes
+    /// during interaction" edge case) the selection clears, so the baptism
+    /// surface deactivates (`baptizeEnablement` sees `None`) rather than ever
+    /// firing a stale send against a panel that has gone silent (FR-002).
+    let pruneSelection (panels: PanelsOnBus) (selected: PanelUuid option) : PanelUuid option =
+        selected |> Option.filter (fun u -> Map.containsKey u panels)
+
+    /// Render the Panels-on-bus list: one selectable `PanelRow` button per
+    /// panel in `PanelUuid` key order (its content is the unchanged `rowView`),
+    /// or the FR-006 empty-state explainer (`emptyStateText linkState`) when
+    /// the map is empty. The selected row carries a `LightBlue` highlight; a
+    /// click invokes `onSelect` with that row's `PanelUuid`. Pure render — the
+    /// GUI decides nothing; the host re-invokes it on every
+    /// `PanelsOnBusChanged` / `LinkStateChanged` and feeds the selection into
+    /// `Baptism.baptizeEnablement` (FR-002).
+    let view
+        (panels: PanelsOnBus)
+        (linkState: CanLinkState)
+        (selected: PanelUuid option)
+        (onSelect: PanelUuid -> unit)
+        : IView =
         if Map.isEmpty panels then
             TextBlock.create [
                 TextBlock.name "EmptyState"
@@ -88,11 +107,28 @@ module PanelsOnBusView =
             ]
             :> IView
         else
+            let rowButton (o: PanelObservation) : IView =
+                // FuncUI: the selected highlight is added by list-concat (the
+                // `variantAttrs` idiom), NOT a `match ... -> ()` inside the attr
+                // list (that would be a type error). When unselected the
+                // background is left unset.
+                let attrs: IAttr<Button> list =
+                    [ Button.name "PanelRow"
+                      Button.horizontalAlignment HorizontalAlignment.Stretch
+                      Button.content (rowView o)
+                      Button.onClick (fun _ -> onSelect o.Uuid) ]
+                    @ (if selected = Some o.Uuid then
+                           [ Button.background Brushes.LightBlue ]
+                       else
+                           [])
+
+                Button.create attrs :> IView
+
             StackPanel.create [
                 StackPanel.name "PanelsOnBusList"
                 StackPanel.orientation Orientation.Vertical
                 StackPanel.spacing 4.0
                 // Map iteration is by PanelUuid key order -> deterministic row order.
-                StackPanel.children [ for kvp in panels -> rowView kvp.Value ]
+                StackPanel.children [ for kvp in panels -> rowButton kvp.Value ]
             ]
             :> IView
