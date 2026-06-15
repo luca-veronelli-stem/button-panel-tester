@@ -339,7 +339,7 @@ watch + test). C6 = {T026} (audit + test).
       unclaimed and visible); a new attempt or link loss cancels the watch; window expiry is
       silent. Volatile in-memory only — no persistence (FR-013). Tests drive the window via
       `FrozenClock` + the deterministic tick hook. (FR-007; data-model §4.4)
-- [ ] T026 [US1] **[NEW]** Add `src/ButtonPanelTester.Services/Can/BaptismLogging.fs` + 
+- [X] T026 [US1] **[NEW]** Add `src/ButtonPanelTester.Services/Can/BaptismLogging.fs` + 
       `tests/ButtonPanelTester.Tests/Unit/Can/BaptismLoggingTests.fs`: exactly one structured
       audit record per baptize attempt via `ILogger<BaptismService>` (house pattern —
       `CanLinkLogging.fs` precedent, R8): fields `Action`/`Variant`/`PanelUuid`/`Outcome`/
