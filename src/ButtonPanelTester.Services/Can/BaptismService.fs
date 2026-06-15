@@ -494,11 +494,27 @@ type BaptismService
                     | _ -> return ResetLinkLost
             }
 
-        if not confirmed then
-            // Declined at confirmation (FR-009): transmit nothing.
-            Task.FromResult Declined
-        else
-            broadcast Baptism.resetFwTypes
+        // Attempt-entry instant for the FR-012 audit record (`data-model.md`
+        // §7), captured once before the flow runs (both the declined and the
+        // broadcast paths read the same `StartedAt`).
+        let startedAt = clock.UtcNow()
+
+        task {
+            let! outcome =
+                if not confirmed then
+                    // Declined at confirmation (FR-009): transmit nothing.
+                    Task.FromResult Declined
+                else
+                    broadcast Baptism.resetFwTypes
+
+            // FR-012 audit (`data-model.md` §7; SC-006 — a declined-at-
+            // confirmation attempt logs too): ONE structured record per reset
+            // attempt, on EVERY outcome path, emitted OUTSIDE any lock (the
+            // reset flow holds none). Cancellation throws before this line, so
+            // a cancelled reset emits no record — consistent with baptize.
+            BaptismLogging.logResetAttempt logger outcome (iso startedAt) (iso (clock.UtcNow()))
+            return outcome
+        }
 
     interface IBaptismService with
         member this.CurrentState = this.CurrentState

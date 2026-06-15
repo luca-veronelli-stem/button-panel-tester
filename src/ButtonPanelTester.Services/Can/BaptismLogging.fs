@@ -62,10 +62,11 @@ module BaptismLogging =
     /// Emit the ONE structured baptize audit record for an attempt (FR-012,
     /// `data-model.md` §7) at `Information`, via a template naming every field
     /// as a named parameter (stem-logging — NO string interpolation). `Action`
-    /// is the literal `"Baptize"` (this slice; reset is #216) so the field is
-    /// present and filterable. No operator-identity field (clarification 5).
-    /// Called by `BaptismService` OUTSIDE its `stateLock`, exactly once per
-    /// attempt (either at the FSM terminal or at an entry-guard rejection).
+    /// is the literal `"Baptize"` (the baptize record; the reset record is
+    /// `logResetAttempt` below) so the field is present and filterable. No
+    /// operator-identity field (clarification 5). Called by `BaptismService`
+    /// OUTSIDE its `stateLock`, exactly once per attempt (either at the FSM
+    /// terminal or at an entry-guard rejection).
     let logBaptizeAttempt
         (logger: ILogger)
         (variant: MarketingVariant)
@@ -82,5 +83,51 @@ module BaptismLogging =
             uuidText uuid,
             outcomeName outcome,
             stepReached stepState,
+            startedAt,
+            completedAt)
+
+    /// Stable, filterable name for the `{Outcome}` field of a RESET attempt —
+    /// one per `ResetOutcome` case (`data-model.md` §5). WILDCARD-FREE: a fifth
+    /// reset outcome must break this match.
+    let resetOutcomeName (outcome: ResetOutcome) : string =
+        match outcome with
+        | Sent -> "Sent"
+        | Declined -> "Declined"
+        | ResetLinkLost -> "ResetLinkLost"
+        | ResetTransmissionFailure -> "ResetTransmissionFailure"
+
+    /// Furthest reset step reached, for the `{StepReached}` field
+    /// (`data-model.md` §7 — reset's two steps are `confirmation` / `broadcast`).
+    /// A `Declined` attempt stopped at the confirmation prompt; every other
+    /// outcome entered the broadcast phase (the link/fault verdicts are all
+    /// reached while broadcasting). WILDCARD-FREE over `ResetOutcome`.
+    let resetStepReached (outcome: ResetOutcome) : string =
+        match outcome with
+        | Declined -> "Confirmation"
+        | Sent -> "Broadcast"
+        | ResetLinkLost -> "Broadcast"
+        | ResetTransmissionFailure -> "Broadcast"
+
+    /// Emit the ONE structured reset audit record for an attempt (FR-012,
+    /// `data-model.md` §7; SC-006 — including a declined-at-confirmation
+    /// attempt) at `Information`, via the SAME field template as the baptize
+    /// record so dashboards filter both uniformly. `Action` is the literal
+    /// `"Reset"`; reset carries no variant and no uuid (it is a broadcast — the
+    /// target's uuid is unknown), so both render as `"-"` (data-model §7). No
+    /// operator-identity field (clarification 5). Called by `BaptismService`
+    /// exactly once per reset attempt, on every outcome path (no lock is held).
+    let logResetAttempt
+        (logger: ILogger)
+        (outcome: ResetOutcome)
+        (startedAt: string)
+        (completedAt: string)
+        : unit =
+        logger.LogInformation(
+            "Reset attempt {Action} {Variant} {PanelUuid} -> {Outcome} (step {StepReached}, {StartedAt} -> {CompletedAt})",
+            "Reset",
+            "-",
+            "-",
+            resetOutcomeName outcome,
+            resetStepReached outcome,
             startedAt,
             completedAt)

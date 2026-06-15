@@ -409,7 +409,7 @@ commit). D3 = {T029, T030} (reset flow + its integration tests, one commit). D4 
       (c) scripted fault on the first or second write → `ResetTransmissionFailure`, no
       retry, no further sends; (d) link not Connected / drops mid-pair → `ResetLinkLost`.
       Lands with T029 (D3 commit). (FR-008/009/010; SC-003 logic side)
-- [ ] T031 [US2] **[NEW]** Extend `BaptismLogging.fs` + `BaptismLoggingTests.fs` with the
+- [X] T031 [US2] **[NEW]** Extend `BaptismLogging.fs` + `BaptismLoggingTests.fs` with the
       reset audit records: one record per reset attempt **including declined-at-confirmation**
       (SC-006, clarification 5) — `Action = "Reset"`, no variant, no uuid (broadcast — uuid
       unknown, data-model §7), outcome, step reached (confirmation / broadcast), timestamps.

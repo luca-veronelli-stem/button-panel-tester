@@ -258,3 +258,72 @@ let Baptize_EntryGuardPanelDisappeared_EmitsOneRecord () =
     Assert.Equal(PanelDisappeared, outcome)
 
     assertAudit (auditValues h) "PanelDisappeared" "EdenXp" "00000001-00000002-00000003" "NotStarted"
+
+// --- pure: resetOutcomeName (all four shapes) ---
+
+[<Fact>]
+let ResetOutcomeName_AllShapes_RenderStableNames () =
+    Assert.Equal("Sent", BaptismLogging.resetOutcomeName Sent)
+    Assert.Equal("Declined", BaptismLogging.resetOutcomeName Declined)
+    Assert.Equal("ResetLinkLost", BaptismLogging.resetOutcomeName ResetLinkLost)
+    Assert.Equal("ResetTransmissionFailure", BaptismLogging.resetOutcomeName ResetTransmissionFailure)
+
+// --- pure: resetStepReached (declined stops at confirmation; the rest broadcast) ---
+
+[<Fact>]
+let ResetStepReached_DeclinedIsConfirmation_RestAreBroadcast () =
+    Assert.Equal("Confirmation", BaptismLogging.resetStepReached Declined)
+    Assert.Equal("Broadcast", BaptismLogging.resetStepReached Sent)
+    Assert.Equal("Broadcast", BaptismLogging.resetStepReached ResetLinkLost)
+    Assert.Equal("Broadcast", BaptismLogging.resetStepReached ResetTransmissionFailure)
+
+// --- reset audit: shared field asserts (Action "Reset", no variant, no uuid) ---
+
+/// Assert the reset audit fields: `Action = "Reset"`, `Variant`/`PanelUuid`
+/// rendered `"-"` (broadcast — uuid unknown, data-model §7), the outcome, the
+/// step reached, and the presence of the two ISO instants.
+let private assertResetAudit (values: Map<string, obj>) (outcome: string) (step: string) =
+    Assert.Equal(box "Reset", values.["Action"])
+    Assert.Equal(box "-", values.["Variant"])
+    Assert.Equal(box "-", values.["PanelUuid"])
+    Assert.Equal(box outcome, values.["Outcome"])
+    Assert.Equal(box step, values.["StepReached"])
+    Assert.True(values.ContainsKey "StartedAt")
+    Assert.True(values.ContainsKey "CompletedAt")
+    Assert.True(DateTimeOffset.TryParse(string values.["StartedAt"]) |> fst)
+    Assert.True(DateTimeOffset.TryParse(string values.["CompletedAt"]) |> fst)
+
+// --- Declined: counts as an attempt (SC-006), one record, StepReached "Confirmation" ---
+
+[<Fact>]
+let Reset_Declined_EmitsOneRecord () =
+    let h = newHarness ()
+
+    // Declined at confirmation transmits nothing, but the attempt still logs
+    // exactly one audit record (SC-006, clarification 5).
+    let outcome = h.Service.ResetAsync(false, CancellationToken.None).GetAwaiter().GetResult()
+    Assert.Equal(Declined, outcome)
+
+    assertResetAudit (auditValues h) "Declined" "Confirmation"
+
+// --- Sent: confirmed broadcast over a connected link, one record, StepReached "Broadcast" ---
+
+[<Fact>]
+let Reset_Sent_EmitsOneRecord () =
+    let h = newHarness ()
+
+    let outcome = h.Service.ResetAsync(true, CancellationToken.None).GetAwaiter().GetResult()
+    Assert.Equal(Sent, outcome)
+
+    assertResetAudit (auditValues h) "Sent" "Broadcast"
+
+// --- ResetLinkLost: link not Connected at entry, one record, StepReached "Broadcast" ---
+
+[<Fact>]
+let Reset_LinkLost_EmitsOneRecord () =
+    let h = newHarnessWith notConnectedLink
+
+    let outcome = h.Service.ResetAsync(true, CancellationToken.None).GetAwaiter().GetResult()
+    Assert.Equal(ResetLinkLost, outcome)
+
+    assertResetAudit (auditValues h) "ResetLinkLost" "Broadcast"
