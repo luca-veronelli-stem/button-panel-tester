@@ -296,3 +296,18 @@ module CompositionRoot =
                 let logger = sp.GetRequiredService<ILogger<ProtocolMasterSequenceTransmitter>>()
                 new ProtocolMasterSequenceTransmitter(share, DeviceVariantConfig.DefaultSenderId, logger)
                 :> IMasterSequenceTransmitter)
+            // Baptism FSM driver (spec-004): drives the pure baptism FSM
+            // (`Baptism.step`, Core) over the consumed observables — the
+            // reassembled WHO_I_AM feed, the discovery snapshot, and the
+            // link state — and the master-sequence TX port. Modal,
+            // single-attempt, no auto-retry (#216 Reset is a later slice).
+            // All dependencies are bound earlier in this graph; registered
+            // as the LAST CAN service in the chain.
+            .AddSingleton<IBaptismService>(fun sp ->
+                let transmitter = sp.GetRequiredService<IMasterSequenceTransmitter>()
+                let whoIAm = sp.GetRequiredService<IWhoIAmObserver>()
+                let discovery = sp.GetRequiredService<IPanelDiscoveryService>()
+                let link = sp.GetRequiredService<ICanLinkService>()
+                let clock = sp.GetRequiredService<IClock>()
+                let logger = sp.GetRequiredService<ILogger<BaptismService>>()
+                new BaptismService(transmitter, whoIAm, discovery, link, clock, logger) :> IBaptismService)

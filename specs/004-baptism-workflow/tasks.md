@@ -288,7 +288,7 @@ watch + test). C6 = {T026} (audit + test).
       both writes complete), `ForeignUuidNeverSatisfiesWait` (announcements from any other
       UUID never advance `AwaitingAnnounce` — spec edge case). Lands with T019 (C3 commit).
       (Constitution II; FR-004/005)
-- [ ] T021 [US1] **[NEW]** Add `src/ButtonPanelTester.Services/Can/IBaptismService.fs` +
+- [X] T021 [US1] **[NEW]** Add `src/ButtonPanelTester.Services/Can/IBaptismService.fs` +
       `BaptismService.fs` (house pattern: interface file beside the service, spec-003
       precedent): drive the pure FSM over the consumed surfaces — ctor
       `(transmitter: IMasterSequenceTransmitter, whoIAm: IWhoIAmObserver, discovery:
@@ -306,7 +306,7 @@ watch + test). C6 = {T026} (audit + test).
       automatic retry on any failure. Register `IBaptismService` in
       `src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs` and extend
       `CompositionRootCanTests` to resolve it (hardware-free). (FR-002..006; R6)
-- [ ] T022 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/BaptismE2ETests.fs`
+- [X] T022 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/BaptismE2ETests.fs`
       over `InMemoryMasterSequenceTransmitter` + `InMemoryWhoIAmObserver` + the discovery
       service + a real `CanLinkService` wrapping `InMemoryCanLink` + `FrozenClock` (spec-003
       integration pattern): (a) happy path — claim recorded with the **panel's announced
@@ -319,7 +319,7 @@ watch + test). C6 = {T026} (audit + test).
       fake's recorded sends never contain a SET_ADDRESS without a prior validated match
       (plan-named property, adapter-agnostic). Lands with T021 (C4 commit).
       (FR-003/004/005; SC-001)
-- [ ] T023 [P] [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/TimeoutE2ETests.fs`
+- [X] T023 [P] [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/TimeoutE2ETests.fs`
       (`FrozenClock`-driven): advance to just under the deadline → still waiting; cross the
       deadline (claim-write completion + 6 s, CHK010) → `WaitTimeout` whose structured
       outcome carries the recovery guidance verbatim from FR-005/clarification 4 (claim may
@@ -327,7 +327,7 @@ watch + test). C6 = {T026} (audit + test).
       Reset); a **matching announcement after the reported timeout does NOT flip the outcome**
       (never-flip rule, spec edge case); foreign-UUID announcements before the deadline never
       satisfy the wait. Rides in the C4 commit. (FR-005; SC-001)
-- [ ] T024 [P] [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/LinkLossAbortsTests.fs`:
+- [X] T024 [P] [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/LinkLossAbortsTests.fs`:
       the link leaving `Connected` in **each** non-terminal state — `ClaimSent`,
       `AwaitingAnnounce`, `Assigning` — yields `LinkLost`, transmits nothing further, and
       never retries (CHK015 coverage: link-loss complete across every sequence step,

@@ -31,6 +31,9 @@
         <Compile Include="Property/Can/BaptismSequenceProperties.fs" />
         <Compile Include="Integration/Can/CanLinkServiceLifecycleTests.fs" />
         <Compile Include="Integration/Can/DiscoveryE2ETests.fs" />
+        <Compile Include="Integration/Can/BaptismE2ETests.fs" />
+        <Compile Include="Integration/Can/TimeoutE2ETests.fs" />
+        <Compile Include="Integration/Can/LinkLossAbortsTests.fs" />
         <Compile Include="Integration/Can/PruningE2ETests.fs" />
         <Compile Include="Integration/Can/LinkLossClearsListTests.fs" />
         <Compile Include="Integration/Can/RecoverableToFatalEscalationTests.fs" />
