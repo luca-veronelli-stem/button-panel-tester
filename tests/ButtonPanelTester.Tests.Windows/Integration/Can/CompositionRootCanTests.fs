@@ -32,5 +32,6 @@ let Composition_ResolvesCanGraph_BindsRealPcanFrameStream () =
         Assert.IsType<PcanCanFrameStream>(frameStream) |> ignore
         Assert.IsType<WhoIAmReassemblyObserver>(observer) |> ignore
         Assert.IsType<ProtocolMasterSequenceTransmitter>(transmitter) |> ignore
+        Assert.IsType<BaptismService>(sp.GetRequiredService<IBaptismService>()) |> ignore
     finally
         (sp :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult()
