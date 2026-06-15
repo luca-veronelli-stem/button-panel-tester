@@ -369,7 +369,7 @@ FsCheck `EnablementGuards` (T028) ↔ XML-doc citations (T028).
 commit). D3 = {T029, T030} (reset flow + its integration tests, one commit). D4 = {T031}
 (reset audit + tests).
 
-- [ ] T027 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase3/Enablement.lean`: prove
+- [X] T027 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase3/Enablement.lean`: prove
       `baptize_enabled_iff` (enabled ⇔ link `Connected` ∧ exactly one panel announcing ∧ that
       panel selected — FR-002) and `reset_enabled_iff` (enabled ⇔ `Connected` ∧ at most one
       announcing — FR-008); the count ranges over **announcing** panels only (silent panels
