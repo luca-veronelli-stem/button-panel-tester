@@ -8,6 +8,7 @@ open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.ApplicationLifetimes
 open Avalonia.Layout
+open Avalonia.Media
 open Avalonia.Platform
 open Avalonia.Styling
 open Avalonia.Svg.Skia
@@ -220,6 +221,12 @@ type MainWindow(services: IServiceProvider) as this =
     /// attempt; rendered by `BaptismView.view` into the operator message.
     let mutable lastBaptismWarning: PanelUuid option = None
 
+    /// The latest reset-to-virgin outcome (spec-004 E3, FR-010). `None` until a
+    /// reset completes; set by `onReset` to the `ResetOutcome` returned through
+    /// the confirmation seam and rendered by `BaptismView.view` into the honest
+    /// success / failure line.
+    let mutable lastResetOutcome: ResetOutcome option = None
+
     // Active Avalonia theme. Initial value read once at construction
     // from `Application.Current.ActualThemeVariant`; every render
     // reads from this cell so a future `ActualThemeVariantChanged`
@@ -354,6 +361,82 @@ type MainWindow(services: IServiceProvider) as this =
 
             ()
 
+    /// The FR-009 confirmation SEAM for reset-to-virgin (spec-004 E3): shows a
+    /// modal confirmation dialog and resolves to the technician's choice. Mirrors
+    /// `runDialog` — a small imperative `Window` backed by a
+    /// `TaskCompletionSource<bool>`: the "Reset to virgin" button resolves
+    /// `true`, "Cancel" and any other close resolve `false` (closing = decline).
+    /// The resolved bool feeds `BaptismView.runReset` → `IBaptismService.ResetAsync`;
+    /// the GUI decides nothing, it only relays the confirmation.
+    let confirmReset () : Task<bool> =
+        let tcs = TaskCompletionSource<bool>()
+
+        let message =
+            TextBlock(
+                Text = BaptismView.resetConfirmationMessage,
+                TextWrapping = TextWrapping.Wrap)
+
+        let confirmButton = Button(Content = "Reset to virgin")
+        let cancelButton = Button(Content = "Cancel")
+
+        let buttonRow = StackPanel(Orientation = Orientation.Horizontal, Spacing = 8.0)
+        buttonRow.Children.Add(confirmButton)
+        buttonRow.Children.Add(cancelButton)
+
+        let panel = StackPanel(Margin = Thickness 20.0, Spacing = 12.0)
+        panel.Children.Add(message)
+        panel.Children.Add(buttonRow)
+
+        let dialog =
+            Window(
+                Title = "Reset to virgin?",
+                Width = 420.0,
+                Height = 200.0,
+                CanResize = false,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Content = panel)
+
+        confirmButton.Click.Add(fun _ ->
+            tcs.TrySetResult true |> ignore
+            dialog.Close())
+
+        cancelButton.Click.Add(fun _ ->
+            tcs.TrySetResult false |> ignore
+            dialog.Close())
+
+        // Any close without an explicit choice (window chrome, ESC) declines.
+        dialog.Closed.Add(fun _ -> tcs.TrySetResult false |> ignore)
+
+        dialog.ShowDialog(this) |> ignore
+        tcs.Task
+
+    /// Reset-button callback wired into `BaptismView.view` (spec-004 E3, FR-008 /
+    /// FR-009 / FR-010). Fire-and-forget, mirroring `kickoffReconnect` / `onBaptize`:
+    /// drives the confirmation seam (`BaptismView.runReset confirmReset …`), then
+    /// posts the resolved `ResetOutcome` onto the UI thread so the honest
+    /// success / failure line repaints. Cancellation is swallowed; any other
+    /// fault is logged and ignored at the UI layer.
+    let onReset () =
+        let _ : Task =
+            task {
+                try
+                    let! outcome =
+                        BaptismView.runReset confirmReset baptismService CancellationToken.None
+
+                    Dispatcher.UIThread.Post(fun () ->
+                        lastResetOutcome <- Some outcome
+                        renderCombined ())
+                with
+                | :? OperationCanceledException -> ()
+                | ex ->
+                    mainLogger.LogWarning(
+                        ex,
+                        "ResetAsync raised; ignored at the UI layer"
+                    )
+            }
+
+        ()
+
     // Re-register: wipe local install state (credential + install.guid
     // sidecar) so the next /register POST is treated server-side as a
     // fresh installation, then re-open the registration dialog.
@@ -426,6 +509,14 @@ type MainWindow(services: IServiceProvider) as this =
             let baptizeEnablement =
                 Baptism.baptizeEnablement lastCanState (Map.count lastPanelsOnBus) selectedPanel
 
+            // Reset surface (spec-004 E3, FR-008): the reset enablement verdict
+            // is computed in Core from the live link + announcing count — no
+            // selection conjunct (reset is a list-anchor-free broadcast). The
+            // GUI renders that verdict + the last `ResetOutcome`; it decides
+            // nothing.
+            let resetEnablement =
+                Baptism.resetEnablement lastCanState (Map.count lastPanelsOnBus)
+
             let combinedView : IView =
                 StackPanel.create [
                     StackPanel.orientation Orientation.Vertical
@@ -436,12 +527,15 @@ type MainWindow(services: IServiceProvider) as this =
                         PanelsOnBusView.view lastPanelsOnBus lastCanState selectedPanel onSelectPanel
                         BaptismView.view
                             baptizeEnablement
+                            resetEnablement
                             lastBaptismState
                             selectedVariant
                             lastAttempt
                             lastBaptismWarning
+                            lastResetOutcome
                             onSelectVariant
                             onBaptize
+                            onReset
                     ]
                 ]
                 :> IView
