@@ -332,7 +332,7 @@ watch + test). C6 = {T026} (audit + test).
       `AwaitingAnnounce`, `Assigning` — yields `LinkLost`, transmits nothing further, and
       never retries (CHK015 coverage: link-loss complete across every sequence step,
       acceptance 1.8). Rides in the C4 commit. (FR-005)
-- [ ] T025 [US1] **[NEW]** Implement the FR-007 post-success watch in `BaptismService.fs` +
+- [X] T025 [US1] **[NEW]** Implement the FR-007 post-success watch in `BaptismService.fs` +
       add `tests/ButtonPanelTester.Tests/Integration/Can/PostSuccessWarningTests.fs`: after
       `Succeeded`, watch `IWhoIAmObserver` for the claimed UUID for one pruning window (15 s,
       spec-003 constant); heard → raise the claim-did-not-take warning (panel still
