@@ -15,21 +15,28 @@ $failures = @()
 git diff --check
 if ($LASTEXITCODE -ne 0) { $failures += 'git diff --check' }
 
-# STEM .NET default - uncomment + adjust per repo:
-# dotnet build -c Release
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
-# dotnet test Tests/Tests.csproj --framework net10.0
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test' }
-# dotnet format --verify-no-changes
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet format' }
+# Whole-solution Release build (CI parity).
+dotnet build Stem.ButtonPanelTester.slnx -c Release
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
 
-# Lean formalization (for repos with specs/ Lean projects):
-# lake build
-# if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+# Cross-platform test project (net10.0).
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj -c Release --no-build
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test (cross-platform)' }
 
-# Ticket-specific proof (extend per ticket, same capture pattern):
-# dotnet test Tests/Tests.csproj --filter FullyQualifiedName~<focused-pattern>
-# if ($LASTEXITCODE -ne 0) { $failures += '<focused-pattern>' }
+# Windows test project, excluding the hardware-gated bench suite (CI default).
+dotnet test tests/ButtonPanelTester.Tests.Windows/ButtonPanelTester.Tests.Windows.fsproj -c Release --no-build --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test (windows, Category!=Hardware)' }
+
+# Focused baptism fast-signal: the spec-004 logic suites (always present on
+# this branch, so the gate stays green from the gate-add commit onward).
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj -c Release --no-build --filter "FullyQualifiedName~Baptism"
+if ($LASTEXITCODE -ne 0) { $failures += 'baptism focused filter' }
+
+# Lean Phase 3 formalization.
+Push-Location lean
+lake build
+if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+Pop-Location
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
