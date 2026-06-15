@@ -95,6 +95,21 @@ type AttemptConfig =
     { SelectedUuid: PanelUuid
       ChosenVariant: MarketingVariant }
 
+/// The rendered verdict of an enablement guard, per `data-model.md` §6
+/// (FR-002 / FR-008): the GUI surface renders `Enabled` as an active button
+/// and `Disabled` as a greyed button whose tooltip is the carried
+/// `explanation` — the human-readable text naming the one unmet condition.
+/// `explanation` is display-only (a `Detail`-style field, stem-fp §4): the
+/// GUI branches on `Enabled` vs `Disabled`, never on the explanation text.
+/// Mirrors the Lean inductive `Enablement` in
+/// `lean/Stem/ButtonPanelTester/Phase3/Enablement.lean` (T027); the boolean
+/// verdict is theorem-backed (`baptize_enabled_iff` / `reset_enabled_iff`)
+/// and witnessed at the value level by the FsCheck `EnablementGuards`
+/// property in `Tests/Property/Can/EnablementProperties.fs` (T028).
+type Enablement =
+    | Enabled
+    | Disabled of explanation: string
+
 module Baptism =
 
     /// The announce-wait budget: 6 s, per research R4 — a settled scope
@@ -198,3 +213,73 @@ module Baptism =
         | ClaimSent -> stepClaimSent event
         | AwaitingAnnounce deadline -> stepAwaiting cfg deadline event
         | Assigning -> stepAssigning event
+
+    /// Explanation a `Disabled` baptize/reset guard carries when the link is
+    /// not `Connected` (the shared link-down conjunct, FR-002 / FR-008).
+    [<Literal>]
+    let LinkNotConnectedExplanation =
+        "The CAN link is not connected; connect the adapter first."
+
+    /// Explanation a `Disabled` baptize guard carries when NO panel is
+    /// announcing (the zero-announcing conjunct, FR-002).
+    [<Literal>]
+    let NoPanelAnnouncingExplanation =
+        "No panel is announcing on the bus; only an announcing (virgin) panel can be baptized."
+
+    /// Explanation a `Disabled` baptize guard carries when two or more panels
+    /// are announcing (the baptize two-or-more conjunct, FR-002): baptism
+    /// targets exactly one selected panel.
+    [<Literal>]
+    let MultipleAnnouncingBaptizeExplanation =
+        "More than one panel is announcing; baptism needs exactly one announcing panel on the bus."
+
+    /// Explanation a `Disabled` baptize guard carries when exactly one panel
+    /// is announcing but none is selected (the none-selected conjunct,
+    /// FR-002).
+    [<Literal>]
+    let NoPanelSelectedExplanation =
+        "Select the announcing panel before baptizing."
+
+    /// Explanation a `Disabled` reset guard carries when two or more panels
+    /// are announcing (the reset two-or-more conjunct, FR-008): the reset
+    /// WHO_ARE_YOU is a broadcast and would reach EVERY panel on the bus, so
+    /// it is refused while more than one is present.
+    [<Literal>]
+    let MultipleAnnouncingResetExplanation =
+        "More than one panel is announcing; the reset broadcast would reach every panel on the bus."
+
+    /// `true` iff the link state is `Connected` — the one bit both guards read
+    /// off the link (data-model §6). Mirrors Lean `isConnected`.
+    let private isConnected (link: CanLinkState) : bool =
+        match link with
+        | Connected _ -> true
+        | _ -> false
+
+    /// Baptize enablement guard (data-model §6, FR-002): `Enabled` IFF the
+    /// link is `Connected`, exactly one panel is announcing, AND that panel
+    /// is selected. Priority-ordered case analysis — link down / zero
+    /// announcing / two-or-more announcing / none selected — each `Disabled`
+    /// branch naming its one unmet conjunct. `announcingCount` ranges over
+    /// ANNOUNCING panels only (silent claimed panels are invisible, CHK019).
+    /// The Lean theorem `baptize_enabled_iff` (T027) proves this ordered
+    /// analysis equivalent to the flat conjunction; the FsCheck
+    /// `EnablementGuards` property (T028) witnesses it at the value level.
+    let baptizeEnablement (link: CanLinkState) (announcingCount: int) (selection: PanelUuid option) : Enablement =
+        if not (isConnected link) then Disabled LinkNotConnectedExplanation
+        elif announcingCount = 0 then Disabled NoPanelAnnouncingExplanation
+        elif announcingCount >= 2 then Disabled MultipleAnnouncingBaptizeExplanation
+        elif Option.isNone selection then Disabled NoPanelSelectedExplanation
+        else Enabled
+
+    /// Reset enablement guard (data-model §6, FR-008): `Enabled` IFF the link
+    /// is `Connected` AND at most one panel is announcing. Priority-ordered —
+    /// link down / two-or-more announcing — each `Disabled` branch naming its
+    /// one unmet conjunct (the two-or-more text states the broadcast reaches
+    /// every panel). No selection conjunct: reset is a list-anchor-free
+    /// broadcast (FR-008). The Lean theorem `reset_enabled_iff` (T027) proves
+    /// the equivalence; the FsCheck `EnablementGuards` property (T028)
+    /// witnesses it.
+    let resetEnablement (link: CanLinkState) (announcingCount: int) : Enablement =
+        if not (isConnected link) then Disabled LinkNotConnectedExplanation
+        elif announcingCount >= 2 then Disabled MultipleAnnouncingResetExplanation
+        else Enabled
