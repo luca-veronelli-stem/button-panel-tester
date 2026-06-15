@@ -45,3 +45,16 @@ type IBaptismService =
     /// Current FSM state at the moment of read, consistent with the latest
     /// `StateChanged` emission. `Idle` between attempts.
     abstract member CurrentState: BaptismState
+
+    /// Hot observable of the FR-007 post-success "claim did not take"
+    /// warning, carrying the claimed `PanelUuid`. After an attempt reaches
+    /// `Terminal Succeeded` the service watches for the claimed uuid for one
+    /// 15 s pruning window (`data-model.md` §4.4): a panel that took the
+    /// claim goes silent, so hearing its uuid again WITHIN the window means
+    /// the claim did not take and fires this once. The window is anchored at
+    /// the success instant; a new attempt or a link loss cancels the watch,
+    /// and expiry is silent. Volatile in-memory only (FR-013). Hot —
+    /// subscribers added after a raise do NOT replay it; subscribe at
+    /// composition time. The GUI (Phase E) renders the uuid into the operator
+    /// message.
+    abstract member WarningRaised: IObservable<PanelUuid>
