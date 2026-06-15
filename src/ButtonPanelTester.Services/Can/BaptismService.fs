@@ -1,6 +1,7 @@
 namespace Stem.ButtonPanelTester.Services.Can
 
 open System
+open System.Globalization
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging
@@ -125,9 +126,15 @@ type BaptismService
     /// anchored at the success instant.
     let postSuccessWindow: TimeSpan = TimeSpan.FromSeconds 15.0
 
-    // `logger` is held this slice; the structured audit emission is the next
-    // slice (C6). Touch it once so the unused binding reads as intentional.
-    do logger.LogDebug("BaptismService constructed (idle)")
+    /// Attempt-entry instant for the FR-012 audit record (`data-model.md`
+    /// §7). Captured under the entry lock in `BaptizeAsync` BEFORE the
+    /// start/guard split, so both terminal paths (FSM terminal and entry-guard
+    /// rejection) read the same `StartedAt`.
+    let mutable attemptStartedAt: DateTimeOffset = clock.UtcNow()
+
+    /// Render an instant as ISO-8601 round-trip ("O", invariant culture) for
+    /// the `{StartedAt}` / `{CompletedAt}` audit fields.
+    let iso (instant: DateTimeOffset) = instant.ToString("O", CultureInfo.InvariantCulture)
 
     /// Extract the terminal outcome of a state, if any.
     let terminalOutcome (s: BaptismState) : BaptismOutcome option =
@@ -194,12 +201,28 @@ type BaptismService
     /// complete OUTSIDE it. Terminal idempotence is enforced by the caller
     /// (a step out of `Terminal _` produces `(Terminal _, NoAction)` and the
     /// state is unchanged, so we re-detect "already terminal" and skip).
-    let commit (next: BaptismState) (action: BaptismAction) (cfg: AttemptConfig) (attemptTcs: TaskCompletionSource<BaptismOutcome>) (ct: CancellationToken) =
+    /// `preTerminal` is the state the step was computed FROM — the furthest
+    /// phase reached, projected into the FR-012 audit record's `StepReached`
+    /// at the terminal transition.
+    let commit (next: BaptismState) (action: BaptismAction) (cfg: AttemptConfig) (preTerminal: BaptismState) (attemptTcs: TaskCompletionSource<BaptismOutcome>) (ct: CancellationToken) =
         stateSubject.OnNext next // publish OUTSIDE the lock
         dispatch action cfg attemptTcs ct
 
         match terminalOutcome next with
-        | Some outcome -> attemptTcs.TrySetResult outcome |> ignore
+        | Some outcome ->
+            attemptTcs.TrySetResult outcome |> ignore
+            // FR-012 audit (`data-model.md` §7): ONE Information record per
+            // started attempt, at the FSM terminal, OUTSIDE the lock. Terminal
+            // idempotence (a step out of `Terminal _` is absorbed in `apply`
+            // before reaching here) guarantees this fires exactly once.
+            BaptismLogging.logBaptizeAttempt
+                logger
+                cfg.ChosenVariant
+                cfg.SelectedUuid
+                outcome
+                preTerminal
+                (iso attemptStartedAt)
+                (iso (clock.UtcNow()))
         | None -> ()
 
     /// Feed one observed event into the FSM. A no-op when no attempt is
@@ -234,10 +257,10 @@ type BaptismService
                         | Terminal Succeeded -> watch <- Some(cfg.SelectedUuid, clock.UtcNow() + postSuccessWindow)
                         | _ -> ()
 
-                        Some(next, action, cfg, tcs, attemptCt))
+                        Some(next, action, cfg, current, tcs, attemptCt))
 
         match work with
-        | Some(next, action, cfg, attemptTcs, ct) -> commit next action cfg attemptTcs ct
+        | Some(next, action, cfg, preTerminal, attemptTcs, ct) -> commit next action cfg preTerminal attemptTcs ct
         | None -> ()
 
     do applyRef.Value <- apply
@@ -356,6 +379,11 @@ type BaptismService
                 if running then
                     invalidOp "BaptismService: an attempt is already running"
 
+                // Capture the attempt-entry instant once, under the lock,
+                // BEFORE the start/guard split (FR-012 `StartedAt`): both the
+                // FSM-terminal and the entry-guard path read this same value.
+                attemptStartedAt <- clock.UtcNow()
+
                 // Raw re-check of the entry guards against the CURRENT
                 // observables (the Enablement module is #216, not here).
                 match link.CurrentState with
@@ -401,6 +429,18 @@ type BaptismService
             // Publish the entry-guard terminal OUTSIDE the lock and return
             // the resolved outcome directly (no attempt was started).
             stateSubject.OnNext(Terminal outcome)
+            // FR-012 audit (`data-model.md` §7): an entry-guard rejection
+            // (`LinkLost` / `PanelDisappeared`) COUNTS as an attempt, so it
+            // emits ONE record too, OUTSIDE the lock, with `StepReached` =
+            // `NotStarted` (the FSM never started — project `Idle`).
+            BaptismLogging.logBaptizeAttempt
+                logger
+                variant
+                selected
+                outcome
+                Idle
+                (iso attemptStartedAt)
+                (iso (clock.UtcNow()))
             Task.FromResult outcome
         | Choice1Of2(cfg, attemptTcs) ->
             // Start: the entry lock already set `state <- ClaimSent`
@@ -411,7 +451,11 @@ type BaptismService
             // awaited inline — its continuation feeds `WriteCompleted` /
             // `WriteFaulted` back in.
             let startState, startAction = Baptism.start
-            commit startState startAction cfg attemptTcs cancellationToken
+            // The start transition (`Idle → ClaimSent`) is non-terminal, so
+            // `commit`'s audit branch does not fire here; pass `Idle` as the
+            // (unused) pre-terminal placeholder. The terminal record is emitted
+            // later by the `apply → commit` path with the real furthest state.
+            commit startState startAction cfg Idle attemptTcs cancellationToken
             attemptTcs.Task
 
     interface IBaptismService with

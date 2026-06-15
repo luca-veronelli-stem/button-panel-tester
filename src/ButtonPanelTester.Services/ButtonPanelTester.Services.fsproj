@@ -11,6 +11,7 @@
         <Compile Include="Can/IPanelDiscoveryService.fs" />
         <Compile Include="Can/PanelDiscoveryService.fs" />
         <Compile Include="Can/IBaptismService.fs" />
+        <Compile Include="Can/BaptismLogging.fs" />
         <Compile Include="Can/BaptismService.fs" />
         <Compile Include="Dictionary/DictionaryOptions.fs" />
         <Compile Include="Dictionary/IDictionaryService.fs" />
