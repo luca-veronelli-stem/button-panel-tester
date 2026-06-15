@@ -388,7 +388,7 @@ commit). D3 = {T029, T030} (reset flow + its integration tests, one commit). D4 
       non-empty and names the unmet condition". XML docs cite `Phase3/Enablement.lean`. One
       commit (D2). *(No story label — serves FR-002/US1 and FR-008/US2; see §Format.)*
       (FR-002/FR-008; SC-005)
-- [ ] T029 [US2] **[NEW]** Implement the reset flow: extend
+- [X] T029 [US2] **[NEW]** Implement the reset flow: extend
       `src/ButtonPanelTester.Core/Can/Baptism.fs` with `ResetOutcome = Sent | Declined |
       ResetLinkLost | ResetTransmissionFailure` (data-model §5) and
       `src/ButtonPanelTester.Services/Can/BaptismService.fs` (+ `IBaptismService.fs`) with
@@ -401,7 +401,7 @@ commit). D3 = {T029, T030} (reset flow + its integration tests, one commit). D4 
       signal); a fault on either write → `ResetTransmissionFailure`; link not `Connected` /
       lost mid-broadcast → `ResetLinkLost`. No announcement wait, no retry. (FR-008/009/010;
       R2)
-- [ ] T030 [US2] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ResetE2ETests.fs`
+- [X] T030 [US2] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ResetE2ETests.fs`
       over the fake transmitter + real `CanLinkService` wrapping `InMemoryCanLink`:
       (a) confirmed → exactly **two** recorded WHO_ARE_YOU broadcasts, in order, payloads
       `FF 00 04 01` then `FF 00 0F 01` (the T007 fixtures), outcome `Sent`; (b) declined →

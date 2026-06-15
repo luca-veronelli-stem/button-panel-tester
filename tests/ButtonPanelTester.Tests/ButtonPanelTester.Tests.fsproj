@@ -33,6 +33,7 @@
         <Compile Include="Integration/Can/CanLinkServiceLifecycleTests.fs" />
         <Compile Include="Integration/Can/DiscoveryE2ETests.fs" />
         <Compile Include="Integration/Can/BaptismE2ETests.fs" />
+        <Compile Include="Integration/Can/ResetE2ETests.fs" />
         <Compile Include="Integration/Can/TimeoutE2ETests.fs" />
         <Compile Include="Integration/Can/LinkLossAbortsTests.fs" />
         <Compile Include="Integration/Can/PostSuccessWarningTests.fs" />
