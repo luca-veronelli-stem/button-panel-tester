@@ -31,7 +31,7 @@ inflates the diff it is the one clean split point (plan §Child PR boundary).
 
 **Commit group**: RW01 = {T} Lean-only, `lake build` green.
 
-- [ ] RW01 **[AMEND]** `lean/Stem/ButtonPanelTester/Phase3/BaptismSequence.lean`: add the
+- [X] RW01 **[AMEND]** `lean/Stem/ButtonPanelTester/Phase3/BaptismSequence.lean`: add the
       `awaitingAdoption (deadline) (ackSeen)` state, the `claimNotAdopted` outcome, and the
       `setAddressAcked` event (data-model §4.1/§4.2/§4.3). Rewrite `step`: (a) `awaitingAnnounce`
       branches `Marketing chosen → assigning` / `Virgin → stay` (F1) / `Marketing other | Unknown _
