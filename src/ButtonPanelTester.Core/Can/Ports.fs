@@ -96,6 +96,28 @@ type IWhoIAmObserver =
     /// subscribe at composition time (late subscribers do not replay).
     abstract member WhoIAmObserved: IObservable<WhoIAmFrame>
 
+/// Receive port for the SET_ADDRESS application ACK the slave's protocol dispatcher returns to
+/// the tool. The dispatcher (`SP_App_ProcessDataRx`, `SP_Application.c:347-360`) ORs `0x80` into
+/// the command for every fully-received command whose handler returns true, so `0x80|0x25` is the
+/// SET_ADDRESS ACK (`0x80|0x23` the WHO_ARE_YOU ACK — the F6 discriminator). The SET_ADDRESS
+/// handler returns true regardless of UUID match, so this ACK is only a *fast positive* that the
+/// assignment was received intact — confirmed broadcast-silence stays the authoritative adoption
+/// signal (FR-006). The TX port stays fire-and-forget (the slave sends no domain reply); this is
+/// the sole RX surface for the ACK, an adoption fast-positive (D1). Receive-only.
+///
+/// Contract of record:
+/// `specs/004-baptism-workflow/contracts/master-sequence-wire-format.md` §SET_ADDRESS §Slave
+/// semantics. The confirmation model that consumes it is
+/// `specs/004-baptism-workflow/confirmation-rework/data-model.md` §4.3 (the `SetAddressAcked`
+/// event observed in `AwaitingAdoption`) — that consumer is a later slice; this port is
+/// additive and consumed by nothing yet.
+type ISetAddressAckObserver =
+    /// Hot observable that fires once per observed SET_ADDRESS ACK addressed to the tool, carrying
+    /// the frame's receive timestamp. Fires on the vendored read thread; subscribe at composition
+    /// time (late subscribers do not replay). The load-bearing fact is that it fired — the
+    /// timestamp is for audit/correlation, not control flow (silence is authoritative).
+    abstract member SetAddressAckObserved: IObservable<DateTimeOffset>
+
 /// Transmits the auto-address master-sequence commands this tool is allowed to send
 /// (FR-014: claim / reset via WHO_ARE_YOU, address assignment via SET_ADDRESS — nothing
 /// else). The product's first CAN transmit port and the single TX entry point — not a

@@ -27,10 +27,12 @@ let Composition_ResolvesCanGraph_BindsRealPcanFrameStream () =
         sp.GetRequiredService<ICanLink>() |> ignore
         sp.GetRequiredService<ICanLinkService>() |> ignore
         let observer = sp.GetRequiredService<IWhoIAmObserver>()
+        let ackObserver = sp.GetRequiredService<ISetAddressAckObserver>()
         sp.GetRequiredService<IPanelDiscoveryService>() |> ignore
         let transmitter = sp.GetRequiredService<IMasterSequenceTransmitter>()
         Assert.IsType<PcanCanFrameStream>(frameStream) |> ignore
         Assert.IsType<WhoIAmReassemblyObserver>(observer) |> ignore
+        Assert.IsType<SetAddressAckObserver>(ackObserver) |> ignore
         Assert.IsType<ProtocolMasterSequenceTransmitter>(transmitter) |> ignore
         Assert.IsType<BaptismService>(sp.GetRequiredService<IBaptismService>()) |> ignore
     finally
