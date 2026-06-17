@@ -19,7 +19,9 @@ type IMasterSequenceTransmitter =
 
     /// Broadcasts SET_ADDRESS(uuid, spAddress). The uuid is re-encoded byte-identically
     /// to the announcement it was parsed from (byte-echo invariant). Completes on write
-    /// completion; faults on transmission failure. The slave never replies (FR-006/FR-010).
+    /// completion; faults on transmission failure. There is no reply on the *transmit* path;
+    /// the panel's `0x25` ACK and the adoption confirmation arrive asynchronously on the RX
+    /// path and are judged by the service (FR-006, corrected 2026-06-17 — not "no reply ever").
     abstract member SendSetAddressAsync:
         uuid: PanelUuid * spAddress: uint32 * ct: CancellationToken -> Task
 ```
@@ -54,5 +56,9 @@ committed `masterSequenceFixtures.json` byte fixtures. The live-bus proof is the
 
 - Not a general-purpose CAN TX surface — adding any new command to the bus requires a spec that
   amends FR-014 and this contract, not a new method here "while we're at it".
-- Not a reply-correlation surface — the master sequence has no synchronous replies; RX stays on
-  the existing `IWhoIAmObserver` path.
+- Not a reply-correlation surface — the master sequence has **no synchronous replies on the
+  transmit path**; this port stays fire-and-forget. The panel *does* acknowledge asynchronously
+  (the `0x23`/`0x25` application ACKs) and adoption is confirmed by broadcast-silence; those
+  signals are observed on the **RX** side by the service, not surfaced here. The confirmation
+  rework (2026-06-17, FR-006) consumes the existing `IWhoIAmObserver` for silence and adds a
+  separate RX observation for the `0x25` ACK — the transmit port is unchanged.
