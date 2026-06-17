@@ -68,7 +68,7 @@ virgin marker `0xFF` (firmware constants, audited in CORRECTIONS.md).
 - **reset=1 effects**: EEPROM `IDMachineType` ← sent machineType; `MotherBoardAddress` ← sender
   srid; RAM `SP_Address` ← `0xFFFFFFFF`; announce timer restarted → the panel re-announces the
   **newly written** identity within its 2–6 s cadence (`2000 + (Σ uuid words mod 4000)` ms).
-- The slave never replies to WHO_ARE_YOU itself; the observable effect is the re-announcement.
+- The application layer **does** acknowledge the command — the dispatcher returns a `0x23` ACK (`SP_Application.c:347-360`) — but the slave sends no *domain* reply to WHO_ARE_YOU; the load-bearing observable effect is the re-announcement carrying the newly-written identity. (Corrects the earlier "the slave never replies" wording, 2026-06-17.)
 
 ## SET_ADDRESS app payload (16 B)
 
@@ -104,9 +104,17 @@ constant).
 
 - Accepts **iff all three UUID words match** its own; no machineType/fwType check.
 - On accept: stores SP_Address, `IDBoardNumber = SP_Address & 0x3F` to EEPROM, transitions to
-  `AAS_STAND_BY` (claimed, **silent**). **No reply** — the tool's success signal is write
-  completion of the broadcast (FR-006/FR-010), optionally corroborated by the FR-007 silence
-  watch.
+  `AAS_STAND_BY` (claimed, **silent** — it stops broadcasting WHO_I_AM, `AA_Slave_Main_Task`).
+- **Acknowledgement and the success signal** (corrected 2026-06-17 — supersedes the earlier
+  "no reply ever comes"): the dispatcher (`SP_App_ProcessDataRx`, `SP_Application.c:347-360`)
+  builds an application ACK (`0x80 | cmd` → `0x25`) for every fully-received command whose handler
+  returns true, so SET_ADDRESS **is acknowledged** (`02 80 25`). The handler returns true
+  regardless of UUID match, so the `0x25` ACK proves "assignment received intact" — a fast
+  positive — while **broadcast-silence is the authoritative, firmware-deterministic adoption
+  signal**: silence ⟺ `AAS_STAND_BY` ⟺ UUID-matched address stored (no firmware path adopts yet
+  keeps announcing). The tool's success signal is therefore **confirmed adoption** — the `0x25` ACK
+  **and** confirmed broadcast-silence (FR-006) — **not** write completion (the F6 false success
+  completed the write yet kept announcing). The FR-007 silence watch is folded into this gate.
 
 ## Transmission discipline (FR-014)
 
