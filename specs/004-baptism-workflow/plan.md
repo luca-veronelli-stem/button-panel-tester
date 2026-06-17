@@ -245,6 +245,13 @@ agent-context script exists in `.specify/scripts/bash/` — the agent-file updat
 
 ## Status
 
+> **Confirmation-model rework (2026-06-17).** This plan is the frozen trace of the shipped feature
+> (Phases A–F, children #213–#217). Bench testing reopened the success criterion (F1 + F6); the
+> corrected confirmation slice is re-planned in
+> [`confirmation-rework/plan.md`](./confirmation-rework/plan.md) (+ `data-model.md`, `tasks.md`),
+> sequenced before the bench gate #218. The phase tasks below stay as-is — they record what was
+> built, not the corrected target.
+
 *Created 2026-06-11 by `/speckit-plan` (fresh context per the RPI overlay).*
 
 ### Completed (this run)

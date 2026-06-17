@@ -4,6 +4,12 @@ description: "Task list for spec-004 — Baptism Workflow: Claim and Reset Panel
 
 # Tasks: Baptism Workflow — Claim and Reset Panels on the Bus
 
+> **Confirmation-model rework (2026-06-17).** T001–T046 below are the frozen trace of children
+> #213–#217 (the shipped model: six outcomes, success on write-completion). Bench testing reopened
+> the success criterion (F1 + F6); the corrected confirmation slice has its own breakdown in
+> [`confirmation-rework/tasks.md`](./confirmation-rework/tasks.md) (RW01–RW08), sequenced before the
+> bench gate #218. Do not re-open the [X] marks below — they record what shipped.
+
 **Input**: Design documents from [`specs/004-baptism-workflow/`](./)
 
 **Prerequisites**: [plan.md](./plan.md) (task authority — §Implementation phases A–F),

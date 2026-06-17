@@ -68,6 +68,15 @@ One technician-initiated claim of the selected panel as the chosen variant. At m
 runs at a time (the surface is modal while running); the tool holds **no** memory between
 attempts (FR-013).
 
+> **Superseded for the confirmation model (2026-06-17).** §4.1–§4.4 and §8 below are the **frozen
+> trace** of the model children [#213](https://github.com/luca-veronelli-stem/button-panel-tester/issues/213)/[#215](https://github.com/luca-veronelli-stem/button-panel-tester/issues/215)
+> shipped (six outcomes; `Succeeded` on SET_ADDRESS write-completion). Bench testing exposed F1 + F6
+> and refuted "no reply ever comes"; the **corrected** FSM — `AwaitingAdoption`, the seventh
+> `ClaimNotAdopted` outcome, the `SetAddressAcked` event, the virgin-keeps-waiting branch, and the
+> restated theorems — lives in [`confirmation-rework/data-model.md`](./confirmation-rework/data-model.md)
+> (plan + tasks alongside it). See the spec Clarifications session 2026-06-17. Read the rework delta,
+> not §4 below, for the target behaviour.
+
 ### 4.1 States and transitions
 
 ```mermaid
