@@ -25,6 +25,32 @@ extended (build + both test projects `Category!=Hardware` + `lake build` + a foc
 recovery E2E + bench validation) are **#218's** — they need the bench rig. If RW03 (ACK RX port)
 inflates the diff it is the one clean split point (plan §Child PR boundary).
 
+**Bisect-safety & execution order (orchestrator re-slice, 2026-06-17).** The naive RW01→RW06 order
+is NOT bisect-safe: the Core DUs are wildcard-free, so adding `ClaimNotAdopted`/`AwaitingAdoption`
+breaks the exhaustive matches in `BaptismLogging.fs` + `BaptismView.fs` (compile error), and the
+`step` flip (`assigning`-write → `AwaitingAdoption`, not `Succeeded`) breaks the existing service
+integration suites (`BaptismE2ETests`, `PostSuccessWarningTests`, `TimeoutE2ETests`) which assert
+success-on-write-completion — and the service cannot reach the new `Succeeded` until the `0x25` ACK
+observer (RW03) is wired in and consumed. So the **commit order** is re-cut (task IDs unchanged):
+
+1. **RW01** — Lean FSM. *(done — commit `a749518`→stamped)*
+2. **RW03** — the `0x25` ACK RX plumbing (port + production adapter + InMemory fake + composition +
+   adapter unit tests). **ADDITIVE: nothing consumes it yet**, so it lands green BEFORE the FSM flip.
+3. **RW02 + RW04 (ONE combined commit)** — the confirmed-adoption behavioral flip. Core types + `step`
+   + `BaptismSequenceProperties` + `BaptismService` driving `AwaitingAdoption` (subscribing the RW03
+   ACK observer + adoption-deadline ticks) + the three integration suites updated + the **minimal
+   compile-arms** in `BaptismLogging.fs` (outcome/state → audit string — the real RW05 projection) and
+   `BaptismView.fs` (state in-progress predicate = real; a compile-safe `ClaimNotAdopted` outcome arm =
+   bridge, refined in RW06). Green ONLY as one commit (the step flip + its service + its tests are
+   inseparable). Trailer `Tasks: RW02, RW04`.
+4. **RW05** — `BaptismLogging` audit TEST for the new outcome + the `adoption confirmed` step-reached
+   value (the source arm already lands in step 3).
+5. **RW06** — the full FR-015 guided-recovery rendering + `BaptismViewTests` Headless (refines the
+   compile-arm from step 3).
+
+`BaptismGuidance.recoveryText` already has a `_ -> None` wildcard, so it does not break on the new
+outcome; only `BaptismLogging` + `BaptismView` need compile-arms in step 3.
+
 ---
 
 ## Phase R1: Lean FSM (the corrected spec) — FOUNDATIONAL
