@@ -101,18 +101,18 @@ triple is intact for the new state/outcome/event.
 **Commit group**: RW03 = {T,T,T} port + adapter + fake + wiring (one commit; ports compile green,
 exercised from R4).
 
-- [ ] RW03a **[EXTEND]** `src/ButtonPanelTester.Core/Can/Ports.fs`: add a minimal RX port for the
+- [X] RW03a **[EXTEND]** `src/ButtonPanelTester.Core/Can/Ports.fs`: add a minimal RX port for the
       SET_ADDRESS ACK — e.g. `ISetAddressAckObserver` with an event/observable carrying the ACK
       observation (mirror the shipped `IWhoIAmObserver` shape). XML doc: it surfaces the
       application-layer `0x25` ACK addressed to the tool, an adoption fast-positive (the TX port
       stays fire-and-forget; D1). (Constitution III)
-- [ ] RW03b **[NEW]** `src/ButtonPanelTester.Infrastructure/Can/SetAddressAckObserver.fs`
+- [X] RW03b **[NEW]** `src/ButtonPanelTester.Infrastructure/Can/SetAddressAckObserver.fs`
       (`net10.0-windows` if PEAK-bound, else neutral): filter the RX frame stream
       (`ICanFrameStream`/reassembly) for the `0x80|0x25` ACK addressed to the tool's srid; surface
       it on the port. Unit-test it against a fake `ICommunicationPort` replaying a captured/fixture
       ACK frame (spec-003 Phase-C frame-synthesis precedent) — assert the genuine `02 80 25` is
       surfaced and a `02 80 23` / foreign frame is not.
-- [ ] RW03c **[NEW]** `tests/ButtonPanelTester.Tests/Fakes/Can/InMemorySetAddressAckObserver.fs`:
+- [X] RW03c **[NEW]** `tests/ButtonPanelTester.Tests/Fakes/Can/InMemorySetAddressAckObserver.fs`:
       scriptable virtual ACK source (raise-on-demand) for CI; **[EXTEND]**
       `CompositionRoot.fs` to register the production adapter and extend `CompositionRootCanTests`
       to resolve it, hardware-free. (Constitution III/IV)

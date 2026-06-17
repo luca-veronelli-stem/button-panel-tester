@@ -259,6 +259,17 @@ module CompositionRoot =
                 let frameStream = sp.GetRequiredService<ICanFrameStream>()
                 let logger = sp.GetRequiredService<ILogger<WhoIAmReassemblyObserver>>()
                 new WhoIAmReassemblyObserver(frameStream, logger) :> IWhoIAmObserver)
+            // SET_ADDRESS ACK RX observer (spec-004 confirmation rework, D1): taps the SAME bound
+            // `ICanFrameStream` the WHO_I_AM observer does — so it transitively rides the shared
+            // `CanPortShare` and needs no eager PEAK build — and surfaces the `0x80|0x25`
+            // application ACK addressed to the tool's srid (`DeviceVariantConfig.DefaultSenderId`,
+            // the same srid the TX transmitter sends under). Additive: the baptism FSM consumes
+            // this in a later slice; nothing resolves it yet beyond the composition smoke.
+            .AddSingleton<ISetAddressAckObserver>(fun sp ->
+                let frameStream = sp.GetRequiredService<ICanFrameStream>()
+                let logger = sp.GetRequiredService<ILogger<SetAddressAckObserver>>()
+                new SetAddressAckObserver(frameStream, DeviceVariantConfig.DefaultSenderId, logger)
+                :> ISetAddressAckObserver)
             .AddSingleton<ICanLinkService>(fun sp ->
                 let link = sp.GetRequiredService<ICanLink>()
                 let clock = sp.GetRequiredService<IClock>()
