@@ -568,6 +568,15 @@ semantics are proven at the live boundary. The feature is **Done**.
       returns immediately. Plus a `try/finally` teardown reset so a failed leg leaves the panel virgin
       and does not pollute the next run. The 6 s budget and the confirmed-adoption gate are unchanged.
       Added from the #218 bench (RW08).
+- [X] T048 Correct the `BaptismHardwareTests.fs` claim recovery to the spec's PER-OUTCOME remedy
+      (RW09 rig finding — the four-variant cycle failed on the OptimusXp leg with `WaitTimeout` x3
+      because T047 reset on `WaitTimeout`): `WaitTimeout` -> re-run Baptize on the SAME still-announcing
+      panel WITHOUT a reset (FR-005 / acceptance 3 / late-re-announcement edge case — the WHO_ARE_YOU
+      took effect and the panel re-announces the variant just past the 6 s budget, so a re-claim catches
+      it; resetting discards that late announce and re-races the same timing, never converging);
+      `ClaimNotAdopted` -> Reset-to-virgin then re-baptize (FR-006a/FR-015, unchanged). Renames
+      `claimWithResetRecovery` -> `claimWithRecovery`; `maxClaimAttempts = 3` and the `try/finally`
+      teardown reset are unchanged; test-only.
 
 ---
 
