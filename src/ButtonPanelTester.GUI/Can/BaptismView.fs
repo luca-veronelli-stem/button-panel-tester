@@ -94,10 +94,9 @@ module BaptismView =
                 "The panel re-announced as %s, not the chosen %s: the claim did not apply. Re-check the variant choice and re-run Baptize, or Reset first."
                 (PanelsOnBusView.variantLabel announced)
                 label
-        // RW06 refines the guided-recovery rendering (full FR-015 text + Headless test).
         | ClaimNotAdopted ->
             sprintf
-                "%s did not adopt the %s identity: it kept announcing after the assignment (or never confirmed). Reset it to virgin, then re-run Baptize."
+                "%s did not adopt the %s identity: the address was assigned but the panel was confirmed still announcing (it never went silent), so the claim did not take. Reset it to virgin, then re-run Baptize."
                 uuidHex
                 label
         | PanelDisappeared ->

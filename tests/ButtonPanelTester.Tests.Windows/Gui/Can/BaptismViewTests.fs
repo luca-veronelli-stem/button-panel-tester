@@ -305,6 +305,28 @@ let UnexpectedVariant_NamesAnnouncedIdentity () =
         outcomeText (renderOutcome EdenXp sampleUuid (UnexpectedVariant(Marketing OptimusXp)))
     Assert.Contains("Optimus XP", text)
 
+// ClaimNotAdopted (FR-006a / FR-015 / acceptance scenario 10): the deterministic
+// guided-recovery rendering. The outcome states the claim did not TAKE — as fact,
+// never "likely"/"maybe" — and guides the operator into Reset-to-virgin → re-baptize
+// using the existing affordances, naming the attempted variant + panel like the
+// sibling outcome arms.
+[<AvaloniaFact>]
+let ClaimNotAdopted_RendersGuidedRecovery () =
+    let text = outcomeText (renderOutcome EdenXp sampleUuid ClaimNotAdopted)
+    let lower = text.ToLowerInvariant()
+    // Deterministic: states the claim did not take, never hedged.
+    Assert.DoesNotContain("likely", lower)
+    Assert.DoesNotContain("maybe", lower)
+    Assert.Contains("did not take", text)
+    // Names the attempted identity + panel, like the sibling arms.
+    Assert.Contains("Eden XP", text)
+    Assert.Contains(sampleUuidHex, text)
+    // Guided recovery: Reset-to-virgin → re-run Baptize via the existing affordances.
+    Assert.Contains("Reset", text)
+    Assert.True(
+        text.Contains("re-run Baptize") || text.Contains("re-baptize"),
+        sprintf "ClaimNotAdopted text missing reset → re-baptize recovery: %s" text)
+
 [<AvaloniaFact>]
 let PanelDisappeared_NamesStepStateAndNextAction () =
     let text = outcomeText (renderOutcome EdenXp sampleUuid PanelDisappeared)
