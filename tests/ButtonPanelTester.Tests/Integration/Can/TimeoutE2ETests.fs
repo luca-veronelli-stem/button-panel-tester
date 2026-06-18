@@ -25,6 +25,9 @@ open Stem.ButtonPanelTester.Tests.Fakes.Can
 ///     does not change the outcome (terminal absorption).
 ///   - a foreign-uuid announcement before the deadline never satisfies the
 ///     wait.
+///   - the adoption deadline (F6): assign written, no `0x25` ACK, the
+///     adoption window (assign-complete + `adoptionBudget`) elapses →
+///     `ClaimNotAdopted` (D2 strict — never a false success).
 
 let private fixedNow = DateTimeOffset(2026, 5, 24, 12, 0, 0, TimeSpan.Zero)
 
@@ -47,6 +50,7 @@ let private frameOf (machineType: byte) (u0, u1, u2) : WhoIAmFrame =
 type private Harness =
     { Clock: FrozenClock
       Observer: InMemoryWhoIAmObserver
+      AckObserver: InMemorySetAddressAckObserver
       Transmitter: InMemoryMasterSequenceTransmitter
       Service: BaptismService }
 
@@ -54,6 +58,7 @@ let private newHarness () : Harness =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     let discovery = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
 
@@ -61,6 +66,7 @@ let private newHarness () : Harness =
         new BaptismService(
             transmitter,
             observer,
+            ackObserver,
             discovery,
             link,
             clock,
@@ -68,6 +74,7 @@ let private newHarness () : Harness =
 
     { Clock = clock
       Observer = observer
+      AckObserver = ackObserver
       Transmitter = transmitter
       Service = service }
 
@@ -152,3 +159,27 @@ let Deadline_ForeignUuidBeforeDeadline_StillTimesOut () =
 
     Assert.Equal(WaitTimeout, task.GetAwaiter().GetResult())
     Assert.DoesNotContain(h.Transmitter.Sent, (fun (send, _) -> match send with SetAddressSent _ -> true | _ -> false))
+
+// --- the adoption deadline: assign written, no ACK, deadline elapses → ClaimNotAdopted ---
+
+[<Fact>]
+let AdoptionDeadline_NoAckBeforeDeadline_ClaimNotAdopted () =
+    let h = newHarness ()
+    let uuid = (0x1u, 0x2u, 0x3u)
+    let variant = EdenXp
+    h.Observer.Emit(frameOf 0xFFuy uuid)
+
+    let task = h.Service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
+
+    // Match → Assigning → assign write → AwaitingAdoption: the assign write
+    // completed at fixedNow, so the adoption deadline is fixedNow + adoptionBudget.
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+    Assert.False(task.IsCompleted)
+    Assert.Equal(AwaitingAdoption(fixedNow + Baptism.adoptionBudget, false), h.Service.CurrentState)
+
+    // No 0x25 ACK observed; crossing the adoption deadline closes the window
+    // `ClaimNotAdopted` (F6 / FR-006a, D2 strict — never a false success).
+    h.Clock.SetTo(fixedNow + Baptism.adoptionBudget)
+    h.Service.RunDeadlineTick()
+
+    Assert.Equal(ClaimNotAdopted, task.GetAwaiter().GetResult())

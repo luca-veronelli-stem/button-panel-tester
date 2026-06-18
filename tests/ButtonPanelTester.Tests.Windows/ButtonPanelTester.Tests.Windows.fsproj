@@ -21,6 +21,9 @@
         <Compile Include="..\ButtonPanelTester.Tests\Fakes\Can\InMemoryWhoIAmObserver.fs">
             <Link>Fakes\Can\InMemoryWhoIAmObserver.fs</Link>
         </Compile>
+        <Compile Include="..\ButtonPanelTester.Tests\Fakes\Can\InMemorySetAddressAckObserver.fs">
+            <Link>Fakes\Can\InMemorySetAddressAckObserver.fs</Link>
+        </Compile>
         <Compile Include="..\ButtonPanelTester.Tests\Fakes\Can\InMemoryMasterSequenceTransmitter.fs">
             <Link>Fakes\Can\InMemoryMasterSequenceTransmitter.fs</Link>
         </Compile>

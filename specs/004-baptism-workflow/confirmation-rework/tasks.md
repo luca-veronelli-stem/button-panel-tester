@@ -81,7 +81,7 @@ outcome; only `BaptismLogging` + `BaptismView` need compile-arms in step 3.
 
 **Commit group**: RW02 = {T} (Core `Baptism.fs` + FsCheck, one commit — mirror lands with its tests).
 
-- [ ] RW02 **[AMEND]** `src/ButtonPanelTester.Core/Can/Baptism.fs`: mirror RW01 exactly (stem-fp
+- [X] RW02 **[AMEND]** `src/ButtonPanelTester.Core/Can/Baptism.fs`: mirror RW01 exactly (stem-fp
       §10 — same names/case order): add `AwaitingAdoption` state, `ClaimNotAdopted` outcome,
       `SetAddressAcked` event; rewrite the pure `step` per data-model §4.1; update XML-doc citations
       to the RW01 theorems. **Same commit** — add/extend
@@ -126,7 +126,7 @@ success path consumes it yet.
 
 **Commit group**: RW04 = {T} service + integration suites (one commit). RW05 = {T} audit.
 
-- [ ] RW04 **[AMEND]** `src/ButtonPanelTester.Services/Can/BaptismService.fs` (+ `IBaptismService`):
+- [X] RW04 **[AMEND]** `src/ButtonPanelTester.Services/Can/BaptismService.fs` (+ `IBaptismService`):
       consume `ISetAddressAckObserver` (RW03) and `IWhoIAmObserver`; after the assign write
       completes, enter `AwaitingAdoption` with `adoptionBudget` (`IClock`/`FrozenClock`, no
       wall-clock sleep); reach `Succeeded` only on `ackSeen ∧ silence-held-to-deadline`; emit

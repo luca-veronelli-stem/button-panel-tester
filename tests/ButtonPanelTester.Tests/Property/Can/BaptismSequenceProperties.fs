@@ -54,7 +54,7 @@ let private run (cfg: AttemptConfig) (events: BaptismEvent list) =
     runFrom cfg (fst Baptism.start) events
 
 /// `(state-before, event)` trace of a run — the decomposition scans of
-/// `BaptismSucceedsIffMatchingAnnouncement` key off the state each
+/// `BaptismSucceedsIffConfirmedAdoption` key off the state each
 /// event was consumed in.
 let private transitions (cfg: AttemptConfig) (events: BaptismEvent list) =
     let folder (state, acc) ev =
@@ -62,25 +62,31 @@ let private transitions (cfg: AttemptConfig) (events: BaptismEvent list) =
 
     events |> List.fold folder (fst Baptism.start, []) |> snd |> List.rev
 
-/// Mirror of Lean `closingSchedule` (T017): the canonical suffix that
-/// drives any state past its pending work — the outstanding write
-/// resolves, then the clock passes the deadline.
+/// Mirror of Lean `closingSchedule` (T017/RW01): the canonical suffix that
+/// drives any state past its pending work — the outstanding write resolves,
+/// then the clock passes the deadline. From `Assigning` the schedule must
+/// cross BOTH the assign write AND the adoption deadline (the assign write
+/// lands in `AwaitingAdoption`, not a terminal — F6); from `AwaitingAdoption`
+/// one tick past the deadline closes it (`Succeeded` if `ackSeen`, else
+/// `ClaimNotAdopted`).
 let private closingSchedule (state: BaptismState) : BaptismEvent list =
     match state with
     | Idle -> [ LinkChanged(nonConnectedLink 0) ]
     | ClaimSent -> [ WriteCompleted baseInstant; Tick(baseInstant + Baptism.announceBudget) ]
     | AwaitingAnnounce deadline -> [ Tick deadline ]
-    | Assigning -> [ WriteCompleted baseInstant ]
+    | Assigning -> [ WriteCompleted baseInstant; Tick(baseInstant + Baptism.adoptionBudget) ]
+    | AwaitingAdoption(deadline, _) -> [ Tick deadline ]
     | Terminal _ -> []
 
 /// Wildcard-free witness that a reached outcome is one of the exactly
-/// six §4.2 cases — a seventh `BaptismOutcome` case breaks this
+/// SEVEN §4.2 cases — an eighth `BaptismOutcome` case breaks this
 /// `match` AND the Lean `baptize_outcome_total` proof together.
 let private outcomeWitnessed (outcome: BaptismOutcome) : bool =
     match outcome with
     | Succeeded -> true
     | WaitTimeout -> true
     | UnexpectedVariant _ -> true
+    | ClaimNotAdopted -> true
     | PanelDisappeared -> true
     | LinkLost -> true
     | TransmissionFailure ClaimStep -> true
@@ -103,18 +109,40 @@ let private isAssignCompletion (state: BaptismState, ev: BaptismEvent) =
     | Assigning, WriteCompleted _ -> true
     | _ -> false
 
-/// Ordered three-pivot scan over a run's trace — the RHS shape of Lean
-/// `baptize_progress` (T017): a claim `WriteCompleted`, then a matching
-/// announcement heard WHILE WAITING, then an assign `WriteCompleted`.
-let private hasSuccessDecomposition (cfg: AttemptConfig) (steps: (BaptismState * BaptismEvent) list) =
-    match steps |> List.tryFindIndex isClaimCompletion with
-    | None -> false
-    | Some i ->
-        let afterClaim = steps |> List.skip (i + 1)
+/// The `SetAddressAcked` pivot: the `0x25` ACK consumed while the adoption
+/// window is still ACK-pending (`ackSeen = false`) — the F6 fast positive.
+let private isAck (state: BaptismState, ev: BaptismEvent) =
+    match state, ev with
+    | AwaitingAdoption(_, false), SetAddressAcked -> true
+    | _ -> false
 
-        match afterClaim |> List.tryFindIndex (isMatchingAnnouncementWhileWaiting cfg) with
-        | None -> false
-        | Some j -> afterClaim |> List.skip (j + 1) |> List.exists isAssignCompletion
+/// The closing-tick pivot: a tick at/past the adoption deadline while the
+/// ACK has already been seen and the silence held — the FR-006 confirmation
+/// that reaches `Succeeded`.
+let private isClosingTick (state: BaptismState, ev: BaptismEvent) =
+    match state, ev with
+    | AwaitingAdoption(deadline, true), Tick now -> deadline <= now
+    | _ -> false
+
+/// Skip past the first pivot match, returning the trace suffix after it.
+let private afterPivot (pred: BaptismState * BaptismEvent -> bool) (steps: (BaptismState * BaptismEvent) list) =
+    steps |> List.tryFindIndex pred |> Option.map (fun i -> steps |> List.skip (i + 1))
+
+/// Ordered FIVE-pivot scan over a run's trace — the RHS shape of Lean
+/// `baptize_progress` (RW01): a claim `WriteCompleted`, then a matching
+/// announcement heard WHILE WAITING, then an assign `WriteCompleted`, then
+/// the `SetAddressAcked` ACK while ACK-pending, then a closing `Tick` at/past
+/// the adoption deadline with the silence held (F6 confirmed adoption). Each
+/// `afterPivot` consumes the matched pivot and threads the suffix forward, so
+/// the pivots must appear in this exact order.
+let private hasSuccessDecomposition (cfg: AttemptConfig) (steps: (BaptismState * BaptismEvent) list) =
+    steps
+    |> afterPivot isClaimCompletion
+    |> Option.bind (afterPivot (isMatchingAnnouncementWhileWaiting cfg))
+    |> Option.bind (afterPivot isAssignCompletion)
+    |> Option.bind (afterPivot isAck)
+    |> Option.bind (afterPivot isClosingTick)
+    |> Option.isSome
 
 /// Generator-level event script. Deadline-relative ticks cannot be
 /// realized up front (the announce deadline is anchored at the claim
@@ -123,6 +151,7 @@ let private hasSuccessDecomposition (cfg: AttemptConfig) (steps: (BaptismState *
 type ScriptedEvent =
     | MatchingAnnouncement
     | WrongVariantAnnouncement of raw: byte
+    | VirginAnnouncement
     | ForeignAnnouncement of raw: byte
     | TickBeforeDeadline
     | TickAtDeadline
@@ -132,6 +161,7 @@ type ScriptedEvent =
     | LinkLeavesConnected of shape: int
     | WriteOk
     | WriteFault
+    | SetAddressAck
 
 /// Realize one scripted event against the live state. The wrong-variant
 /// fix-up substitutes the virgin marker when the generated byte happens
@@ -145,14 +175,17 @@ let private realizeOne (cfg: AttemptConfig) (state: BaptismState) (now: DateTime
         let chosen = BoardVariant.encode cfg.ChosenVariant
         let other = if raw = chosen then BoardVariant.virginMarker else raw
         AnnouncementHeard(frameFor cfg.SelectedUuid other)
+    | VirginAnnouncement -> AnnouncementHeard(frameFor cfg.SelectedUuid BoardVariant.virginMarker)
     | ForeignAnnouncement raw -> AnnouncementHeard(frameFor (foreignOf cfg.SelectedUuid) raw)
     | TickBeforeDeadline ->
         match state with
         | AwaitingAnnounce deadline -> Tick(deadline.AddMilliseconds(-1.0))
+        | AwaitingAdoption(deadline, _) -> Tick(deadline.AddMilliseconds(-1.0))
         | _ -> Tick now
     | TickAtDeadline ->
         match state with
         | AwaitingAnnounce deadline -> Tick deadline
+        | AwaitingAdoption(deadline, _) -> Tick deadline
         | _ -> Tick(now + Baptism.announceBudget)
     | SnapshotKeepsSelected -> PanelsChanged(snapshotKeeping cfg.SelectedUuid)
     | SnapshotDropsSelected -> PanelsChanged(snapshotDropping cfg.SelectedUuid)
@@ -160,6 +193,7 @@ let private realizeOne (cfg: AttemptConfig) (state: BaptismState) (now: DateTime
     | LinkLeavesConnected shape -> LinkChanged(nonConnectedLink shape)
     | WriteOk -> WriteCompleted now
     | WriteFault -> WriteFaulted
+    | SetAddressAck -> SetAddressAcked
 
 /// Realize a script into concrete `BaptismEvent`s, folding the real
 /// `step` so deadline-relative ticks land on the intended side of the
@@ -173,28 +207,36 @@ let private realizeFrom (cfg: AttemptConfig) (start: BaptismState) (script: Scri
     List.rev evs
 
 /// Scripted run shape. `SuccessShaped` is the canonical successful
-/// decomposition of Lean `baptize_progress`'s RHS — claim-pending
-/// self-loops, the claim `WriteOk` pivot, window-keeping self-loops,
-/// the matching announcement, assign-pending self-loops, the assign
-/// `WriteOk` pivot, then an absorbed tail. `ArbitraryScript` is an
-/// unconstrained event mix.
+/// decomposition of Lean `baptize_progress`'s RHS (RW01, the 6-list /
+/// 3-instant shape) — claim-pending self-loops, the claim `WriteOk` pivot,
+/// window-keeping self-loops, the matching announcement, assign-pending
+/// self-loops, the assign `WriteOk` pivot, ACK-pending self-loops, the
+/// `SetAddressAck` pivot (F6), silence-window self-loops, the closing
+/// `TickAtDeadline` past the adoption deadline, then an absorbed tail.
+/// `ArbitraryScript` is an unconstrained event mix.
 type BaptismScript =
     | SuccessShaped of
         claimPending: ScriptedEvent list *
         waitWindow: ScriptedEvent list *
         assignPending: ScriptedEvent list *
+        ackPending: ScriptedEvent list *
+        silenceWindow: ScriptedEvent list *
         tail: ScriptedEvent list
     | ArbitraryScript of ScriptedEvent list
 
 let private scriptEvents (script: BaptismScript) : ScriptedEvent list =
     match script with
-    | SuccessShaped(claimPending, waitWindow, assignPending, tail) ->
+    | SuccessShaped(claimPending, waitWindow, assignPending, ackPending, silenceWindow, tail) ->
         claimPending
         @ [ WriteOk ]
         @ waitWindow
         @ [ MatchingAnnouncement ]
         @ assignPending
         @ [ WriteOk ]
+        @ ackPending
+        @ [ SetAddressAck ]
+        @ silenceWindow
+        @ [ TickAtDeadline ]
         @ tail
     | ArbitraryScript events -> events
 
@@ -234,6 +276,7 @@ let private anyScripted: Gen<ScriptedEvent> =
     Gen.frequency
         [ 2, Gen.constant MatchingAnnouncement
           2, Gen.map WrongVariantAnnouncement byteGen
+          1, Gen.constant VirginAnnouncement
           2, Gen.map ForeignAnnouncement byteGen
           2, Gen.constant TickBeforeDeadline
           2, Gen.constant TickAtDeadline
@@ -242,7 +285,8 @@ let private anyScripted: Gen<ScriptedEvent> =
           1, Gen.constant LinkStaysConnected
           1, Gen.map LinkLeavesConnected (Gen.choose (0, 2))
           3, Gen.constant WriteOk
-          1, Gen.constant WriteFault ]
+          1, Gen.constant WriteFault
+          2, Gen.constant SetAddressAck ]
 
 /// Self-loop-safe while a write is pending (`ClaimSent` / `Assigning`):
 /// everything except a write resolution or link loss self-loops there.
@@ -258,9 +302,26 @@ let private writePendingSafe: Gen<ScriptedEvent> =
           1, Gen.constant LinkStaysConnected ]
 
 /// Keeps the announce window open in `AwaitingAnnounce`: foreign uuids,
-/// ticks strictly before the deadline, selected-keeping snapshots, link
-/// up, and write resolutions (which self-loop while waiting).
+/// selected-uuid VIRGIN re-announces (F1: panel still mid-cycle, keeps
+/// waiting), ticks strictly before the deadline, selected-keeping snapshots,
+/// link up, and write resolutions (which self-loop while waiting).
 let private waitWindowSafe: Gen<ScriptedEvent> =
+    Gen.frequency
+        [ 3, Gen.map ForeignAnnouncement byteGen
+          2, Gen.constant VirginAnnouncement
+          3, Gen.constant TickBeforeDeadline
+          1, Gen.constant SnapshotKeepsSelected
+          1, Gen.constant LinkStaysConnected
+          1, Gen.constant WriteOk
+          1, Gen.constant WriteFault ]
+
+/// Keeps the adoption window open in `AwaitingAdoption` (either ack state):
+/// foreign uuids (no-op), ticks strictly before the adoption deadline,
+/// selected-keeping snapshots (a no-op in adoption — the matched panel cannot
+/// prune inside the window), link up, and write resolutions (which self-loop).
+/// A selected-uuid announce (matching / wrong / virgin), a tick at/past the
+/// deadline, or link loss all LEAVE the window, so none appear here.
+let private adoptionWindowSafe: Gen<ScriptedEvent> =
     Gen.frequency
         [ 3, Gen.map ForeignAnnouncement byteGen
           3, Gen.constant TickBeforeDeadline
@@ -276,8 +337,10 @@ let private scriptGen: Gen<BaptismScript> =
               let! claimPending = Gen.listOf writePendingSafe
               let! waitWindow = Gen.listOf waitWindowSafe
               let! assignPending = Gen.listOf writePendingSafe
+              let! ackPending = Gen.listOf adoptionWindowSafe
+              let! silenceWindow = Gen.listOf adoptionWindowSafe
               let! tail = Gen.listOf anyScripted
-              return SuccessShaped(claimPending, waitWindow, assignPending, tail)
+              return SuccessShaped(claimPending, waitWindow, assignPending, ackPending, silenceWindow, tail)
           }
           1, Gen.map ArbitraryScript (Gen.listOf anyScripted) ]
 
@@ -285,7 +348,8 @@ let private outcomeGen: Gen<BaptismOutcome> =
     Gen.elements
         [ Succeeded
           WaitTimeout
-          UnexpectedVariant Virgin
+          UnexpectedVariant(Unknown 0x42uy) // F1: UnexpectedVariant only on a non-virgin variant
+          ClaimNotAdopted
           PanelDisappeared
           LinkLost
           TransmissionFailure ClaimStep
@@ -299,6 +363,12 @@ let private stateGen: Gen<BaptismState> =
           Gen.choose (0, 3600)
           |> Gen.map (fun s -> AwaitingAnnounce(baseInstant.AddSeconds(float s)))
           2, Gen.constant Assigning
+          3,
+          gen {
+              let! s = Gen.choose (0, 3600)
+              let! ack = Gen.elements [ true; false ]
+              return AwaitingAdoption(baseInstant.AddSeconds(float s), ack)
+          }
           1, Gen.map Terminal outcomeGen ]
 
 /// FsCheck `Arbitrary` container — passed to `[<Property>]` via
@@ -354,18 +424,20 @@ let BaptismOutcomeTotal (scenario: BaptismScenario) =
     | _ -> false
 
 /// FsCheck property mirroring the Lean theorem `baptize_progress` in
-/// `Phase3/BaptismSequence.lean` (T017), per `data-model.md` §4.1 /
-/// FR-004/FR-006: a run reaches `Terminal Succeeded` IFF its trace
-/// decomposes as claim `WriteCompleted`, then an announcement matching
-/// the selected uuid AND chosen variant heard while waiting, then
-/// assign `WriteCompleted`. `SuccessShaped` scripts assert the
-/// completeness direction (the canonical shape always succeeds);
-/// `ArbitraryScript` runs assert the equivalence — soundness is the
-/// Lean decomposition, and decomposition ⇒ success follows because the
-/// assign-completion pivot lands in `Terminal Succeeded`, which absorbs
-/// the rest of the run (`terminal_absorbs`).
+/// `Phase3/BaptismSequence.lean` (RW01), per the confirmation-rework
+/// data-model §4.1 / FR-004/FR-006: a run reaches `Terminal Succeeded` IFF
+/// its trace decomposes as claim `WriteCompleted`, then an announcement
+/// matching the selected uuid AND chosen variant heard while waiting, then
+/// assign `WriteCompleted`, then the `SetAddressAcked` ACK while ACK-pending,
+/// then a closing `Tick` at/past the adoption deadline with the silence held
+/// (F6 confirmed adoption — the assign write completing no longer succeeds).
+/// `SuccessShaped` scripts assert the completeness direction (the canonical
+/// shape always confirms adoption and succeeds); `ArbitraryScript` runs assert
+/// the equivalence — soundness is the Lean decomposition, and decomposition ⇒
+/// success follows because the closing-tick pivot lands in `Terminal
+/// Succeeded`, which absorbs the rest of the run (`terminal_absorbs`).
 [<Property(Arbitrary = [| typeof<BaptismGenerators> |])>]
-let BaptismSucceedsIffMatchingAnnouncement (scenario: BaptismScenario) =
+let BaptismSucceedsIffConfirmedAdoption (scenario: BaptismScenario) =
     let cfg = scenario.Config
     let events = realizeFrom cfg (fst Baptism.start) (scriptEvents scenario.Script)
     let succeeded = run cfg events = Terminal Succeeded
@@ -374,6 +446,64 @@ let BaptismSucceedsIffMatchingAnnouncement (scenario: BaptismScenario) =
     match scenario.Script with
     | SuccessShaped _ -> succeeded && decomposed
     | ArbitraryScript _ -> succeeded = decomposed
+
+/// FsCheck property mirroring the Lean theorem `virgin_keeps_waiting` in
+/// `Phase3/BaptismSequence.lean` (RW01), the F1 fix: in `AwaitingAnnounce` a
+/// selected-uuid VIRGIN re-announce is a strict no-op (the panel is still
+/// mid-cycle, not rejected), and `UnexpectedVariant` fires ONLY on a
+/// non-virgin, non-chosen variant (`Marketing other` / `Unknown`). Stated at
+/// the transition level over a generated config, deadline, and announced byte.
+[<Property>]
+let VirginAnnounceKeepsWaiting (cfg: AttemptConfig) (machineType: byte) (seconds: int) =
+    let deadline = baseInstant.AddSeconds(float (abs (seconds % 3600)))
+
+    let virginStep =
+        Baptism.step cfg (AwaitingAnnounce deadline) (AnnouncementHeard(frameFor cfg.SelectedUuid BoardVariant.virginMarker))
+
+    let virginIsNoOp = virginStep = (AwaitingAnnounce deadline, NoAction)
+
+    let next, _ =
+        Baptism.step cfg (AwaitingAnnounce deadline) (AnnouncementHeard(frameFor cfg.SelectedUuid machineType))
+
+    let unexpectedOnlyOnOther =
+        match next with
+        | Terminal(UnexpectedVariant announced) -> announced <> Virgin && announced <> Marketing cfg.ChosenVariant
+        | _ -> true
+
+    virginIsNoOp && unexpectedOnlyOnOther
+
+/// FsCheck property for the FR-006a rule (confirmation-rework data-model
+/// §4.1): in `AwaitingAdoption`, ANY selected-uuid re-announce — matching,
+/// wrong, or virgin, regardless of `ackSeen` — means the panel is still
+/// announcing, i.e. it did NOT adopt the claim, so the attempt ends
+/// `ClaimNotAdopted` (silence is authoritative). Stated at the transition
+/// level; the run-level carrier is `BaptismSucceedsIffConfirmedAdoption`.
+[<Property>]
+let ClaimNotAdoptedWhenStillAnnouncing (cfg: AttemptConfig) (machineType: byte) (ackSeen: bool) (seconds: int) =
+    let deadline = baseInstant.AddSeconds(float (abs (seconds % 3600)))
+
+    let next, action =
+        Baptism.step cfg (AwaitingAdoption(deadline, ackSeen)) (AnnouncementHeard(frameFor cfg.SelectedUuid machineType))
+
+    next = Terminal ClaimNotAdopted && action = NoAction
+
+/// FsCheck property mirroring the Lean theorem `no_success_without_adoption`
+/// in `Phase3/BaptismSequence.lean` (RW01), the F6 carrier of "never a false
+/// success on write-completion": a run can reach `Terminal Succeeded` only if
+/// a `SetAddressAcked` (the `0x25` ACK) was observed AND a closing `Tick`
+/// happened — the two events the corrected gate adds over the shipped
+/// write-completion model.
+[<Property(Arbitrary = [| typeof<BaptismGenerators> |])>]
+let NoSuccessWithoutAdoption (scenario: BaptismScenario) =
+    let cfg = scenario.Config
+    let events = realizeFrom cfg (fst Baptism.start) (scriptEvents scenario.Script)
+
+    if run cfg events = Terminal Succeeded then
+        let sawAck = events |> List.exists (function SetAddressAcked -> true | _ -> false)
+        let sawTick = events |> List.exists (function Tick _ -> true | _ -> false)
+        sawAck && sawTick
+    else
+        true
 
 /// FsCheck property mirroring the Lean theorem
 /// `foreign_uuid_never_transitions` in `Phase3/BaptismSequence.lean`

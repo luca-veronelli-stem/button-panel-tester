@@ -97,11 +97,12 @@ let private newHarnessWith (link: IClock -> ICanLinkService) : Harness =
     let clock = FrozenClock(fixedNow)
     let canLink = link (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     let discovery = new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
 
     let service =
-        new BaptismService(transmitter, observer, discovery, canLink, clock, NullLogger<BaptismService>.Instance)
+        new BaptismService(transmitter, observer, ackObserver, discovery, canLink, clock, NullLogger<BaptismService>.Instance)
 
     { Clock = clock; Transmitter = transmitter; Service = service }
 
@@ -196,6 +197,7 @@ let Reset_LinkDropsMidPair_LinkLostAfterFirstBroadcast () =
     let clock = FrozenClock(fixedNow)
     let canLink = connectThenDisconnectLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     use discovery = new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = DeferredTransmitter()
 
@@ -203,6 +205,7 @@ let Reset_LinkDropsMidPair_LinkLostAfterFirstBroadcast () =
         new BaptismService(
             transmitter :> IMasterSequenceTransmitter,
             observer,
+            ackObserver,
             discovery,
             canLink,
             clock,

@@ -82,15 +82,28 @@ let private collectWarnings (svc: IBaptismService) =
     svc.WarningRaised |> Observable.subscribe (fun u -> seen.Add u) |> ignore
     seen
 
-/// Drive one full success: emit the virgin frame so discovery sees the
-/// panel, launch `BaptizeAsync` WITHOUT awaiting (the synchronous claim
-/// write parks the FSM in `AwaitingAnnounce`), then emit the matching
-/// variant frame so the attempt reaches `Succeeded`. Returns the completed
-/// outcome (asserted `Succeeded` by callers).
-let private driveSuccess (service: BaptismService) (observer: InMemoryWhoIAmObserver) (uuid: uint32 * uint32 * uint32) (variant: MarketingVariant) : BaptismOutcome =
+/// Drive one full success through the corrected F6 gate: emit the virgin
+/// frame so discovery sees the panel, launch `BaptizeAsync` WITHOUT awaiting
+/// (the synchronous claim write parks the FSM in `AwaitingAnnounce`), emit
+/// the matching variant frame (→ Assigning → assign write → AwaitingAdoption,
+/// NOT yet success), then confirm adoption — observe the `0x25` ACK and hold
+/// silence past the adoption deadline (assign-complete + adoptionBudget) so a
+/// closing tick reaches `Succeeded` at `fixedNow + adoptionBudget + 1 s`.
+/// Returns the completed outcome (asserted `Succeeded` by callers).
+let private driveSuccess
+    (clock: FrozenClock)
+    (service: BaptismService)
+    (observer: InMemoryWhoIAmObserver)
+    (ackObserver: InMemorySetAddressAckObserver)
+    (uuid: uint32 * uint32 * uint32)
+    (variant: MarketingVariant)
+    : BaptismOutcome =
     observer.Emit(frameOf 0xFFuy uuid)
     let task = service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
     observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+    ackObserver.Emit fixedNow
+    clock.SetTo(fixedNow + Baptism.adoptionBudget + TimeSpan.FromSeconds 1.0)
+    service.RunDeadlineTick()
     task.GetAwaiter().GetResult()
 
 // --- (1) heard within window → exactly one warning ---
@@ -100,23 +113,26 @@ let PostSuccess_ClaimedUuidHeardWithinWindow_RaisesWarningOnce () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     use discovery = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
 
     use service =
-        new BaptismService(transmitter, observer, discovery, link, clock, NullLogger<BaptismService>.Instance)
+        new BaptismService(transmitter, observer, ackObserver, discovery, link, clock, NullLogger<BaptismService>.Instance)
 
     let warnings = collectWarnings (service :> IBaptismService)
     let uuid = (0x177Cu, 0x126Du, 0x7308u)
 
-    Assert.Equal(Succeeded, driveSuccess service observer uuid EdenXp)
+    Assert.Equal(Succeeded, driveSuccess clock service observer ackObserver uuid EdenXp)
 
     // The success-triggering announcement must NOT already have fired a
     // warning — the watch was armed BY that very announcement.
     Assert.Empty warnings
 
-    // Within the 15 s window the claimed uuid is heard again → claim did not take.
-    clock.SetTo(fixedNow.AddSeconds 5.0)
+    // Within the 15 s post-success window (success was at fixedNow + 7 s, so
+    // the window runs to fixedNow + 22 s) the claimed uuid is heard again →
+    // the claim did not take, and the residual FR-007 backstop fires once.
+    clock.SetTo(fixedNow.AddSeconds 10.0)
     observer.Emit(frameOf (BoardVariant.encode EdenXp) uuid)
 
     Assert.Equal<PanelUuid list>([ PanelUuid uuid ], List.ofSeq warnings)
@@ -128,16 +144,17 @@ let PostSuccess_NewAttemptCancelsWatch_NoWarning () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     use discovery = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
 
     use service =
-        new BaptismService(transmitter, observer, discovery, link, clock, NullLogger<BaptismService>.Instance)
+        new BaptismService(transmitter, observer, ackObserver, discovery, link, clock, NullLogger<BaptismService>.Instance)
 
     let warnings = collectWarnings (service :> IBaptismService)
     let uuid = (0x1u, 0x2u, 0x3u)
 
-    Assert.Equal(Succeeded, driveSuccess service observer uuid EdenXp)
+    Assert.Equal(Succeeded, driveSuccess clock service observer ackObserver uuid EdenXp)
     Assert.Empty warnings
 
     // A fresh attempt starts and cancels the prior watch (`data-model.md`
@@ -148,9 +165,10 @@ let PostSuccess_NewAttemptCancelsWatch_NoWarning () =
     let _ = service.BaptizeAsync(PanelUuid uuid, EdenXp, CancellationToken.None)
 
     // The claimed uuid heard now belongs to the cancelled watch → no warning.
-    // (The new attempt parks in `AwaitingAnnounce`; this matching frame drives
-    // it to a second success, which arms a fresh watch — not the old one.)
-    clock.SetTo(fixedNow.AddSeconds 2.0)
+    // (The new attempt parks in `AwaitingAnnounce`; this matching frame only
+    // drives it to `AwaitingAdoption` — without an ACK + closing tick it never
+    // reaches a second success, and it never re-arms the old, cancelled watch.)
+    clock.SetTo(fixedNow.AddSeconds 8.0)
     observer.Emit(frameOf (BoardVariant.encode EdenXp) uuid)
 
     Assert.Empty warnings
@@ -162,23 +180,24 @@ let PostSuccess_LinkLossCancelsWatch_NoWarning () =
     let clock = FrozenClock(fixedNow)
     let link = connectThenDisconnectLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     use discovery = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
 
     use service =
-        new BaptismService(transmitter, observer, discovery, link, clock, NullLogger<BaptismService>.Instance)
+        new BaptismService(transmitter, observer, ackObserver, discovery, link, clock, NullLogger<BaptismService>.Instance)
 
     let warnings = collectWarnings (service :> IBaptismService)
     let uuid = (0x1u, 0x2u, 0x3u)
 
-    Assert.Equal(Succeeded, driveSuccess service observer uuid EdenXp)
+    Assert.Equal(Succeeded, driveSuccess clock service observer ackObserver uuid EdenXp)
     Assert.Empty warnings
 
     // Drive the link out of Connected — this cancels the pending watch silently.
     link.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
 
     // A re-announcement of the claimed uuid now must not fire a warning.
-    clock.SetTo(fixedNow.AddSeconds 3.0)
+    clock.SetTo(fixedNow.AddSeconds 10.0)
     observer.Emit(frameOf (BoardVariant.encode EdenXp) uuid)
 
     Assert.Empty warnings
@@ -190,20 +209,22 @@ let PostSuccess_WindowExpires_NoWarning () =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     use discovery = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
 
     use service =
-        new BaptismService(transmitter, observer, discovery, link, clock, NullLogger<BaptismService>.Instance)
+        new BaptismService(transmitter, observer, ackObserver, discovery, link, clock, NullLogger<BaptismService>.Instance)
 
     let warnings = collectWarnings (service :> IBaptismService)
     let uuid = (0x1u, 0x2u, 0x3u)
 
-    Assert.Equal(Succeeded, driveSuccess service observer uuid EdenXp)
+    Assert.Equal(Succeeded, driveSuccess clock service observer ackObserver uuid EdenXp)
     Assert.Empty warnings
 
-    // Advance past the 15 s window and tick the deadline timer — expiry is silent.
-    clock.SetTo(fixedNow.AddSeconds 16.0)
+    // Advance past the 15 s window (success was at fixedNow + 7 s, so it ends at
+    // fixedNow + 22 s) and tick the deadline timer — expiry is silent.
+    clock.SetTo(fixedNow.AddSeconds 23.0)
     service.RunDeadlineTick()
     Assert.Empty warnings
 

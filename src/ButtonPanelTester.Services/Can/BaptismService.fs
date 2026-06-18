@@ -86,6 +86,7 @@ type BaptismService
     (
         transmitter: IMasterSequenceTransmitter,
         whoIAm: IWhoIAmObserver,
+        setAddressAck: ISetAddressAckObserver,
         discovery: IPanelDiscoveryService,
         link: ICanLinkService,
         clock: IClock,
@@ -298,6 +299,19 @@ type BaptismService
     /// the FR-007 post-success watch (see `onWhoIAm`).
     let _whoIAmSubscription: IDisposable =
         whoIAm.WhoIAmObserved |> Observable.subscribe onWhoIAm
+
+    /// Held so the SET_ADDRESS ACK subscription outlives the ctor; detached
+    /// in `Dispose` alongside `_whoIAmSubscription`. Feeds the `0x25`
+    /// application ACK (the RW03 `ISetAddressAckObserver`) into the FSM as
+    /// `SetAddressAcked` — the adoption fast-positive consumed in
+    /// `AwaitingAdoption` (F6). The 250 ms `deadlineTimer` already drives the
+    /// adoption-deadline `Tick`s, so no other timer work is needed. The
+    /// carried timestamp is audit/correlation only (silence is authoritative),
+    /// so the FSM event carries no payload. A no-op while no attempt is active
+    /// or the attempt is already terminal (`apply` absorbs it).
+    let _setAddressAckSubscription: IDisposable =
+        setAddressAck.SetAddressAckObserved
+        |> Observable.subscribe (fun _ -> apply SetAddressAcked)
 
     /// Held so the presence subscription outlives the ctor; detached in
     /// `Dispose`. Feeds discovery snapshots so a pruned-away selected panel
@@ -529,5 +543,6 @@ type BaptismService
         member _.Dispose() =
             deadlineTimer.Dispose()
             _whoIAmSubscription.Dispose()
+            _setAddressAckSubscription.Dispose()
             _discoverySubscription.Dispose()
             _linkSubscription.Dispose()

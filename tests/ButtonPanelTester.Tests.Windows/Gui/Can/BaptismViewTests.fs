@@ -382,6 +382,7 @@ let private connectedService () : IBaptismService * InMemoryMasterSequenceTransm
     let canLink = CanLinkService(link, clock, NullLogger<CanLinkService>.Instance) :> ICanLinkService
     canLink.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     let discovery =
         new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock)
@@ -390,6 +391,7 @@ let private connectedService () : IBaptismService * InMemoryMasterSequenceTransm
         new BaptismService(
             transmitter,
             observer,
+            ackObserver,
             discovery,
             canLink,
             clock,
