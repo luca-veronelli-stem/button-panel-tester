@@ -527,37 +527,43 @@ semantics are proven at the live boundary. The feature is **Done**.
 
 ## Phase G: Polish & cross-cutting concerns
 
-- [ ] T040 [P] XML-doc audit of the new public surfaces per COMMENTS / stem-fp §10:
+- [X] T040 [P] XML-doc audit of the new public surfaces per COMMENTS / stem-fp §10:
       `BoardVariant`, `WhoAreYouFrame`, `SetAddressFrame`, `Baptism` (types + predicates),
       `IMasterSequenceTransmitter`, `ProtocolMasterSequenceTransmitter`,
       `InMemoryMasterSequenceTransmitter`, `IBaptismService`/`BaptismService`,
       `BaptismLogging`, `BaptismView` — Lean citations in the house format (module path +
       theorem name + authoring task), contract paths current.
-- [ ] T041 [P] Logging audit per LOGGING / stem-logging over the baptism path
+- [X] T041 [P] Logging audit per LOGGING / stem-logging over the baptism path
       (`BaptismService`, `BaptismLogging`, `ProtocolMasterSequenceTransmitter`): typed
       `ILogger<T>`, template messages with named params (no string interpolation),
       exception-as-first-arg, no `Console.WriteLine` / `Debug.WriteLine` on production paths.
-- [ ] T042 [P] Principle V + FR-013 compliance audit over the baptism path: zero OS-user /
+- [X] T042 [P] Principle V + FR-013 compliance audit over the baptism path: zero OS-user /
       machine-name / SID / MAC fields anywhere (panel UUIDs are device hardware identifiers —
       plan §V; audit records carry no operator identity, clarification 5); no per-panel
       persistence beyond the structured log — no registry, no claim history, no lockout
       (FR-013). Expected zero hits.
-- [ ] T043 [P] FR-014 TX whitelist audit (CHK027 at code level): grep the production tree for
+- [X] T043 [P] FR-014 TX whitelist audit (CHK027 at code level): grep the production tree for
       CAN send/write surfaces — `IMasterSequenceTransmitter` is the **only** TX port, its
       production adapter sends **only** the two command codes (`0x00:0x23` claim/reset,
       `0x00:0x25` assignment), every send sits behind a technician-initiated service
       operation gated on `Connected`; the RX ports (`ICanFrameStream`, `IWhoIAmObserver`)
       remain send-free; discovery still transmits nothing (spec-003 FR-009 preserved).
-- [ ] T044 [P] `cd lean; lake build` — the ten Phase 3 theorems of data-model §8
+- [X] T044 [P] `cd lean; lake build` — the ten Phase 3 theorems of data-model §8
       (`parse_encode_roundtrip` + `encode_length` per codec module, `encode_decode_inverse`,
       `baptize_progress`, `baptize_outcome_total`, `no_assignment_without_match`,
       `baptize_enabled_iff`, `reset_enabled_iff`) compile with no `sorry`;
       `#print axioms` on each shows only {`propext`, `Classical.choice`, `Quot.sound`}.
-- [ ] T045 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Baptism workflow — claim a virgin
+- [X] T045 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Baptism workflow — claim a virgin
       panel as a marketed variant and reset claimed panels to virgin via the auto-address
       master sequence; first CAN-transmit feature (spec-004)."
-- [ ] T046 [P] Update `README.md`: link `specs/004-baptism-workflow/quickstart.md` and add a
-      one-paragraph mention of the baptism workflow beside the Panels-on-bus list mention.
+- [X] T046 [P] Update `README.md`: link `specs/004-baptism-workflow/quickstart.md` and add a
+      one-paragraph mention of the baptism workflow beside the Panels-on-bus list mention; rewrite
+      `quickstart.md` §Hardware E2E as a per-case run-sheet (preconditions + per-case `--filter`; the
+      FR-014 live capture needs a *separate* adapter).
+- [ ] T047 Harden `BaptismHardwareTests.fs` (`Baptize...`, `FullCycle...`) with a bounded
+      retry-on-`WaitTimeout` per claim (FR-005 / quickstart "re-run Baptize"), so a valid claim at the
+      announce-budget edge under rapid re-baptize is not a test failure; the 6 s budget and the
+      confirmed-adoption gate are unchanged. Added from the #218 bench (RW08).
 
 ---
 
