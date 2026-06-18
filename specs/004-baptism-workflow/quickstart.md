@@ -31,12 +31,18 @@ panel** physically on the bus.
 2. Select the row — the baptism surface activates (it stays disabled unless **exactly one** panel
    announces, FR-002).
 3. Pick a variant (EDEN-XP / OPTIMUS-XP / R-3L XP / EDEN-BS8) and press **Baptize**.
-4. Within 6 s you get a definitive outcome (SC-001). On success the message explains the panel
-   now goes **silent by design** and its row will age out of the list within the 15 s pruning
-   window — expected behaviour, not a fault (FR-006).
+4. Within the **combined outcome budget** (≤ 6 s re-announcement wait + ≤ one announcement period of
+   adoption confirmation) you get a definitive outcome (SC-001). Success is reported **only on
+   confirmed adoption** — the panel acknowledges the SET_ADDRESS (the `0x25` ACK) **and** is confirmed
+   silent on the broadcast for at least one announcement period; the message then explains the
+   now-claimed panel goes **silent by design** and its row ages out within the 15 s pruning window
+   (FR-006/SC-002). Write-completion alone is no longer success.
 5. On a wait-timeout: the panel may still re-announce late carrying the target variant — it stays
    visible and claimable; re-run **Baptize** to complete the claim, or **Reset** to start over
    (FR-005). The tool never silently upgrades a failure to success.
+6. On **claim-not-adopted** (the address was assigned but the panel stayed announcing / never confirmed
+   silent — the F6 state, now caught deterministically): the outcome states the claim did **not take**
+   and guides you straight into **Reset to virgin → re-baptize** (FR-006a/FR-015/SC-007).
 
 ### Reset to virgin
 
@@ -60,13 +66,24 @@ zero state between cycles (FR-013) — the fourth cycle is indistinguishable fro
 under #112 — excluded from default CI by the `Category!=Hardware` filter):
 
 ```powershell
-$env:BPT_HARDWARE = '1'   # plus the interactive gate if the run needs operator action
+$env:BPT_HARDWARE = '1'                # the unattended claim / reset legs
+$env:BPT_HARDWARE_INTERACTIVE = '1'    # + the attended recovery / full-cycle legs
 dotnet test tests/ButtonPanelTester.Tests.Windows -c Release --filter "Category=Hardware"
 ```
 
-Covers: claim E2E (success within budget; bus capture shows the claimed UUID goes silent,
-SC-002), reset E2E (virgin row back within 6 s, SC-003), full cycle (SC-004). Bench needs one
-virgin panel per firmware-type class exercised.
+On the **confirmed-adoption** criterion — reaching `Succeeded` requires the `0x25` ACK + held
+broadcast-silence (never write-completion), so a green claim case IS the SC-002 proof. Covers:
+- **claim E2E** (`HardwareFact`) — confirmed adoption within the combined budget (SC-001/002, FR-006);
+- **reset E2E** (`HardwareFact`) — a virgin row back within 6 s (SC-003);
+- **recovery E2E** (`ManualHardwareFact`) — recover a not-adopted panel via Reset → re-baptize;
+  asserts the F1 fix (a post-reset transient virgin re-announce never false-fails) (SC-007, FR-015);
+- **full cycle** (`ManualHardwareFact`) — all four variants on one panel, zero residual state (SC-004).
+
+**Attended capture (not automated):** FR-014 (the tool emits only master-sequence frames) is verified
+by running PCAN-View on a second channel during the claim/reset legs — PCANBasic exposes no TX counter.
+The **first bench validation of the reverse-engineered `0x25` ACK arbId** lands here: if it is wrong,
+the claim case ends `ClaimNotAdopted` (not `Succeeded`) with a diagnostic naming the tool srid. Bench
+needs one virgin panel per firmware-type class exercised.
 
 ## Troubleshooting
 

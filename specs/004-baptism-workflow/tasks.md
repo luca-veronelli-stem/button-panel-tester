@@ -499,7 +499,7 @@ bench tracker [#112](https://github.com/luca-veronelli-stem/button-panel-tester/
 this feature adds its hooks there and does not expand #112's scope (plan Constitution Check
 IV). Bench needs one virgin panel per fwType class exercised.
 
-- [ ] T038 **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/BaptismHardwareTests.fs`,
+- [X] T038 **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/BaptismHardwareTests.fs`,
       every case `[<Trait("Category","Hardware")>]` (excluded by the default
       `Category!=Hardware` CI filter) + the shipped env-gated attributes — **never** a bare
       `[<Fact(Skip=…)>]` (#142 lesson): `[<HardwareFact>]` (`BPT_HARDWARE=1`) **claim E2E** —
