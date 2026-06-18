@@ -89,6 +89,15 @@ let private confirmedAdoptionTimeout =
 /// is generous slack for the PEAK write path.
 let private resetWriteTimeout = TimeSpan.FromSeconds 6.0
 
+/// FR-015 operator-recovery bound: how many Reset -> re-baptize rounds a single claim attempts before
+/// surfacing the failure. Bench RW08 (v04test8.trc, frame-verified) showed rapid cycling can leave a
+/// VALID claim half-adopted — `WaitTimeout` (the panel never re-announces the variant) or
+/// `ClaimNotAdopted` (SET_ADDRESS sent, panel ACKs `02 80 23` not `02 80 25` and keeps announcing) —
+/// and only a Reset clears that half-baptized state (a bare re-claim cannot: the panel is no longer
+/// virgin, so a virgin-wait finds nothing). THREE bounded rounds model the spec'd operator remedy
+/// without ever spinning unbounded.
+let private maxClaimAttempts = 3
+
 // --- helpers ---
 
 /// The selected uuid of a Virgin row in a discovery snapshot, if any (machineType `0xFF`). On a clean
@@ -197,6 +206,43 @@ let private buildBaptismChain () : ICanLinkService * IPanelDiscoveryService * IB
 
     (svc :> ICanLinkService), (discovery :> IPanelDiscoveryService), (baptism :> IBaptismService), cleanup
 
+/// The FR-015 operator-recovery claim: select the currently-settled Virgin row and baptize it, and when
+/// the claim does NOT take, run the operator's spec'd remedy — Reset-to-virgin then re-baptize — up to
+/// `maxClaimAttempts` bounded rounds (never an unbounded loop). Recovery fires ONLY on the half-adopted
+/// outcomes `WaitTimeout`/`ClaimNotAdopted`; every other outcome is a real failure the bench must see,
+/// so it returns IMMEDIATELY. Returns `Some Succeeded` on confirmed adoption (possibly after a recovery
+/// round), `Some <outcome>` for a genuine failure (including a `WaitTimeout`/`ClaimNotAdopted` that
+/// survives the final round), or `None` when there is no settled Virgin row to claim / no definitive
+/// outcome within budget. The Reset between rounds is best-effort (its result is ignored — a failed
+/// reset simply surfaces as no-virgin on the next round).
+let private claimWithResetRecovery
+    (discovery: IPanelDiscoveryService)
+    (baptism: IBaptismService)
+    (variant: MarketingVariant)
+    (ct: CancellationToken)
+    : BaptismOutcome option =
+    let rec attempt n =
+        match waitForCurrentVirginUuid discovery discoveryTimeout with
+        | None -> None
+        | Some uuid ->
+            match awaitOutcome (baptism.BaptizeAsync(uuid, variant, ct)) confirmedAdoptionTimeout with
+            | Some Succeeded -> Some Succeeded
+            | Some((WaitTimeout | ClaimNotAdopted) as outcome) when n < maxClaimAttempts ->
+                Console.WriteLine(
+                    sprintf
+                        "FR-015 recovery: claim of %A as %A ended %A (attempt %d/%d) — Reset-to-virgin then re-baptize."
+                        uuid
+                        variant
+                        outcome
+                        n
+                        maxClaimAttempts)
+
+                awaitOutcome (baptism.ResetAsync(true, ct)) resetWriteTimeout |> ignore
+                attempt (n + 1)
+            | other -> other
+
+    attempt 1
+
 // --- SC-001/002, FR-006: a powered virgin panel reaches CONFIRMED adoption (unattended) ---
 
 [<Trait("Category", "Hardware")>]
@@ -209,17 +255,13 @@ let Baptize_RealVirginPanel_ConfirmedAdoptionWithinCombinedBudget () =
     // discovery coalesces the virgin row while the link is Connected.
     link.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    match waitForCurrentVirginUuid discovery discoveryTimeout with
-    | None ->
-        Assert.Fail(
-            sprintf
-                "no Virgin Panels-on-bus row within %.1f s — verify a powered VIRGIN panel is on the bus"
-                discoveryTimeout.TotalSeconds)
-    | Some uuid ->
+    try
+        // FR-015 operator path: claim the settled Virgin row, recovering via Reset -> re-baptize if the
+        // claim does not take. Reaching `Succeeded` (possibly after a bounded recovery round) is the
+        // SC-002 confirmed-adoption proof, end-to-end on real silicon.
         let variant = EdenXp
-        let attempt = baptism.BaptizeAsync(uuid, variant, CancellationToken.None)
 
-        match awaitOutcome attempt confirmedAdoptionTimeout with
+        match claimWithResetRecovery discovery baptism variant CancellationToken.None with
         | Some Succeeded ->
             // SC-002: reaching `Succeeded` under the production FSM means the service observed the
             // 0x25 SET_ADDRESS ACK addressed to the tool AND held broadcast-silence through the full
@@ -228,22 +270,26 @@ let Baptize_RealVirginPanel_ConfirmedAdoptionWithinCombinedBudget () =
             // prune window) is supplementary, logged for the RW08 capture rather than asserted.
             Console.WriteLine(
                 sprintf
-                    "Confirmed adoption for %A as %A: the claimed panel is silent by design; its row ages out within the 15 s prune window (SC-002 capture)."
-                    uuid
+                    "Confirmed adoption as %A: the claimed panel is silent by design; its row ages out within the 15 s prune window (SC-002 capture)."
                     variant)
         | Some other ->
             Assert.Fail(
                 sprintf
-                    "baptism of %A as %A ended %A, not Succeeded — on a confirmed-adoption run, ClaimNotAdopted here most likely means the 0x25 ACK was not observed: verify the tool srid (%d) and capture the bus to confirm the directed-reply arbId"
-                    uuid
+                    "baptism as %A ended %A, not Succeeded even after a bounded Reset -> re-baptize — on a confirmed-adoption run, ClaimNotAdopted here most likely means the 0x25 ACK was not observed: verify the tool srid (%d) and capture the bus to confirm the directed-reply arbId"
                     variant
                     other
                     DeviceVariantConfig.DefaultSenderId)
         | None ->
             Assert.Fail(
-                sprintf
-                    "no definitive baptism outcome within %.1f s — verify a powered VIRGIN panel is on the bus and re-announcing"
-                    confirmedAdoptionTimeout.TotalSeconds)
+                "no Virgin Panels-on-bus row / no definitive baptism outcome within budget — verify a powered VIRGIN panel is on the bus and re-announcing")
+    finally
+        // Teardown hygiene: a failed leg can leave the panel half-baptized and pollute the next run, so
+        // best-effort Reset-to-virgin before `cleanup` (use _ = cleanup) disposes the chain. Swallowed:
+        // a faulting reset here must never mask the test's own assertion.
+        try
+            awaitOutcome (baptism.ResetAsync(true, CancellationToken.None)) resetWriteTimeout |> ignore
+        with _ ->
+            ()
 
 // --- SC-003: a claimed panel reset-to-virgin surfaces a Virgin row within ~6 s (unattended) ---
 
@@ -346,29 +392,36 @@ let FullCycle_FourVariants_ZeroResidualState () =
     Console.WriteLine(
         "Full-cycle bench check: one physical panel re-typed across all four variants. Keep it powered on the bus throughout; the tool resets it to virgin between cycles.")
 
-    // Each cycle is baptize -> confirmed adoption -> reset-to-virgin. The tool holds NO state between
-    // attempts (FR-013), so the 4th cycle is indistinguishable from the 1st: every cycle must reach
-    // `Succeeded` then return the panel to a Virgin row. Uniform success across all four, with no
-    // degradation, is the zero-residual-state evidence (SC-004). The selected uuid is the one physical
-    // panel; its UUID is stable across resets (a hardware id, not an assigned address).
-    for variant in [ EdenXp; OptimusXp; R3LXp; EdenBs8 ] do
-        match waitForCurrentVirginUuid discovery discoveryTimeout with
-        | None ->
-            Assert.Fail(
-                sprintf
-                    "cycle %A: no Virgin row within %.1f s — verify the panel is powered and re-announcing"
-                    variant
-                    discoveryTimeout.TotalSeconds)
-        | Some uuid ->
-            match awaitOutcome (baptism.BaptizeAsync(uuid, variant, CancellationToken.None)) confirmedAdoptionTimeout with
+    try
+        // Each cycle is claim (with FR-015 Reset -> re-baptize recovery) -> confirmed adoption ->
+        // reset-to-virgin. The tool holds NO state between attempts (FR-013), so the 4th cycle is
+        // indistinguishable from the 1st: every cycle must reach `Succeeded` then return the panel to a
+        // Virgin row. Uniform success across all four, with no degradation, is the zero-residual-state
+        // evidence (SC-004). The selected uuid is the one physical panel; its UUID is stable across
+        // resets (a hardware id, not an assigned address).
+        for variant in [ EdenXp; OptimusXp; R3LXp; EdenBs8 ] do
+            match claimWithResetRecovery discovery baptism variant CancellationToken.None with
             | Some Succeeded -> ()
-            | Some other -> Assert.Fail(sprintf "cycle %A: baptism ended %A, not Succeeded" variant other)
+            | Some other ->
+                Assert.Fail(
+                    sprintf "cycle %A: baptism ended %A, not Succeeded even after a bounded Reset -> re-baptize" variant other)
             | None ->
                 Assert.Fail(
-                    sprintf "cycle %A: no confirmed adoption within %.1f s" variant confirmedAdoptionTimeout.TotalSeconds)
+                    sprintf
+                        "cycle %A: no Virgin row / no confirmed adoption within budget — verify the panel is powered and re-announcing"
+                        variant)
 
+            // Per-leg success reset stays: return the panel to virgin before the next variant.
             match awaitOutcome (baptism.ResetAsync(true, CancellationToken.None)) resetWriteTimeout with
             | Some Sent -> ()
             | Some other -> Assert.Fail(sprintf "cycle %A: reset ended %A, not Sent" variant other)
             | None ->
                 Assert.Fail(sprintf "cycle %A: reset did not complete within %.1f s" variant resetWriteTimeout.TotalSeconds)
+    finally
+        // Teardown hygiene: a failed leg can leave the panel half-baptized and pollute the next run, so
+        // best-effort Reset-to-virgin before `cleanup` (use _ = cleanup) disposes the chain. Swallowed:
+        // a faulting reset here must never mask the test's own assertion.
+        try
+            awaitOutcome (baptism.ResetAsync(true, CancellationToken.None)) resetWriteTimeout |> ignore
+        with _ ->
+            ()

@@ -560,10 +560,14 @@ semantics are proven at the live boundary. The feature is **Done**.
       one-paragraph mention of the baptism workflow beside the Panels-on-bus list mention; rewrite
       `quickstart.md` §Hardware E2E as a per-case run-sheet (preconditions + per-case `--filter`; the
       FR-014 live capture needs a *separate* adapter).
-- [ ] T047 Harden `BaptismHardwareTests.fs` (`Baptize...`, `FullCycle...`) with a bounded
-      retry-on-`WaitTimeout` per claim (FR-005 / quickstart "re-run Baptize"), so a valid claim at the
-      announce-budget edge under rapid re-baptize is not a test failure; the 6 s budget and the
-      confirmed-adoption gate are unchanged. Added from the #218 bench (RW08).
+- [X] T047 Harden `BaptismHardwareTests.fs` (`Baptize...`, `FullCycle...`) with a bounded
+      Reset -> re-baptize recovery per claim (FR-015 operator remedy): on `WaitTimeout`/`ClaimNotAdopted`
+      the `claimWithResetRecovery` helper logs an FR-015 note, resets the panel to virgin (best-effort),
+      and re-baptizes, up to `maxClaimAttempts = 3` rounds, so a valid claim left half-adopted under
+      rapid re-baptize is recovered the spec'd way rather than failing the bench; every other outcome
+      returns immediately. Plus a `try/finally` teardown reset so a failed leg leaves the panel virgin
+      and does not pollute the next run. The 6 s budget and the confirmed-adoption gate are unchanged.
+      Added from the #218 bench (RW08).
 
 ---
 
