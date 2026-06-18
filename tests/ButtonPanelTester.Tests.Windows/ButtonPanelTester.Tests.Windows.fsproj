@@ -56,6 +56,7 @@
         <Compile Include="Integration/Can/CompositionRootCanTests.fs" />
         <Compile Include="Integration/Can/Hardware/PcanLifecycleTests.fs" />
         <Compile Include="Integration/Can/Hardware/DiscoveryHardwareTests.fs" />
+        <Compile Include="Integration/Can/Hardware/BaptismHardwareTests.fs" />
     </ItemGroup>
 
     <ItemGroup>

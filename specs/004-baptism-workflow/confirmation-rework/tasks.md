@@ -179,7 +179,7 @@ code-complete** (ValidationPending — the bench proof is RW08).
 > re-bases its existing claim/reset E2E on the corrected criterion (confirmed adoption, not
 > write-completion).
 
-- [ ] RW07 **[AMEND]** `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/BaptismHardwareTests.fs`:
+- [X] RW07 **[AMEND]** `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/BaptismHardwareTests.fs`:
       re-base the claim E2E on confirmed adoption (assert the `0x25` ACK + broadcast-silence, SC-002,
       not write-completion); add a **recovery E2E** `[<HardwareFact>]` (SC-007) — induce a
       not-adopted state, recover via Reset → re-baptize to a confirmed adoption; assert F1 no longer
