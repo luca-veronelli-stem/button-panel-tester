@@ -142,7 +142,7 @@ success path consumes it yet.
       (e) F1 — a virgin re-announce during `AwaitingAnnounce` keeps waiting, a later chosen-variant
       announce still succeeds; (f) link-loss in `AwaitingAdoption` → `LinkLost`. (FR-004/006/006a/007;
       SC-001/002)
-- [ ] RW05 **[AMEND]** `BaptismLogging.fs` + `BaptismLoggingTests.fs`: the audit record covers the
+- [X] RW05 **[AMEND]** `BaptismLogging.fs` + `BaptismLoggingTests.fs`: the audit record covers the
       new `ClaimNotAdopted` outcome and the `adoption confirmed` step-reached value; still exactly
       one record per attempt across all seven outcomes (SC-006). (FR-012)
 

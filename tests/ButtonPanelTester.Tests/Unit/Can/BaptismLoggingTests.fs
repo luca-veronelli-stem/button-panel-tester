@@ -31,6 +31,7 @@ let OutcomeName_AllShapes_RenderStableNames () =
     Assert.Equal("Succeeded", BaptismLogging.outcomeName Succeeded)
     Assert.Equal("WaitTimeout", BaptismLogging.outcomeName WaitTimeout)
     Assert.Equal("UnexpectedVariant", BaptismLogging.outcomeName (UnexpectedVariant(Marketing OptimusXp)))
+    Assert.Equal("ClaimNotAdopted", BaptismLogging.outcomeName ClaimNotAdopted)
     Assert.Equal("PanelDisappeared", BaptismLogging.outcomeName PanelDisappeared)
     Assert.Equal("LinkLost", BaptismLogging.outcomeName LinkLost)
     Assert.Equal("TransmissionFailure.ClaimStep", BaptismLogging.outcomeName (TransmissionFailure ClaimStep))
@@ -180,6 +181,28 @@ let Baptize_Succeeded_EmitsOneRecord () =
     // The success terminal is reached FROM AwaitingAdoption (the closing tick),
     // so the furthest pre-terminal step is now "AwaitingAdoption" (was "Assigning").
     assertAudit (auditValues h) "Succeeded" "EdenXp" "0000177C-0000126D-00007308" "AwaitingAdoption"
+
+// --- ClaimNotAdopted: one record, StepReached "AwaitingAdoption" (F6) ---
+
+[<Fact>]
+let Baptize_ClaimNotAdopted_EmitsOneRecord () =
+    let h = newHarness ()
+    let uuid = (0x1u, 0x2u, 0x3u)
+    let variant = EdenXp
+    h.Observer.Emit(frameOf 0xFFuy uuid)
+
+    let task = h.Service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
+    // Match → Assigning → assign write → AwaitingAdoption (F6, not yet terminal).
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+    // The selected panel re-announces during the adoption window: still announcing
+    // ⇒ it did not adopt the claim → `ClaimNotAdopted` (FR-006a), deterministically.
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+    Assert.Equal(ClaimNotAdopted, task.GetAwaiter().GetResult())
+
+    // ClaimNotAdopted is reached FROM AwaitingAdoption (the refuting re-announce),
+    // so the furthest pre-terminal step is "AwaitingAdoption" — the same phase a
+    // confirmed success passes through, here refuted rather than confirmed.
+    assertAudit (auditValues h) "ClaimNotAdopted" "EdenXp" "00000001-00000002-00000003" "AwaitingAdoption"
 
 // --- UnexpectedVariant: one record, StepReached "AwaitingAnnounce" ---
 
