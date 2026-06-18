@@ -63,27 +63,33 @@ zero state between cycles (FR-013) — the fourth cycle is indistinguishable fro
 ## Hardware E2E suite (manual pre-release check)
 
 `BaptismHardwareTests.fs` (`Category=Hardware`, env-gated like the spec-002/003 suites, tracked
-under #112 — excluded from default CI by the `Category!=Hardware` filter):
+under #112 — excluded from default CI by the `Category!=Hardware` filter). On the
+**confirmed-adoption** criterion: reaching `Succeeded` requires the `0x25` ACK + held broadcast-silence
+(never write-completion), so a green claim case IS the SC-002 proof.
 
-```powershell
-$env:BPT_HARDWARE = '1'                # the unattended claim / reset legs
-$env:BPT_HARDWARE_INTERACTIVE = '1'    # + the attended recovery / full-cycle legs
-dotnet test tests/ButtonPanelTester.Tests.Windows -c Release --filter "Category=Hardware"
-```
+**Run the cases one at a time, each with its precondition — do NOT run the whole `Category=Hardware`
+filter in one shot.** The cases mutate panel state (a claim leaves the panel silent, so the next case
+finds no virgin), share the single PEAK handle, and two are attended; a batch run conflates ordering and
+state. If a claim reports `WaitTimeout` at the announce-budget edge — the spec-acknowledged tail
+(FR-005): a freshly-reset panel re-announces just past the 6 s budget, most likely on a rapid
+re-baptize — re-run that case; it completes on the retry.
 
-On the **confirmed-adoption** criterion — reaching `Succeeded` requires the `0x25` ACK + held
-broadcast-silence (never write-completion), so a green claim case IS the SC-002 proof. Covers:
-- **claim E2E** (`HardwareFact`) — confirmed adoption within the combined budget (SC-001/002, FR-006);
-- **reset E2E** (`HardwareFact`) — a virgin row back within 6 s (SC-003);
-- **recovery E2E** (`ManualHardwareFact`) — recover a not-adopted panel via Reset → re-baptize;
-  asserts the F1 fix (a post-reset transient virgin re-announce never false-fails) (SC-007, FR-015);
-- **full cycle** (`ManualHardwareFact`) — all four variants on one panel, zero residual state (SC-004).
+Common precondition: PEAK connected (250 kbps, 120 Ω both ends, 24 V), one panel on the bus. Each
+command is `dotnet test tests/ButtonPanelTester.Tests.Windows -c Release --filter "<filter>"`.
 
-**Attended capture (not automated):** FR-014 (the tool emits only master-sequence frames) is verified
-by running PCAN-View on a second channel during the claim/reset legs — PCANBasic exposes no TX counter.
-The **first bench validation of the reverse-engineered `0x25` ACK arbId** lands here: if it is wrong,
-the claim case ends `ClaimNotAdopted` (not `Succeeded`) with a diagnostic naming the tool srid. Bench
-needs one virgin panel per firmware-type class exercised.
+| Case | Env gate | Panel precondition | `--filter` |
+|---|---|---|---|
+| **claim E2E** (SC-001/002, FR-006) | `BPT_HARDWARE=1` | one **virgin** panel | `FullyQualifiedName~Baptize_RealVirginPanel_ConfirmedAdoptionWithinCombinedBudget` |
+| **reset E2E** (SC-003) | `BPT_HARDWARE=1` | one **claimed (silent)** panel | `FullyQualifiedName~Reset_RealClaimedPanel_VirginRowWithin6s` |
+| **recovery E2E** (SC-007, FR-015) | `BPT_HARDWARE_INTERACTIVE=1` | attended; induce a not-adopted state | `FullyQualifiedName~Recover_NotAdoptedPanel_ResetThenReBaptize` |
+| **full cycle** (SC-004, FR-013) | `BPT_HARDWARE_INTERACTIVE=1` | one virgin panel, powered throughout | `FullyQualifiedName~FullCycle_FourVariants_ZeroResidualState` |
+
+**FR-014 capture (attended, not automated):** to confirm the tool emits only master-sequence frames,
+run PCAN-View on a **separate** PEAK adapter on the same bus during a claim — a single shared adapter
+does **not** show the tool's own TX (it sees only the panel's broadcasts), so this capture genuinely
+needs a second adapter. The reverse-engineered `0x25` ACK arbId is validated by the claim case reaching
+`Succeeded`; if it were wrong, the claim ends `ClaimNotAdopted` with a diagnostic naming the tool srid.
+Bench needs one virgin panel per firmware-type class exercised.
 
 ## Troubleshooting
 
