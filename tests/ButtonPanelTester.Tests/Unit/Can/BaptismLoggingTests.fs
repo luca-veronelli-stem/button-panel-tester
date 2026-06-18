@@ -98,6 +98,7 @@ let private frameOf (machineType: byte) (u0, u1, u2) : WhoIAmFrame =
 type private Harness =
     { Clock: FrozenClock
       Observer: InMemoryWhoIAmObserver
+      AckObserver: InMemorySetAddressAckObserver
       Discovery: PanelDiscoveryService
       Transmitter: InMemoryMasterSequenceTransmitter
       Logger: RecordingLogger<BaptismService>
@@ -107,15 +108,17 @@ let private newHarnessWith (link: IClock -> ICanLinkService) : Harness =
     let clock = FrozenClock(fixedNow)
     let canLink = link (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     let discovery = new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
     let logger = RecordingLogger<BaptismService>()
 
     let service =
-        new BaptismService(transmitter, observer, discovery, canLink, clock, logger)
+        new BaptismService(transmitter, observer, ackObserver, discovery, canLink, clock, logger)
 
     { Clock = clock
       Observer = observer
+      AckObserver = ackObserver
       Discovery = discovery
       Transmitter = transmitter
       Logger = logger
@@ -156,7 +159,7 @@ let private assertAudit
     Assert.True(DateTimeOffset.TryParse(string values.["StartedAt"]) |> fst)
     Assert.True(DateTimeOffset.TryParse(string values.["CompletedAt"]) |> fst)
 
-// --- Succeeded: one record, StepReached "Assigning" ---
+// --- Succeeded: one record, StepReached "AwaitingAdoption" ---
 
 [<Fact>]
 let Baptize_Succeeded_EmitsOneRecord () =
@@ -166,10 +169,17 @@ let Baptize_Succeeded_EmitsOneRecord () =
     h.Observer.Emit(frameOf 0xFFuy uuid)
 
     let task = h.Service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
+    // Match → Assigning → assign write → AwaitingAdoption (F6): success is now
+    // reached only after the 0x25 ACK plus held silence past the adoption deadline.
     h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+    h.AckObserver.Emit fixedNow
+    h.Clock.SetTo(fixedNow + Baptism.adoptionBudget + TimeSpan.FromSeconds 1.0)
+    h.Service.RunDeadlineTick()
     Assert.Equal(Succeeded, task.GetAwaiter().GetResult())
 
-    assertAudit (auditValues h) "Succeeded" "EdenXp" "0000177C-0000126D-00007308" "Assigning"
+    // The success terminal is reached FROM AwaitingAdoption (the closing tick),
+    // so the furthest pre-terminal step is now "AwaitingAdoption" (was "Assigning").
+    assertAudit (auditValues h) "Succeeded" "EdenXp" "0000177C-0000126D-00007308" "AwaitingAdoption"
 
 // --- UnexpectedVariant: one record, StepReached "AwaitingAnnounce" ---
 

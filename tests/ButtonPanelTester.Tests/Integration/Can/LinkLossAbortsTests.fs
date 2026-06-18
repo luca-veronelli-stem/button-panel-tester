@@ -100,6 +100,7 @@ let LinkLoss_DuringClaimSent_AbortsWithLinkLost () =
     let clock = FrozenClock(fixedNow)
     let canLink = connectThenDisconnectLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     use discovery = new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = DeferredTransmitter()
 
@@ -107,6 +108,7 @@ let LinkLoss_DuringClaimSent_AbortsWithLinkLost () =
         new BaptismService(
             transmitter :> IMasterSequenceTransmitter,
             observer,
+            ackObserver,
             discovery,
             canLink,
             clock,
@@ -135,6 +137,7 @@ let LinkLoss_DuringAwaitingAnnounce_AbortsWithLinkLost () =
     let clock = FrozenClock(fixedNow)
     let canLink = connectThenDisconnectLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     use discovery = new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = DeferredTransmitter()
 
@@ -142,6 +145,7 @@ let LinkLoss_DuringAwaitingAnnounce_AbortsWithLinkLost () =
         new BaptismService(
             transmitter :> IMasterSequenceTransmitter,
             observer,
+            ackObserver,
             discovery,
             canLink,
             clock,
@@ -169,6 +173,7 @@ let LinkLoss_DuringAssigning_AbortsWithLinkLost () =
     let clock = FrozenClock(fixedNow)
     let canLink = connectThenDisconnectLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     use discovery = new PanelDiscoveryService(observer, canLink, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = DeferredTransmitter()
 
@@ -176,6 +181,7 @@ let LinkLoss_DuringAssigning_AbortsWithLinkLost () =
         new BaptismService(
             transmitter :> IMasterSequenceTransmitter,
             observer,
+            ackObserver,
             discovery,
             canLink,
             clock,

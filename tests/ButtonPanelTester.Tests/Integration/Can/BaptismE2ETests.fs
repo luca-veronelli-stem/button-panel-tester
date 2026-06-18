@@ -30,9 +30,17 @@ open Stem.ButtonPanelTester.Tests.Fakes.Can
 /// Coverage:
 ///   - (a) happy path: virgin panel announcing the chosen variant → the
 ///         WHO_ARE_YOU echoes the announced fwType and the SET_ADDRESS
-///         carries the selected uuid + computed spAddress; `Succeeded`.
-///   - (b) wrong variant: a matching uuid announcing a different marketed
-///         identity → `UnexpectedVariant`, ZERO SET_ADDRESS (FR-004).
+///         carries the selected uuid + computed spAddress; the assign write
+///         opens the F6 adoption window, and `Succeeded` is reached only
+///         after the `0x25` ACK plus held silence past the deadline.
+///   - (F1) a transient virgin re-announce keeps waiting; the later chosen
+///         variant still proceeds (no false `UnexpectedVariant`).
+///   - (F6) assign written + selected-uuid re-announce → `ClaimNotAdopted`;
+///         ACK then a re-announce breaking silence → `ClaimNotAdopted`;
+///         silence held but no ACK by the deadline → `ClaimNotAdopted` (D2);
+///         link loss in AwaitingAdoption → `LinkLost`.
+///   - (b) wrong variant: a matching uuid announcing a different NON-virgin
+///         marketed identity → `UnexpectedVariant`, ZERO SET_ADDRESS (FR-004).
 ///   - (c) pruned before match: discovery drops the selected uuid before
 ///         any announcement → `PanelDisappeared`.
 ///   - (d) scripted faults, no retry: claim fault → `TransmissionFailure
@@ -55,6 +63,20 @@ let private connectedLink (clock: IClock) : ICanLinkService =
     (svc :> ICanLinkService).InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
     svc :> ICanLinkService
 
+/// A scripted link: Connected, then Disconnected. `InitializeAsync` reaches
+/// Connected; a later `ReconnectAsync` dequeues the Disconnected step so the
+/// link leaves `Connected` mid-attempt (the `PostSuccessWarningTests`
+/// precedent). Used by the AwaitingAdoption link-loss case.
+let private connectThenDisconnectLink (clock: IClock) : ICanLinkService =
+    let link =
+        InMemoryCanLink(seq {
+            (Connected(fixedAdapter, fixedNow), TimeSpan.Zero)
+            (Disconnected(MidSessionUnplug, fixedNow), TimeSpan.Zero)
+        })
+    let svc = CanLinkService(link, clock, NullLogger<CanLinkService>.Instance)
+    (svc :> ICanLinkService).InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
+    svc :> ICanLinkService
+
 /// Build a decoded WHO_I_AM frame: the given machine-type byte and a
 /// non-trivial 24 V `0x000F` announced fwType, so the WHO_ARE_YOU echo is
 /// actually proven distinct from the discovery suites' `0x0004`.
@@ -70,6 +92,7 @@ let private frameOf (machineType: byte) (u0, u1, u2) : WhoIAmFrame =
 type private Harness =
     { Clock: FrozenClock
       Observer: InMemoryWhoIAmObserver
+      AckObserver: InMemorySetAddressAckObserver
       Discovery: PanelDiscoveryService
       Transmitter: InMemoryMasterSequenceTransmitter
       Service: BaptismService }
@@ -78,6 +101,7 @@ let private newHarness () : Harness =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
     let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
     let discovery = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
 
@@ -85,6 +109,7 @@ let private newHarness () : Harness =
         new BaptismService(
             transmitter,
             observer,
+            ackObserver,
             discovery,
             link,
             clock,
@@ -92,9 +117,21 @@ let private newHarness () : Harness =
 
     { Clock = clock
       Observer = observer
+      AckObserver = ackObserver
       Discovery = discovery
       Transmitter = transmitter
       Service = service }
+
+/// Drive the F6 adoption-confirmation window to `Succeeded`: observe the
+/// `0x25` ACK, then hold broadcast-silence (no selected-uuid re-announce)
+/// past the adoption deadline (assign-write completion + `adoptionBudget`).
+/// The assign write completed at `fixedNow`, so the deadline is
+/// `fixedNow + adoptionBudget`; a tick one second past it closes the window
+/// `Succeeded` (ACK seen + silence held).
+let private confirmAdoption (h: Harness) =
+    h.AckObserver.Emit fixedNow
+    h.Clock.SetTo(fixedNow + Baptism.adoptionBudget + TimeSpan.FromSeconds 1.0)
+    h.Service.RunDeadlineTick()
 
 // --- (a) happy path: fwType echo + computed spAddress + Succeeded ---
 
@@ -109,8 +146,14 @@ let Baptize_VirginAnnouncesChosenVariant_EchoesFwTypeAndAssigns () =
 
     let task = h.Service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
 
-    // The matching announcement (chosen variant byte) drives the FSM to terminal.
+    // The matching announcement assigns and opens the F6 adoption window: the
+    // assign write completing no longer succeeds — it parks in AwaitingAdoption.
     h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+    Assert.False task.IsCompleted
+
+    // Confirmed adoption: the 0x25 ACK plus held broadcast-silence past the
+    // adoption deadline closes the window `Succeeded` (FR-006).
+    confirmAdoption h
 
     let outcome = task.GetAwaiter().GetResult()
 
@@ -122,6 +165,120 @@ let Baptize_VirginAnnouncesChosenVariant_EchoesFwTypeAndAssigns () =
         [ (WhoAreYouSent(BoardVariant.encode variant, announcedFwType, true), fixedNow)
           (SetAddressSent(PanelUuid uuid, expectedSpAddress), fixedNow) ],
         h.Transmitter.Sent)
+
+// --- (F1) a transient virgin re-announce keeps waiting; the chosen variant still proceeds ---
+
+[<Fact>]
+let Baptize_VirginReannounceKeepsWaiting_ThenChosenVariantSucceeds () =
+    let h = newHarness ()
+    let uuid = (0x1u, 0x2u, 0x3u)
+    let variant = EdenXp
+    h.Observer.Emit(frameOf 0xFFuy uuid)
+
+    let task = h.Service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
+
+    // A selected-uuid VIRGIN re-announce mid-cycle is NOT a rejection (F1): the
+    // panel is still announcing pre-claim, so the FSM keeps waiting — no
+    // SET_ADDRESS, the attempt stays live in AwaitingAnnounce.
+    h.Observer.Emit(frameOf 0xFFuy uuid)
+    Assert.False task.IsCompleted
+    Assert.Equal(AwaitingAnnounce(fixedNow + Baptism.announceBudget), h.Service.CurrentState)
+    Assert.DoesNotContain(h.Transmitter.Sent, (fun (send, _) -> match send with SetAddressSent _ -> true | _ -> false))
+
+    // The panel then announces the chosen variant → claim proceeds; once
+    // adoption is confirmed (ACK + silence), it succeeds.
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+    confirmAdoption h
+
+    Assert.Equal(Succeeded, task.GetAwaiter().GetResult())
+
+// --- (F6) assign written, panel keeps announcing → ClaimNotAdopted ---
+
+[<Fact>]
+let Baptize_AssignedThenPanelReannounces_ClaimNotAdopted () =
+    let h = newHarness ()
+    let uuid = (0x1u, 0x2u, 0x3u)
+    let variant = EdenXp
+    h.Observer.Emit(frameOf 0xFFuy uuid)
+
+    let task = h.Service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
+    // Match → Assigning → assign write → AwaitingAdoption (not yet terminal, F6).
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+    Assert.False task.IsCompleted
+
+    // The selected panel re-announces during the adoption window: still
+    // announcing ⇒ it did not adopt the claim — `ClaimNotAdopted` (FR-006a),
+    // deterministically (silence is authoritative).
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+
+    Assert.Equal(ClaimNotAdopted, task.GetAwaiter().GetResult())
+
+// --- (ACK then broken silence) the 0x25 ACK arrives but the panel re-announces → ClaimNotAdopted ---
+
+[<Fact>]
+let Baptize_AckThenPanelReannounces_ClaimNotAdopted () =
+    let h = newHarness ()
+    let uuid = (0x1u, 0x2u, 0x3u)
+    let variant = EdenXp
+    h.Observer.Emit(frameOf 0xFFuy uuid)
+
+    let task = h.Service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid) // → AwaitingAdoption
+
+    // The ACK is a FAST POSITIVE only: it arrives, but a subsequent selected-uuid
+    // re-announce BREAKS the silence — silence is authoritative, so not adopted.
+    h.AckObserver.Emit fixedNow
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid)
+
+    Assert.Equal(ClaimNotAdopted, task.GetAwaiter().GetResult())
+
+// --- (D2 strict) silence held but no 0x25 ACK by the deadline → ClaimNotAdopted ---
+
+[<Fact>]
+let Baptize_SilenceHeldButNoAck_ClaimNotAdopted () =
+    let h = newHarness ()
+    let uuid = (0x1u, 0x2u, 0x3u)
+    let variant = EdenXp
+    h.Observer.Emit(frameOf 0xFFuy uuid)
+
+    let task = h.Service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
+    h.Observer.Emit(frameOf (BoardVariant.encode variant) uuid) // → AwaitingAdoption
+    Assert.False task.IsCompleted
+
+    // Silence holds (no re-announce) but the 0x25 ACK never arrives; the adoption
+    // deadline elapses → `ClaimNotAdopted` (D2 strict: never a false success on a
+    // dropped ACK — re-baptizing an already-adopted panel is harmless).
+    h.Clock.SetTo(fixedNow + Baptism.adoptionBudget + TimeSpan.FromSeconds 1.0)
+    h.Service.RunDeadlineTick()
+
+    Assert.Equal(ClaimNotAdopted, task.GetAwaiter().GetResult())
+
+// --- (link loss in adoption) the link leaves Connected during AwaitingAdoption → LinkLost ---
+
+[<Fact>]
+let Baptize_LinkLostDuringAdoption_LinkLost () =
+    let clock = FrozenClock(fixedNow)
+    let link = connectThenDisconnectLink (clock :> IClock)
+    let observer = InMemoryWhoIAmObserver()
+    let ackObserver = InMemorySetAddressAckObserver()
+    use discovery = new PanelDiscoveryService(observer, link, clock, NullLogger<PanelDiscoveryService>.Instance)
+    let transmitter = InMemoryMasterSequenceTransmitter(clock :> IClock)
+
+    use service =
+        new BaptismService(transmitter, observer, ackObserver, discovery, link, clock, NullLogger<BaptismService>.Instance)
+
+    let uuid = (0x1u, 0x2u, 0x3u)
+    let variant = EdenXp
+    observer.Emit(frameOf 0xFFuy uuid)
+
+    let task = service.BaptizeAsync(PanelUuid uuid, variant, CancellationToken.None)
+    observer.Emit(frameOf (BoardVariant.encode variant) uuid) // → AwaitingAdoption
+    Assert.False task.IsCompleted
+
+    // The link leaves Connected during the adoption window → LinkLost (CHK015).
+    link.ReconnectAsync(CancellationToken.None).GetAwaiter().GetResult()
+
+    Assert.Equal(LinkLost, task.GetAwaiter().GetResult())
 
 // --- (b) wrong variant: UnexpectedVariant, no SET_ADDRESS ---
 

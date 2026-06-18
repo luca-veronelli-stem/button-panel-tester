@@ -12,54 +12,72 @@ type SequenceStep =
     | ClaimStep
     | AssignStep
 
-/// Closed taxonomy of baptism-attempt outcomes — exactly six, per
-/// `data-model.md` §4.2 (FR-005). `UnexpectedVariant` carries the
-/// announced identity so the GUI names what the panel actually claimed
-/// to be; `TransmissionFailure` carries which write faulted.
-/// `WaitTimeout` carries no payload here — the FR-005/clarification-4
-/// recovery guidance TEXT (late re-announce, re-run Baptize or Reset)
-/// is rendered by the baptism service slice, not by Core.
-/// Mirrors the Lean inductive `BaptismOutcome` (same case order);
-/// closure is witnessed by the Lean theorem `baptize_outcome_total` in
-/// `Phase3/BaptismSequence.lean` (T017) and by the FsCheck property
+/// Closed taxonomy of baptism-attempt outcomes — exactly SEVEN, per
+/// `data-model.md` confirmation-rework §4.2 (FR-005/FR-006a; supersedes
+/// the parent §4.2's six). `UnexpectedVariant` carries the announced
+/// identity so the GUI names what the panel actually claimed to be, and
+/// fires ONLY on a different NON-virgin variant (F1: a selected-uuid
+/// virgin re-announce keeps waiting, never `UnexpectedVariant`).
+/// `ClaimNotAdopted` (NEW, FR-006a) is the F6 non-success — the assign
+/// wrote but the panel kept announcing, or the adoption window elapsed
+/// without the `0x25` ACK; it carries no payload (its FR-015 reset →
+/// re-baptize guidance is fixed). `TransmissionFailure` carries which
+/// write faulted. `WaitTimeout` / `ClaimNotAdopted` carry no payload
+/// here — their recovery guidance TEXT is rendered by the service/GUI
+/// slice, not by Core.
+/// Mirrors the Lean inductive `BaptismOutcome` (same case order); closure
+/// is witnessed by the Lean theorem `baptize_outcome_total` in
+/// `Phase3/BaptismSequence.lean` (T017/RW01) and by the FsCheck property
 /// `BaptismOutcomeTotal` in
-/// `Tests/Property/Can/BaptismSequenceProperties.fs` (T020); adding a
-/// case requires updating both.
+/// `Tests/Property/Can/BaptismSequenceProperties.fs`. The F6 success gate
+/// is the formal carrier `no_success_without_adoption` and the F1 keep-
+/// waiting is `virgin_keeps_waiting`; adding a case requires updating both
+/// the Lean proof and the FsCheck coverage.
 type BaptismOutcome =
     | Succeeded
     | WaitTimeout
     | UnexpectedVariant of announced: VariantIdentity
+    | ClaimNotAdopted
     | PanelDisappeared
     | LinkLost
     | TransmissionFailure of step: SequenceStep
 
-/// Baptism-attempt FSM states, per `data-model.md` §4.1:
-/// `Idle → ClaimSent → AwaitingAnnounce → Assigning → Terminal`.
-/// `AwaitingAnnounce` CARRIES its deadline — entry instant plus
-/// `Baptism.announceBudget`, anchored at claim-write completion
-/// (CHK010). The six §4.1 `Succeeded`/`Failed_*` sinks collapse into
-/// `Terminal outcome`, and a terminal state absorbs every further
-/// event (Lean `terminal_absorbs`) — the carrier of the FR-005/
-/// clarification-4 never-flip rule: a matching announcement arriving
-/// after a reported `WaitTimeout` never flips the outcome.
-/// Mirrors the Lean inductive `BaptismState` (T017) — same case
-/// order; the Lean model's abstract `Nat` instants refine to
-/// `DateTimeOffset` here.
+/// Baptism-attempt FSM states, per `data-model.md` confirmation-rework
+/// §4.1: `Idle → ClaimSent → AwaitingAnnounce → Assigning →
+/// AwaitingAdoption → Terminal`. `AwaitingAnnounce` CARRIES its deadline
+/// — entry instant plus `Baptism.announceBudget`, anchored at claim-write
+/// completion (CHK010). `AwaitingAdoption` (NEW, F6) is the adoption-
+/// confirmation window the assign write opens INSTEAD of succeeding: it
+/// carries its deadline (entry instant plus `Baptism.adoptionBudget`,
+/// anchored at assign-write completion) AND `ackSeen` — whether the
+/// `0x25` application ACK has been observed yet; `Succeeded` requires it.
+/// The `Succeeded`/`Failed_*` sinks collapse into `Terminal outcome`, and
+/// a terminal state absorbs every further event (Lean `terminal_absorbs`)
+/// — the carrier of the FR-005/clarification-4 never-flip rule: a
+/// matching announcement arriving after a reported `WaitTimeout` never
+/// flips the outcome. Mirrors the Lean inductive `BaptismState`
+/// (T017/RW01) — same case order; the Lean model's abstract `Nat`
+/// instants refine to `DateTimeOffset` here.
 type BaptismState =
     | Idle
     | ClaimSent
     | AwaitingAnnounce of deadline: DateTimeOffset
     | Assigning
+    | AwaitingAdoption of deadline: DateTimeOffset * ackSeen: bool
     | Terminal of outcome: BaptismOutcome
 
 /// The observable FSM inputs, in the `data-model.md` §4.3 row order,
 /// with the RICH source payloads (`WhoIAmFrame`, `PanelsOnBus`,
-/// `CanLinkState`). The Lean `BaptismEvent` (T017) abstracts these to
-/// the one bit/pair each state consumes — `(uuid, variant)` for
+/// `CanLinkState`). The Lean `BaptismEvent` (T017/RW01) abstracts these
+/// to the one bit/pair each state consumes — `(uuid, variant)` for
 /// announcements, `Bool` for presence and connectivity — and
 /// `Baptism.step` performs that reduction: uuid + decoded variant from
 /// the frame, `Map.containsKey` on the snapshot, Connected-or-not on
-/// the link state.
+/// the link state. `SetAddressAcked` (NEW, confirmation-rework §4.3) is
+/// the RX observation of the `0x25` SET_ADDRESS application ACK addressed
+/// to the tool (the RW03 `ISetAddressAckObserver`) — the adoption fast-
+/// positive consumed in `AwaitingAdoption`; it carries no payload (the
+/// load-bearing fact is that it fired).
 type BaptismEvent =
     | AnnouncementHeard of WhoIAmFrame
     | Tick of now: DateTimeOffset
@@ -67,6 +85,7 @@ type BaptismEvent =
     | LinkChanged of CanLinkState
     | WriteCompleted of now: DateTimeOffset
     | WriteFaulted
+    | SetAddressAcked
 
 /// The effect channel of `Baptism.step`: what the service must
 /// transmit after a transition. `SendClaim` is the WHO_ARE_YOU claim
@@ -144,6 +163,17 @@ module Baptism =
     /// `announceBudget` (T017), `Nat` milliseconds refined to `TimeSpan`.
     let announceBudget: TimeSpan = TimeSpan.FromSeconds 6.0
 
+    /// The adoption-confirmation budget: 6 s, per the confirmation-rework
+    /// data-model §Budgets — one worst-case announce period, anchored at
+    /// SET_ADDRESS write completion (see the `Assigning` arm of `step`). A
+    /// panel that adopted is silent immediately; the window only has to
+    /// outlast one announce period to prove the silence is real, not a gap
+    /// between announcements. SC-001's definitive-outcome bound is
+    /// `announceBudget + adoptionBudget` (the two waits are sequential).
+    /// Mirrors Lean `adoptionBudget` (RW01), `Nat` milliseconds refined to
+    /// `TimeSpan`.
+    let adoptionBudget: TimeSpan = TimeSpan.FromSeconds 6.0
+
     /// The Baptize-press transition (`Idle → ClaimSent`, §4.1): the
     /// attempt enters `ClaimSent` and the service performs the
     /// WHO_ARE_YOU claim write. The FR-002 enablement guards are
@@ -173,25 +203,28 @@ module Baptism =
         | LinkChanged _ -> (Terminal LinkLost, NoAction)
         | _ -> (ClaimSent, NoAction)
 
-    /// `AwaitingAnnounce` arm of `step` — the §4.1 wait. A selected-
-    /// uuid announcement decoding to the chosen variant advances to
-    /// `Assigning` and emits `SendAssign` (FR-004); a selected-uuid
-    /// announcement with any other identity ends in `UnexpectedVariant`
-    /// carrying the decoded identity; a FOREIGN uuid is a strict no-op
-    /// (Lean `foreign_uuid_never_transitions`, FsCheck
-    /// `ForeignUuidNeverSatisfiesWait`); a tick at/past the deadline
-    /// ends in `WaitTimeout` (FR-005); a snapshot no longer containing
-    /// the selected uuid ends in `PanelDisappeared`; the link leaving
-    /// `Connected` ends in `LinkLost`; write resolutions self-loop.
+    /// `AwaitingAnnounce` arm of `step` — the §4.1 wait, with the F1 fix
+    /// (Lean `virgin_keeps_waiting`). A selected-uuid announcement branches
+    /// THREE ways on the decoded variant: the chosen marketing variant
+    /// advances to `Assigning` and emits `SendAssign` (FR-004); `Virgin`
+    /// (`0xFF`) is the panel still mid-cycle, NOT a rejection, so the FSM
+    /// KEEPS WAITING; any other non-virgin variant (`Marketing other` /
+    /// `Unknown`) ends in `UnexpectedVariant` carrying the decoded identity.
+    /// A FOREIGN uuid is a strict no-op (Lean `foreign_uuid_never_transitions`,
+    /// FsCheck `ForeignUuidNeverSatisfiesWait`); a tick at/past the deadline
+    /// ends in `WaitTimeout` (FR-005); a snapshot no longer containing the
+    /// selected uuid ends in `PanelDisappeared`; the link leaving `Connected`
+    /// ends in `LinkLost`; write resolutions and the ACK self-loop.
     let private stepAwaiting (cfg: AttemptConfig) (deadline: DateTimeOffset) (event: BaptismEvent) =
         match event with
         | AnnouncementHeard frame when frame.Uuid = cfg.SelectedUuid ->
             let announced = VariantDecoder.decode frame.MachineType
 
-            if announced = Marketing cfg.ChosenVariant then
-                (Assigning, SendAssign)
-            else
-                (Terminal(UnexpectedVariant announced), NoAction)
+            match announced with
+            | Marketing v when v = cfg.ChosenVariant -> (Assigning, SendAssign)
+            | Virgin -> (AwaitingAnnounce deadline, NoAction)
+            | Marketing _
+            | Unknown _ -> (Terminal(UnexpectedVariant announced), NoAction)
         | Tick now when deadline <= now -> (Terminal WaitTimeout, NoAction)
         | PanelsChanged snapshot when not (Map.containsKey cfg.SelectedUuid snapshot) ->
             (Terminal PanelDisappeared, NoAction)
@@ -201,34 +234,63 @@ module Baptism =
         | Tick _
         | PanelsChanged _
         | WriteCompleted _
-        | WriteFaulted -> (AwaitingAnnounce deadline, NoAction)
+        | WriteFaulted
+        | SetAddressAcked -> (AwaitingAnnounce deadline, NoAction)
 
-    /// `Assigning` arm of `step`: the assign write resolves. Completion
-    /// is `Succeeded` (FR-006); a fault ends in `TransmissionFailure
-    /// AssignStep`; the link leaving `Connected` ends in `LinkLost`;
-    /// everything else self-loops.
+    /// `Assigning` arm of `step` — the assign write resolves (F6). Completion
+    /// at `now` no longer succeeds the attempt: it opens the adoption-
+    /// confirmation window `AwaitingAdoption(now + adoptionBudget, ackSeen =
+    /// false)`. A fault ends in `TransmissionFailure AssignStep`; the link
+    /// leaving `Connected` ends in `LinkLost`; everything else self-loops.
     let private stepAssigning (event: BaptismEvent) : BaptismState * BaptismAction =
         match event with
-        | WriteCompleted _ -> (Terminal Succeeded, NoAction)
+        | WriteCompleted now -> (AwaitingAdoption(now + adoptionBudget, false), NoAction)
         | WriteFaulted -> (Terminal(TransmissionFailure AssignStep), NoAction)
         | LinkChanged(Connected _) -> (Assigning, NoAction)
         | LinkChanged _ -> (Terminal LinkLost, NoAction)
         | _ -> (Assigning, NoAction)
 
+    /// `AwaitingAdoption` arm of `step` — the §4.1 confirmation wait (F6,
+    /// Lean `no_success_without_adoption`). The `0x25` application ACK
+    /// (`SetAddressAcked`) records `ackSeen := true`; a selected-uuid
+    /// re-announce means the panel is STILL announcing, i.e. NOT adopted →
+    /// `ClaimNotAdopted` (FR-006a), regardless of variant or `ackSeen`
+    /// (silence is authoritative). A foreign uuid is a strict no-op; a
+    /// `PanelsChanged` is a no-op (the just-matched panel cannot prune inside
+    /// the window — silence is the absence of an announce, not a prune); a
+    /// tick at/past the deadline closes the window — `Succeeded` iff `ackSeen`
+    /// (ACK + held silence, FR-006), else `ClaimNotAdopted` (FR-006a, the D2
+    /// strict gate: never a false success on a dropped ACK). The link leaving
+    /// `Connected` ends in `LinkLost`; writes and sub-deadline ticks self-loop
+    /// preserving `ackSeen`.
+    let private stepAwaitingAdoption (cfg: AttemptConfig) (deadline: DateTimeOffset) (ackSeen: bool) (event: BaptismEvent) =
+        match event with
+        | SetAddressAcked -> (AwaitingAdoption(deadline, true), NoAction)
+        | AnnouncementHeard frame when frame.Uuid = cfg.SelectedUuid -> (Terminal ClaimNotAdopted, NoAction)
+        | Tick now when deadline <= now ->
+            (Terminal(if ackSeen then Succeeded else ClaimNotAdopted), NoAction)
+        | LinkChanged(Connected _) -> (AwaitingAdoption(deadline, ackSeen), NoAction)
+        | LinkChanged _ -> (Terminal LinkLost, NoAction)
+        | AnnouncementHeard _
+        | Tick _
+        | PanelsChanged _
+        | WriteCompleted _
+        | WriteFaulted -> (AwaitingAdoption(deadline, ackSeen), NoAction)
+
     /// Pure TOTAL transition function over (attempt config, state,
     /// event), returning the next state AND the action to perform —
     /// the arm-for-arm transcription of Lean `step` in
-    /// `Phase3/BaptismSequence.lean` (T017), per the `data-model.md`
-    /// §4.1 transition table, with the Lean event abstractions reduced
-    /// here against the rich §4.3 payloads (see `BaptismEvent`).
-    /// `Terminal` absorbs every event — terminal-state idempotence
-    /// (Lean `terminal_absorbs`), the never-flip rule: once an outcome
-    /// is reported, no later event (including a late matching
-    /// announcement after `WaitTimeout`) changes it. The governing
-    /// theorems `baptize_progress`, `baptize_outcome_total` and
-    /// `no_assignment_without_match` (T017) are witnessed at the value
-    /// level by the FsCheck properties in
-    /// `Tests/Property/Can/BaptismSequenceProperties.fs` (T020).
+    /// `Phase3/BaptismSequence.lean` (T017/RW01), per the confirmation-
+    /// rework `data-model.md` §4.1 transition table, with the Lean event
+    /// abstractions reduced here against the rich §4.3 payloads (see
+    /// `BaptismEvent`). `Terminal` absorbs every event — terminal-state
+    /// idempotence (Lean `terminal_absorbs`), the never-flip rule: once an
+    /// outcome is reported, no later event (including a late matching
+    /// announcement after `WaitTimeout`) changes it. The governing theorems
+    /// `baptize_progress`, `baptize_outcome_total`, `no_assignment_without_match`,
+    /// `virgin_keeps_waiting` (F1) and `no_success_without_adoption` (F6,
+    /// RW01) are witnessed at the value level by the FsCheck properties in
+    /// `Tests/Property/Can/BaptismSequenceProperties.fs`.
     let step (cfg: AttemptConfig) (state: BaptismState) (event: BaptismEvent) =
         match state with
         | Terminal _ -> (state, NoAction)
@@ -236,6 +298,7 @@ module Baptism =
         | ClaimSent -> stepClaimSent event
         | AwaitingAnnounce deadline -> stepAwaiting cfg deadline event
         | Assigning -> stepAssigning event
+        | AwaitingAdoption(deadline, ackSeen) -> stepAwaitingAdoption cfg deadline ackSeen event
 
     /// Explanation a `Disabled` baptize/reset guard carries when the link is
     /// not `Connected` (the shared link-down conjunct, FR-002 / FR-008).

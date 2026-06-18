@@ -24,6 +24,7 @@ module BaptismLogging =
         | Succeeded -> "Succeeded"
         | WaitTimeout -> "WaitTimeout"
         | UnexpectedVariant _ -> "UnexpectedVariant"
+        | ClaimNotAdopted -> "ClaimNotAdopted"
         | PanelDisappeared -> "PanelDisappeared"
         | LinkLost -> "LinkLost"
         | TransmissionFailure ClaimStep -> "TransmissionFailure.ClaimStep"
@@ -50,6 +51,7 @@ module BaptismLogging =
         | ClaimSent -> "ClaimSent"
         | AwaitingAnnounce _ -> "AwaitingAnnounce"
         | Assigning -> "Assigning"
+        | AwaitingAdoption _ -> "AwaitingAdoption"
         | Terminal _ -> "Terminal"
 
     /// Render a `PanelUuid` as the canonical hex triple for the `{PanelUuid}`

@@ -47,7 +47,8 @@ module BaptismView =
         match state with
         | ClaimSent
         | AwaitingAnnounce _
-        | Assigning -> true
+        | Assigning
+        | AwaitingAdoption _ -> true
         | Idle
         | Terminal _ -> false
 
@@ -92,6 +93,12 @@ module BaptismView =
             sprintf
                 "The panel re-announced as %s, not the chosen %s: the claim did not apply. Re-check the variant choice and re-run Baptize, or Reset first."
                 (PanelsOnBusView.variantLabel announced)
+                label
+        // RW06 refines the guided-recovery rendering (full FR-015 text + Headless test).
+        | ClaimNotAdopted ->
+            sprintf
+                "%s did not adopt the %s identity: it kept announcing after the assignment (or never confirmed). Reset it to virgin, then re-run Baptize."
+                uuidHex
                 label
         | PanelDisappeared ->
             "The selected panel left the bus before it could be claimed: it stopped announcing (likely unplugged). Reconnect the panel and retry once it re-announces."

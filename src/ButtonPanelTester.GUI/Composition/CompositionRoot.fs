@@ -317,8 +317,13 @@ module CompositionRoot =
             .AddSingleton<IBaptismService>(fun sp ->
                 let transmitter = sp.GetRequiredService<IMasterSequenceTransmitter>()
                 let whoIAm = sp.GetRequiredService<IWhoIAmObserver>()
+                // RW03's SET_ADDRESS ACK observer (the `0x25` adoption fast-positive)
+                // is now consumed by the FSM (F6): feeds `SetAddressAcked` into the
+                // adoption-confirmation window.
+                let setAddressAck = sp.GetRequiredService<ISetAddressAckObserver>()
                 let discovery = sp.GetRequiredService<IPanelDiscoveryService>()
                 let link = sp.GetRequiredService<ICanLinkService>()
                 let clock = sp.GetRequiredService<IClock>()
                 let logger = sp.GetRequiredService<ILogger<BaptismService>>()
-                new BaptismService(transmitter, whoIAm, discovery, link, clock, logger) :> IBaptismService)
+                new BaptismService(transmitter, whoIAm, setAddressAck, discovery, link, clock, logger)
+                :> IBaptismService)
