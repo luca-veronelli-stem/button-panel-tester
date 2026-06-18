@@ -156,7 +156,7 @@ CI-provable below the GUI under the corrected criterion.
 
 **Commit group**: RW06 = {T} view + Headless tests (one commit).
 
-- [ ] RW06 **[AMEND]** `src/ButtonPanelTester.GUI/Can/BaptismView.fs`: render the `ClaimNotAdopted`
+- [X] RW06 **[AMEND]** `src/ButtonPanelTester.GUI/Can/BaptismView.fs`: render the `ClaimNotAdopted`
       outcome with the **guided recovery** (FR-015) — state the claim did not take (deterministic,
       not "likely") and direct the operator to Reset-to-virgin then re-baptize, using the existing
       Reset/Baptize affordances; keep the success rendering's silence explainer (now the confirmed
