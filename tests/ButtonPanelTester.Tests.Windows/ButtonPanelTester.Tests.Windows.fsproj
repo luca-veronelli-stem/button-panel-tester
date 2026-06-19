@@ -27,6 +27,7 @@
         <Compile Include="..\ButtonPanelTester.Tests\Fakes\Can\InMemoryMasterSequenceTransmitter.fs">
             <Link>Fakes\Can\InMemoryMasterSequenceTransmitter.fs</Link>
         </Compile>
+        <Compile Include="Unit/Composition/LoggingLevelConfigurationTests.fs" />
         <Compile Include="Unit/StemAppDataTests.fs" />
         <Compile Include="Unit/JsonFileDictionaryCacheTests.fs" />
         <Compile Include="Unit/DpapiCredentialStoreTests.fs" />

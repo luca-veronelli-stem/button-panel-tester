@@ -53,6 +53,11 @@ module Program =
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional = false, reloadOnChange = false)
             .AddJsonFile(envFile, optional = true, reloadOnChange = false)
+            // Environment variables last so they win over the JSON files —
+            // lets an operator override config (e.g. `Logging__LogLevel__Default`)
+            // per deployment without editing a shipped file (#207). Makes the
+            // "+ environment variables" promise in this comment block true.
+            .AddEnvironmentVariables()
             .Build()
         :> IConfiguration
 
