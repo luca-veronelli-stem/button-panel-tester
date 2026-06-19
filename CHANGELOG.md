@@ -4,6 +4,10 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-19
+
+Ships spec 004 — the **baptism workflow** (the tool's first CAN-transmit feature: claim a virgin panel as one of four BoardVariants, or reset a claimed panel to virgin, via the three-step auto-address master sequence) — plus the v0.4.0 ride-along fixes: configurable log levels, a quieter WHO_I_AM reassembly trace, a claim-write race hardening, and dark-theme selection contrast.
+
 ### Added
 
 - **Baptism workflow** ([spec 004](specs/004-baptism-workflow/spec.md)) — the tool's **first CAN-transmit feature**: from the Panels-on-bus list, claim the single virgin panel on the bus as one of four BoardVariants (EDEN-XP, OPTIMUS-XP, R-3L XP, EDEN-BS8) via the three-step auto-address master sequence (`WHO_ARE_YOU(reset=1)` → `WHO_I_AM` capture → `SET_ADDRESS`), or reset a claimed panel back to virgin. A baptize is reported **Succeeded only on confirmed adoption** — the panel acknowledges the address assignment (the `0x25` ACK) **and** is confirmed silent on the broadcast — never on bare write-completion (the F1/F6 confirmation-model rework); a claim that does not take surfaces the deterministic `ClaimNotAdopted` outcome and guides the operator into the Reset → re-baptize recovery. Baptize/Reset are disabled with an explanation unless exactly one panel announces, and the tool remembers nothing about panels it baptized. The state machine is Lean-formalized (Phase 3, no `sorry`) and the TX path sits behind a Core port with a virtual adapter, so CI greens without hardware ([#212](https://github.com/luca-veronelli-stem/button-panel-tester/issues/212): children [#213](https://github.com/luca-veronelli-stem/button-panel-tester/issues/213)–[#219](https://github.com/luca-veronelli-stem/button-panel-tester/issues/219), [#232](https://github.com/luca-veronelli-stem/button-panel-tester/issues/232)).
@@ -18,6 +22,10 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 - Log levels are now bound from configuration: the `AddLogging` builder reads the `Logging` config section and `Program.fs` adds environment-variable configuration, so operators can raise verbosity (e.g. the #204 discovery `Debug`/`Trace` diagnostics) per deployment via `appsettings.json` `Logging:LogLevel` keys or `Logging__LogLevel__*` env vars without a rebuild. Quiet-by-default is unchanged (no `Logging` section → `Information`, `Microsoft`/`System.Net.Http` `Warning`) ([#207](https://github.com/luca-veronelli-stem/button-panel-tester/issues/207)).
 - Closed a residual TOCTOU window in `BaptismService.BaptizeAsync`: a CAN link-down landing between the entry guard and the out-of-lock claim write could leak one stray `WHO_ARE_YOU` frame (the returned outcome was already the correct `LinkLost`). The claim write is now gated on an under-lock fire-time re-validation, so a dropped link transmits nothing; the lock is still never held across the send ([#231](https://github.com/luca-veronelli-stem/button-panel-tester/issues/231)).
 - Dark-theme legibility: the selected panel row (Panels-on-bus) and selected baptism variant/button now use a theme-aware `BluStem` selection brush meeting WCAG AA in both light and dark themes, replacing a hardcoded `LightBlue` highlight that washed out under dark-theme white text ([#235](https://github.com/luca-veronelli-stem/button-panel-tester/issues/235)).
+
+### Notes
+
+- **Known limitation — SC-004 (rapid four-variant re-baptize cycle) is firmware-limited, not a tool defect.** Single claim, reset, and operator-paced re-typing across all four variants are bench-validated on real silicon (OPTIMUS-XP panel); the confirmed-adoption model correctly catches a half-baptized panel. Under *rapid* automated claim→reset→claim cycling, today's panel firmware (`pac5524-tastiera`) intermittently drops commands / confirms adoption late — the tool transmits and detects correctly throughout. The automated `FullCycle_FourVariants_ZeroResidualState` hardware E2E (SC-004, strict 4/4) validates once the firmware fix lands; tracked at [#237](https://github.com/luca-veronelli-stem/button-panel-tester/issues/237). See [`specs/004-baptism-workflow/spec.md`](specs/004-baptism-workflow/spec.md) SC-004.
 
 ## [0.3.0] - 2026-06-10
 
