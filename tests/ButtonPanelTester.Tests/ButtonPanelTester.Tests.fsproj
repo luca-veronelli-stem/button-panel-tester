@@ -37,6 +37,7 @@
         <Compile Include="Integration/Can/ResetE2ETests.fs" />
         <Compile Include="Integration/Can/TimeoutE2ETests.fs" />
         <Compile Include="Integration/Can/LinkLossAbortsTests.fs" />
+        <Compile Include="Integration/Can/ClaimWriteToctouTests.fs" />
         <Compile Include="Integration/Can/PostSuccessWarningTests.fs" />
         <Compile Include="Integration/Can/PruningE2ETests.fs" />
         <Compile Include="Integration/Can/LinkLossClearsListTests.fs" />

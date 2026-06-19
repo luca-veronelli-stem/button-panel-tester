@@ -65,6 +65,25 @@ module BaptismGuidance =
                  It may re-announce late with the target variant — re-run Baptize (or Reset) to complete."
         | _ -> None
 
+/// Decision of the #231 fire-time re-validation in `BaptizeAsync`, taken
+/// under `stateLock` immediately BEFORE the out-of-lock claim write:
+///   - `FireClaim`       — the attempt is still live and the link is
+///                         `Connected`, so the WHO_ARE_YOU claim write fires
+///                         (the normal start path).
+///   - `SkipClaim`       — a concurrent `apply(LinkDown)` already transitioned
+///                         this attempt to `Terminal` and resolved it
+///                         (`running = false`); transmit nothing.
+///   - `ResolveLinkLost` — the link was observed down at fire time, BEFORE the
+///                         link observer transitioned the FSM; drive `LinkLost`
+///                         here and skip the write.
+/// The decision is computed inside the lock from pure state reads/writes; the
+/// IO it selects (the claim write, or the publish + completion) runs OUTSIDE
+/// the lock, so the lock is never held across the send (stem-async-discipline).
+type private ClaimWriteDecision =
+    | FireClaim
+    | SkipClaim
+    | ResolveLinkLost
+
 /// Production adapter for `IBaptismService` (spec-004 C4). Drives the pure
 /// baptism FSM (`Baptism.step`, Core) over the consumed observables —
 /// `IWhoIAmObserver` (announcements), `IPanelDiscoveryService` (presence),
@@ -457,20 +476,77 @@ type BaptismService
                 (iso (clock.UtcNow()))
             Task.FromResult outcome
         | Choice1Of2(cfg, attemptTcs) ->
-            // Start: the entry lock already set `state <- ClaimSent`
-            // (`fst Baptism.start`) atomically with `running <- true`, so there
-            // is no observable `running = true ∧ state = Idle` window. Publish
-            // `ClaimSent` once and fire `SendClaim` (`snd Baptism.start`)
-            // OUTSIDE the lock via `commit`; the claim write fires WITHOUT being
-            // awaited inline — its continuation feeds `WriteCompleted` /
-            // `WriteFaulted` back in.
-            let startState, startAction = Baptism.start
-            // The start transition (`Idle → ClaimSent`) is non-terminal, so
-            // `commit`'s audit branch does not fire here; pass `Idle` as the
-            // (unused) pre-terminal placeholder. The terminal record is emitted
-            // later by the `apply → commit` path with the real furthest state.
-            commit startState startAction cfg Idle attemptTcs cancellationToken
-            attemptTcs.Task
+            // #231: re-validate under the lock immediately before the claim
+            // write. The entry lock released after setting `ClaimSent ∧ running`;
+            // this branch fires `SendClaim` OUTSIDE the lock (no lock across the
+            // send). A CAN link-down landing in that gap would otherwise leak a
+            // stray WHO_ARE_YOU — the captured `SendClaim` fires regardless of
+            // the link having dropped (the returned outcome is already the
+            // correct `LinkLost`, but the wire disagrees). Decide
+            // Fire/Skip/ResolveLinkLost under `stateLock` from pure state reads,
+            // then act OUTSIDE it. `apply` also takes `stateLock`, so this
+            // re-check is serialized against a concurrent `apply(LinkDown)`.
+            let decision =
+                lock stateLock (fun () ->
+                    if not running then
+                        // A concurrent `apply(LinkDown)` already transitioned
+                        // this attempt to `Terminal` and resolved `attemptTcs`.
+                        SkipClaim
+                    else
+                        match link.CurrentState with
+                        | Connected _ -> FireClaim
+                        | _ ->
+                            // Link down at fire time, before the link observer
+                            // transitioned the FSM: drive `LinkLost` here and
+                            // transmit nothing. Mirrors the entry-guard
+                            // `Choice2Of2 LinkLost` arm, one step later in the
+                            // lifecycle.
+                            state <- Terminal LinkLost
+                            running <- false
+                            ResolveLinkLost)
+
+            match decision with
+            | FireClaim ->
+                // Start: the entry lock already set `state <- ClaimSent`
+                // (`fst Baptism.start`) atomically with `running <- true`, so
+                // there is no observable `running = true ∧ state = Idle` window.
+                // Publish `ClaimSent` once and fire `SendClaim`
+                // (`snd Baptism.start`) OUTSIDE the lock via `commit`; the claim
+                // write fires WITHOUT being awaited inline — its continuation
+                // feeds `WriteCompleted` / `WriteFaulted` back in.
+                let startState, startAction = Baptism.start
+                // The start transition (`Idle → ClaimSent`) is non-terminal, so
+                // `commit`'s audit branch does not fire here; pass `Idle` as the
+                // (unused) pre-terminal placeholder. The terminal record is
+                // emitted later by the `apply → commit` path with the real
+                // furthest state.
+                commit startState startAction cfg Idle attemptTcs cancellationToken
+                attemptTcs.Task
+            | ResolveLinkLost ->
+                // Publish the fire-time terminal OUTSIDE the lock and resolve the
+                // attempt directly (the FSM never reached `commit`, so no claim
+                // was dispatched). `running <- false` (set under the lock above)
+                // makes any later `apply(LinkDown)` a no-op, so this resolves and
+                // audits exactly once.
+                stateSubject.OnNext(Terminal LinkLost)
+                attemptTcs.TrySetResult LinkLost |> ignore
+                // FR-012 audit (`data-model.md` §7): the attempt DID reach
+                // `ClaimSent`, so `StepReached = ClaimSent` (`fst Baptism.start`)
+                // — unlike the entry-guard rejection, which projects `Idle`
+                // (`NotStarted`).
+                BaptismLogging.logBaptizeAttempt
+                    logger
+                    variant
+                    selected
+                    LinkLost
+                    (fst Baptism.start)
+                    (iso attemptStartedAt)
+                    (iso (clock.UtcNow()))
+                attemptTcs.Task
+            | SkipClaim ->
+                // Outcome already resolved by the concurrent `apply(LinkDown)`;
+                // nothing more to publish, send, or complete.
+                attemptTcs.Task
 
     /// FR-008/FR-009/FR-010 Reset-button entrypoint — see
     /// `IBaptismService.ResetAsync`. Linear flow, no FSM, no lock: the only

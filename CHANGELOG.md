@@ -16,6 +16,7 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 ### Fixed
 
 - Log levels are now bound from configuration: the `AddLogging` builder reads the `Logging` config section and `Program.fs` adds environment-variable configuration, so operators can raise verbosity (e.g. the #204 discovery `Debug`/`Trace` diagnostics) per deployment via `appsettings.json` `Logging:LogLevel` keys or `Logging__LogLevel__*` env vars without a rebuild. Quiet-by-default is unchanged (no `Logging` section → `Information`, `Microsoft`/`System.Net.Http` `Warning`) ([#207](https://github.com/luca-veronelli-stem/button-panel-tester/issues/207)).
+- Closed a residual TOCTOU window in `BaptismService.BaptizeAsync`: a CAN link-down landing between the entry guard and the out-of-lock claim write could leak one stray `WHO_ARE_YOU` frame (the returned outcome was already the correct `LinkLost`). The claim write is now gated on an under-lock fire-time re-validation, so a dropped link transmits nothing; the lock is still never held across the send ([#231](https://github.com/luca-veronelli-stem/button-panel-tester/issues/231)).
 
 ## [0.3.0] - 2026-06-10
 
