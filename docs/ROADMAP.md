@@ -25,40 +25,29 @@ wins on *order and scope*, the briefing + corrections win on *technical content*
 | [v0.1.0](../CHANGELOG.md) | [spec-001](../specs/001-fetch-dictionary/spec.md) | Dictionary fetch, status row, registration ceremony, manual refresh |
 | [v0.2.0](../CHANGELOG.md) | [spec-002](../specs/002-can-link-lifecycle/spec.md) | CAN-link lifecycle: status row, four-family FSM, PEAK adapter realities |
 | [v0.3.0](../CHANGELOG.md) | [spec-003](../specs/003-panel-discovery/spec.md) | Passive panel discovery: Panels-on-bus list from `WHO_I_AM` broadcasts |
+| [v0.4.0](../CHANGELOG.md) | [spec-004](../specs/004-baptism-workflow/spec.md) | Baptism workflow: claim a virgin panel as a BoardVariant / reset to virgin via the auto-address master sequence, on the confirmed-adoption model |
 
-## Next — v0.4.0: Baptism workflow (spec-004)
+> **v0.4.0 caveat — SC-004 firmware-limited.** spec-004 ships code-complete; the *rapid automated* four-variant re-baptize cycle (SC-004) is gated on a panel-firmware fix ([#237](https://github.com/luca-veronelli-stem/button-panel-tester/issues/237)), not a tool defect. Single claim / reset / operator-paced re-typing are bench-validated on silicon.
 
-Briefing [§spec-003](./Context/bpt-rollout/03-roadmap.md#spec-003--baptism-workflow),
-corrected by **C2**: baptism is the three-step master sequence
-`WHO_ARE_YOU(reset=1)` → `WHO_I_AM` (capture UUID) → `SET_ADDRESS(UUID, sp_address)` —
-the briefing's single-shot `reset=0` send is a silent no-op on real firmware. Claim a
-virgin panel as one of the four BoardVariants, or reset a claimed panel back to virgin,
-with single-panel-on-bus enforcement.
+## Next — v0.5.0: Button-press test, input side (spec-005)
 
-Mind **C1** at spec time: a *claimed* panel goes silent (`AAS_STAND_BY`), so it drops off
-the Panels-on-bus list after baptism and only reappears via reset-to-virgin. The spec
-must define what the discovery list shows for the panel just baptized.
+Briefing [§spec-004](./Context/bpt-rollout/03-roadmap.md#spec-004--button-press-test-input-side),
+corrected by **C3**: OPTIMUS-XP's active set is panel positions `{1, 2, 4, 5}` =
+`{DOWN, P1, P3, MEM}`, and the prompt UI needs a decal-name vs firmware-name clarify
+(an OPTIMUS-XP technician reads *Light / Suspension / All-Up / Stop*, not
+*DOWN / P1 / P3 / MEM*). The **C5 protocol-metadata fetch migration** first materially
+affects behaviour here; it is hosted in
+[#156](https://github.com/luca-veronelli-stem/button-panel-tester/issues/156) with a
+timing guard — pull it out standalone if the spec-001 supersede hasn't unparked by the
+time this spec starts.
 
-Ride-alongs on the [v0.4.0 milestone](https://github.com/luca-veronelli-stem/button-panel-tester/milestone/7):
-log polish ([#207](https://github.com/luca-veronelli-stem/button-panel-tester/issues/207),
-[#208](https://github.com/luca-veronelli-stem/button-panel-tester/issues/208)) and the
-bench config for the `Category=Hardware` E2E suite
-([#112](https://github.com/luca-veronelli-stem/button-panel-tester/issues/112)) — baptism
-is the first spec that transmits on the bus, exactly when a real-iron suite starts paying
-for itself.
+Baptism (spec-004, shipped in v0.4.0) is the prerequisite: a panel must be claimed before
+it emits the application traffic this spec reads. SC-004's rapid-cycle firmware limitation
+([#237](https://github.com/luca-veronelli-stem/button-panel-tester/issues/237)) does not
+block spec-005 — operator-paced baptism is validated.
 
 ## Then (provisional order)
 
-- **spec-005 — Button-press test (input side)** — briefing
-  [§spec-004](./Context/bpt-rollout/03-roadmap.md#spec-004--button-press-test-input-side),
-  corrected by **C3**: OPTIMUS-XP's active set is panel positions `{1, 2, 4, 5}` =
-  `{DOWN, P1, P3, MEM}`, and the prompt UI needs a decal-name vs firmware-name clarify
-  (an OPTIMUS-XP technician reads *Light / Suspension / All-Up / Stop*, not
-  *DOWN / P1 / P3 / MEM*). The **C5 protocol-metadata fetch migration** first materially
-  affects behaviour here; it is hosted in
-  [#156](https://github.com/luca-veronelli-stem/button-panel-tester/issues/156) with a
-  timing guard — pull it out standalone if the spec-001 supersede hasn't unparked by the
-  time this spec starts.
 - **spec-006 — LED and buzzer test (output side)** — briefing
   [§spec-005](./Context/bpt-rollout/03-roadmap.md#spec-005--led-and-buzzer-test-output-side).
   Open audit carried forward: OPTIMUS-XP `HasBuzzer` is still TBD (C3 note).

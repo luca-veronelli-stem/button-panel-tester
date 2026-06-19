@@ -4,11 +4,13 @@
 
 **Created**: 2026-06-11
 
-**Status**: Draft
+**Status**: Shipped (v0.4.0)
 
 **Epic**: [#212](https://github.com/luca-veronelli-stem/button-panel-tester/issues/212) (milestone v0.4.0)
 
 **Input**: User description: "Baptism workflow: claim a virgin panel on the bus as one of the four BoardVariants, or reset a claimed panel back to virgin, via the three-step auto-address master sequence"
+
+> **Known limitation (v0.4.0).** **SC-004** (the rapid four-variant re-baptize cycle) is **firmware-limited, not a tool defect** — see SC-004 below and [#237](https://github.com/luca-veronelli-stem/button-panel-tester/issues/237). Single claim, reset, and operator-paced re-typing across all four variants are bench-validated on real silicon; the confirmed-adoption model correctly refuses a half-baptized panel. Under *rapid automated* cycling the panel firmware (`pac5524-tastiera`) drops commands / confirms adoption late while the tool transmits and detects correctly throughout. The automated `FullCycle_FourVariants_ZeroResidualState` hardware E2E (strict 4/4) is the firmware-fix acceptance gate; SC-004 validates once that fix lands.
 
 ## Clarifications
 
