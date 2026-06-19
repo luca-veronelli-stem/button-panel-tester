@@ -133,13 +133,16 @@ let WrongId_LogsTrace () =
     for f in virginFrames do fake.Emit(frame 0x000A0441u f)
     Assert.Contains("wrong-id", traceReasons logger)
 
-// (8) MISSING FRAGMENT — every buffered fragment returns null mid-reassembly: Reason "incomplete".
+// (8) MISSING FRAGMENT — buffered fragments are normal mid-reassembly progress, NOT a drop:
+//     #208 makes that path silent. The never-completing case still surfaces as "no row appears"
+//     (pinned by (2) Reassemble_MissingFragment_NoEmission), so the buffering itself must not trace.
 [<Fact>]
-let MissingFragment_LogsTrace () =
+let MissingFragment_NoPerFragmentTrace () =
     let (fake, observer, logger) = wireWithLogger ()
     use _ = observer :> IDisposable
     for f in (virginFrames |> List.take 4) do fake.Emit(frame 0x1FFFFFFFu f)
-    Assert.Contains("incomplete", traceReasons logger)
+    Assert.DoesNotContain("incomplete", traceReasons logger)
+    Assert.Empty(logger.Entries |> Seq.filter (fun e -> e.Level = LogLevel.Trace))
 
 // (9) WRONG COMMAND — reassembles, cmd 0x0025 != 0x0024: Reason "wrong-command".
 [<Fact>]
@@ -163,3 +166,13 @@ let WrongLength_LogsTrace () =
           [| 0x08uy; 0x00uy; 0xEAuy; 0x69uy; 0xABuy |] ]   // one extra payload byte
     for f in wrongLen do fake.Emit(frame 0x1FFFFFFFu f)
     Assert.Contains("wrong-length", traceReasons logger)
+
+// (11) HAPPY PATH — a complete 5-fragment WHO_I_AM emits ZERO Trace lines (#208): 4 buffered
+//      fragments are silent and the 5th parses cleanly. The decoded frame still surfaces on
+//      WhoIAmObserved (pinned by (1) Reassemble_FiveFrameVirgin_EmitsDecodedWhoIAm).
+[<Fact>]
+let HappyPath_NoPerFragmentTrace () =
+    let (fake, observer, logger) = wireWithLogger ()
+    use _ = observer :> IDisposable
+    for f in virginFrames do fake.Emit(frame 0x1FFFFFFFu f)
+    Assert.Empty(logger.Entries |> Seq.filter (fun e -> e.Level = LogLevel.Trace))
