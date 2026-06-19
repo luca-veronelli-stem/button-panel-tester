@@ -403,6 +403,16 @@ let Recover_NotAdoptedPanel_ResetThenReBaptize () =
 
 // --- SC-004, FR-013: full cycle across all four variants, zero residual state (attended) ---
 
+// FIRMWARE-LIMITED (RW10, #237) - KEPT STRICT ON PURPOSE. On today's panel firmware this 4/4-convergence
+// cycle does NOT pass under rapid programmatic cycling: a frame decode proved the firmware drops a claim /
+// SET_ADDRESS and confirms adoption late (polled CAN RX + a blocking inline EEPROM/flash write stalls its
+// loop), so a leg can land WaitTimeout/ClaimNotAdopted while the tool transmits + detects correctly (see
+// .llm/issue-212-baptism-firmware-findings.md). The strict assertion is intentional: this case is the
+// bench acceptance + regression gate for the #237 firmware fix and turns green once the firmware stops
+// dropping commands under rapid cycling. Category=Hardware, so it is excluded from CI and never gates a
+// merge. The single Reset -> re-baptize operator recovery is proven separately by SC-007
+// (Recover_NotAdoptedPanel_ResetThenReBaptize), which is not a rapid cycle.
+
 [<Trait("Category", "Hardware")>]
 [<ManualHardwareFact>]
 let FullCycle_FourVariants_ZeroResidualState () =

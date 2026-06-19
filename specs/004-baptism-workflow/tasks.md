@@ -577,6 +577,13 @@ semantics are proven at the live boundary. The feature is **Done**.
       `ClaimNotAdopted` -> Reset-to-virgin then re-baptize (FR-006a/FR-015, unchanged). Renames
       `claimWithResetRecovery` -> `claimWithRecovery`; `maxClaimAttempts = 3` and the `try/finally`
       teardown reset are unchanged; test-only.
+- [X] T049 [docs] Annotate SC-004 as firmware-limited pending the #237 firmware fix (RW10): a comment on
+      `FullCycle_FourVariants_ZeroResidualState` explaining it is kept STRICT on purpose as the bench
+      acceptance/regression gate for the firmware fix (red on today's firmware - the firmware drops
+      commands / confirms adoption late under rapid cycling; `Category=Hardware`, excluded from CI, never
+      gates merge; turns green once the firmware fix lands), plus matching bench-status notes in
+      `spec.md` SC-004 and the `quickstart.md` run-sheet. Docs/comment-only; no test behavior or product
+      change. See `.llm/issue-212-baptism-firmware-findings.md`.
 
 ---
 

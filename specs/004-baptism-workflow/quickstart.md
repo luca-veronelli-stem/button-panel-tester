@@ -60,6 +60,14 @@ panel** physically on the bus.
 baptize → verify → reset → next variant, all four variants on one physical panel; the tool keeps
 zero state between cycles (FR-013) — the fourth cycle is indistinguishable from the first.
 
+> **Firmware-limited ([#237](https://github.com/luca-veronelli-stem/button-panel-tester/issues/237)).**
+> On today's panel firmware the rapid full cycle does **not** reach 4/4 confirmed adoption: the firmware
+> drops a claim / confirms adoption late when cycled at tool speed (polled CAN RX + a blocking flash
+> write stalls its loop — see the firmware findings). **The tool transmits and detects correctly
+> throughout.** The `FullCycle_FourVariants_ZeroResidualState` hardware E2E keeps a strict 4/4 assertion
+> **on purpose** as the acceptance gate for the firmware fix; it goes green once that lands. The single
+> Reset → re-baptize operator recovery (SC-007) is unaffected.
+
 ## Hardware E2E suite (manual pre-release check)
 
 `BaptismHardwareTests.fs` (`Category=Hardware`, env-gated like the spec-002/003 suites, tracked
