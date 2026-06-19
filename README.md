@@ -4,7 +4,7 @@
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#license)
 
-> **Bench tool to test STEM button-panel hardware over CAN.**
+> **Bench tool to test STEM button-panel hardware over CAN.**  
 > **Standard:** v1.16.1 — see [`docs/Standards/`](./docs/Standards/).
 
 ---
@@ -59,5 +59,5 @@ eng/                             build / release scripts
 
 - **Owner:** STEM E.m.s.
 - **Author:** Luca Veronelli
-- **Creation Date:** 2026
+- **Creation Date:** 2026-05-13
 - **License:** Proprietary — All rights reserved.
