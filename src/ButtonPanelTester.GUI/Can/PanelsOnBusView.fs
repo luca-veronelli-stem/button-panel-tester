@@ -3,9 +3,11 @@ namespace Stem.ButtonPanelTester.GUI.Can
 open Avalonia.Controls
 open Avalonia.Layout
 open Avalonia.Media
+open Avalonia.Styling
 open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Types
 open Stem.ButtonPanelTester.Core.Can
+open Stem.ButtonPanelTester.GUI
 
 /// FuncUI view for the Panels-on-bus list (spec-003 T020, FR-003/004/006). Pure render:
 /// the host (App.fs) passes the latest PanelsOnBus snapshot + the latest CanLinkState
@@ -89,16 +91,19 @@ module PanelsOnBusView =
     /// Render the Panels-on-bus list: one selectable `PanelRow` button per
     /// panel in `PanelUuid` key order (its content is the unchanged `rowView`),
     /// or the FR-006 empty-state explainer (`emptyStateText linkState`) when
-    /// the map is empty. The selected row carries a `LightBlue` highlight; a
-    /// click invokes `onSelect` with that row's `PanelUuid`. Pure render — the
-    /// GUI decides nothing; the host re-invokes it on every
-    /// `PanelsOnBusChanged` / `LinkStateChanged` and feeds the selection into
+    /// the map is empty. The selected row carries the theme-aware
+    /// `Brand.selectionBackground` highlight (BluStem palette, WCAG AA in both
+    /// themes — #235/F2); a click invokes `onSelect` with that row's
+    /// `PanelUuid`. Pure render — the GUI decides nothing; the host re-invokes
+    /// it on every `PanelsOnBusChanged` / `LinkStateChanged` (and on
+    /// `ActualThemeVariantChanged`) and feeds the selection into
     /// `Baptism.baptizeEnablement` (FR-002).
     let view
         (panels: PanelsOnBus)
         (linkState: CanLinkState)
         (selected: PanelUuid option)
         (onSelect: PanelUuid -> unit)
+        (theme: ThemeVariant)
         : IView =
         if Map.isEmpty panels then
             TextBlock.create [
@@ -118,7 +123,7 @@ module PanelsOnBusView =
                       Button.content (rowView o)
                       Button.onClick (fun _ -> onSelect o.Uuid) ]
                     @ (if selected = Some o.Uuid then
-                           [ Button.background Brushes.LightBlue ]
+                           [ Button.background (Brand.selectionBackground theme) ]
                        else
                            [])
 

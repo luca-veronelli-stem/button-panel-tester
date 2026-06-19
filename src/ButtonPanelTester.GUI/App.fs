@@ -524,7 +524,7 @@ type MainWindow(services: IServiceProvider) as this =
                     StackPanel.children [
                         dictionaryRowView
                         CanStatusRow.view lastCanState kickoffReconnect
-                        PanelsOnBusView.view lastPanelsOnBus lastCanState selectedPanel onSelectPanel
+                        PanelsOnBusView.view lastPanelsOnBus lastCanState selectedPanel onSelectPanel currentTheme
                         BaptismView.view
                             baptizeEnablement
                             resetEnablement
@@ -536,6 +536,7 @@ type MainWindow(services: IServiceProvider) as this =
                             onSelectVariant
                             onBaptize
                             onReset
+                            currentTheme
                     ]
                 ]
                 :> IView

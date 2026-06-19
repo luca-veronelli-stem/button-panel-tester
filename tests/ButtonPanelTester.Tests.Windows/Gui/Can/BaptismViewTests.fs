@@ -6,6 +6,7 @@ open System.Threading.Tasks
 open Avalonia.Controls
 open Avalonia.Interactivity
 open Avalonia.Media
+open Avalonia.Styling
 open Avalonia.Headless.XUnit
 open Avalonia.FuncUI.VirtualDom
 open Microsoft.Extensions.Logging.Abstractions
@@ -99,6 +100,7 @@ let private render
             (fun _ -> ())
             (fun _ -> ())
             (fun () -> ())
+            ThemeVariant.Light
     )
 
 let private renderWith
@@ -122,6 +124,7 @@ let private renderWith
             onVariantSelected
             onBaptize
             (fun () -> ())
+            ThemeVariant.Light
     )
 
 // Render the full surface pinning the reset inputs (E3, T037).
@@ -143,6 +146,7 @@ let private renderReset
             (fun _ -> ())
             (fun _ -> ())
             onReset
+            ThemeVariant.Light
     )
 
 // Render a terminal outcome for the failure/success matrix.
