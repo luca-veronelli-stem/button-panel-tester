@@ -5,6 +5,7 @@
 module Stem.ButtonPanelTester.GUI.Brand
 
 open Avalonia.Media
+open Avalonia.Styling
 
 // Primary (corporate identity, all divisions). Deviates from L36-66
 // pending standards#92 — the standards palette pins `#004682`, but
@@ -39,3 +40,21 @@ let AzzurroMarine             = Color.Parse "#00B6ED"   // Pantone 306 C
 // Stem France branch (used only by France-targeted apps)
 let BluFrance      = Color.Parse "#0031A7"   // Pantone 286 C
 let Bianco         = Color.Parse "#F5F5F5"
+
+// Theme-aware selected-state highlight (#235, bench finding F2). Two cached
+// palette brushes so every render reuses one instance instead of allocating.
+// FluentTheme's adaptive Button foreground is dark on light and white on dark,
+// so the selection tint flips with the theme to keep selected text legible:
+//   * Light theme → the light `BluStem30` tint reads as "selected" against the
+//     near-white unselected button while keeping the dark FluentTheme text AA.
+//   * Dark theme  → deep `BluStem` gives strong contrast under the white/light
+//     FluentTheme text, where the old `LightBlue` washed out (the F2 bug).
+let private selectionLight = SolidColorBrush BluStem30 :> IBrush
+let private selectionDark = SolidColorBrush BluStem :> IBrush
+
+/// Theme-aware selected-state background brush, drawn from the BluStem palette
+/// (DESIGN_SYSTEM colour-usage). The single source for the panel-row and
+/// baptism-variant selection highlight — meets WCAG AA against FluentTheme's
+/// adaptive foreground in both light and dark themes (#235, F2).
+let selectionBackground (theme: ThemeVariant) : IBrush =
+    if theme = ThemeVariant.Dark then selectionDark else selectionLight

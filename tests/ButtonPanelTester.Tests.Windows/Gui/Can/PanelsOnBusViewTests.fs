@@ -4,11 +4,17 @@ open System
 open Avalonia.Controls
 open Avalonia.Interactivity
 open Avalonia.Media
+open Avalonia.Styling
 open Avalonia.Headless.XUnit
 open Avalonia.FuncUI.VirtualDom
 open Xunit
 open Stem.ButtonPanelTester.Core.Can
+open Stem.ButtonPanelTester.GUI
 open Stem.ButtonPanelTester.GUI.Can
+
+// The selection highlight is theme-aware (#235); these existing tests render in
+// light theme, where it resolves to `Brand.selectionBackground ThemeVariant.Light`.
+let private selectionBrush = Brand.selectionBackground ThemeVariant.Light
 
 let private fixedNow = DateTimeOffset(2026, 6, 9, 14, 30, 0, TimeSpan.Zero)
 
@@ -17,20 +23,20 @@ let private fixedAdapter: AdapterIdentification =
       DeviceId = "0x01"
       BaudrateBps = 250_000 }
 
-// Default render: no selection, onSelect is a no-op so the six pre-existing
-// content tests stay byte-for-byte on the new 4-arg `view` signature.
+// Default render: no selection, onSelect is a no-op, light theme so the six
+// pre-existing content tests stay focused on content on the 5-arg `view`.
 let private render (panels: PanelsOnBus) (linkState: CanLinkState) : Control =
-    VirtualDom.create (PanelsOnBusView.view panels linkState None (fun _ -> ()))
+    VirtualDom.create (PanelsOnBusView.view panels linkState None (fun _ -> ()) ThemeVariant.Light)
 
 // Render variant that threads a selection + onSelect callback, mirroring
-// `renderStateWith` in CanStatusRowTests.
+// `renderStateWith` in CanStatusRowTests. Light theme for the selection assertions.
 let private renderWith
     (panels: PanelsOnBus)
     (linkState: CanLinkState)
     (selected: PanelUuid option)
     (onSelect: PanelUuid -> unit)
     : Control =
-    VirtualDom.create (PanelsOnBusView.view panels linkState selected onSelect)
+    VirtualDom.create (PanelsOnBusView.view panels linkState selected onSelect ThemeVariant.Light)
 
 // The list nests rows (each wrapped in a `PanelRow` Button whose content is the
 // row StackPanel), so collect TextBlocks recursively — descending through both
@@ -139,7 +145,7 @@ let UnknownVariant_RendersUnknownLabelWithRawByteTooltip () =
 
 let private selectedUuid = PanelUuid(0x177C126Du, 0x7308748Fu, 0x16092104u)
 
-// (7) selected row carries the LightBlue highlight; its content shows the UUID
+// (7) selected row carries the theme selection highlight; its content shows the UUID
 [<AvaloniaFact>]
 let SelectedRow_RendersSelectedHighlight () =
     let panels = oneEntry 0xFFuy (0x177C126Du, 0x7308748Fu, 0x16092104u) fixedNow
@@ -147,10 +153,10 @@ let SelectedRow_RendersSelectedHighlight () =
 
     let highlighted =
         panelRows root
-        |> List.filter (fun b -> obj.ReferenceEquals(b.Background, Brushes.LightBlue))
+        |> List.filter (fun b -> obj.ReferenceEquals(b.Background, selectionBrush))
 
     let button = highlighted |> List.exactlyOne
-    Assert.Same(Brushes.LightBlue, button.Background)
+    Assert.Same(selectionBrush, button.Background)
 
     let uuidText =
         allTextBlocks button
@@ -166,7 +172,7 @@ let UnselectedRows_HaveNoHighlight () =
 
     let highlighted =
         panelRows root
-        |> List.filter (fun b -> obj.ReferenceEquals(b.Background, Brushes.LightBlue))
+        |> List.filter (fun b -> obj.ReferenceEquals(b.Background, selectionBrush))
 
     Assert.Empty(highlighted)
 

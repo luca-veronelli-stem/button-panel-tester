@@ -5,10 +5,12 @@ open System.Threading.Tasks
 open Avalonia.Controls
 open Avalonia.Layout
 open Avalonia.Media
+open Avalonia.Styling
 open Avalonia.FuncUI.DSL
 open Avalonia.FuncUI.Types
 open Stem.ButtonPanelTester.Core.Can
 open Stem.ButtonPanelTester.Services.Can
+open Stem.ButtonPanelTester.GUI
 
 /// FuncUI view for the spec-004 BAPTIZE + RESET surfaces (Phase E, T034–T037,
 /// FR-002 / FR-005 / FR-006 / FR-007 / FR-008 / FR-009 / FR-010). Pure render:
@@ -194,13 +196,15 @@ module BaptismView =
         (onVariantSelected: MarketingVariant -> unit)
         (onBaptize: MarketingVariant -> unit)
         (onReset: unit -> unit)
+        (theme: ThemeVariant)
         : IView =
         let running = isRunning state
 
         // One picker button per marketed variant. Modal: disabled while an
-        // attempt runs. The picked option carries a LightBlue highlight, added
-        // by the conditional-attr concat idiom (never a `match -> ()` in the
-        // attr list).
+        // attempt runs. The picked option carries the theme-aware
+        // `Brand.selectionBackground` highlight (BluStem palette, WCAG AA in
+        // both themes — #235/F2), added by the conditional-attr concat idiom
+        // (never a `match -> ()` in the attr list).
         let variantOption (v: MarketingVariant) : IView =
             let attrs: IAttr<Button> list =
                 [ Button.name "VariantOption"
@@ -208,7 +212,7 @@ module BaptismView =
                   Button.isEnabled (not running)
                   Button.onClick (fun _ -> onVariantSelected v) ]
                 @ (if selectedVariant = Some v then
-                       [ Button.background Brushes.LightBlue ]
+                       [ Button.background (Brand.selectionBackground theme) ]
                    else
                        [])
 

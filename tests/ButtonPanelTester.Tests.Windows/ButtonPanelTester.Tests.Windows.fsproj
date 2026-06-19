@@ -54,6 +54,7 @@
         <Compile Include="Gui/Can/CanStatusRowTests.fs" />
         <Compile Include="Gui/Can/PanelsOnBusViewTests.fs" />
         <Compile Include="Gui/Can/BaptismViewTests.fs" />
+        <Compile Include="Gui/Can/SelectionBrushThemeTests.fs" />
         <Compile Include="Integration/Can/CompositionRootCanTests.fs" />
         <Compile Include="Integration/Can/Hardware/PcanLifecycleTests.fs" />
         <Compile Include="Integration/Can/Hardware/DiscoveryHardwareTests.fs" />
