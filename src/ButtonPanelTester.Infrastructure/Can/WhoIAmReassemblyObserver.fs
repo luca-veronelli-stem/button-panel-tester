@@ -57,10 +57,11 @@ type WhoIAmReassemblyObserver(frameStream: ICanFrameStream, logger: ILogger<WhoI
             | null ->
                 // The reassembler returns null for EVERY buffered fragment — this is normal
                 // mid-reassembly (the happy path buffers 4 fragments before the 5th completes),
-                // not necessarily a drop. Trace only (byte detail); Reason axis "incomplete".
-                logger.LogTrace(
-                    "WHO_I_AM fragment buffered; packet not yet complete (reason={Reason})",
-                    "incomplete")
+                // NOT a drop. Deliberately silent (#208): a per-fragment Trace here was ~4 lines
+                // per WHO_I_AM (every ~4 s per panel) whose "reason=incomplete" read like a drop
+                // and buried the genuine drop-axis traces below. A never-completing reassembly
+                // already surfaces as "no row appears"; the real drop axes still trace.
+                ()
             | merged ->
                 let payloadLen = merged.Length - applicationPayloadStart - crcTailLength
                 // && short-circuits: payloadLen >= 0 guarantees merged.Length >= 11, so the
