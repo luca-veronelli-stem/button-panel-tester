@@ -4,8 +4,9 @@
   "archetype": "A",
   "owner": "luca-veronelli-stem",
   "lucaUser": "luca-veronelli-stem",
-  "standardVersion": "v1.15.0",
+  "standardVersion": "v1.16.1",
   "author": "Luca Veronelli",
   "description": "Bench tool to test STEM button-panel hardware over CAN",
-  "year": "2026"
+  "year": "2026",
+  "creationDate": null
 }

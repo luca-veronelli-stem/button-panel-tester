@@ -96,6 +96,36 @@ Per-repo adoption PR (`chore: bump standards to v1.9.0` — separate from the so
 
 `stem-device-manager` v0.4.3 (worktree at `C:\Users\LucaV\Source\Repos\stem-device-manager-v0.4.3`, branch `fix/0.4.3-diagnostics`, paused awaiting this standard) is the first reference adopter. Adoption may bundle the standards bump and the path-relocation work into one PR or split them — that's a v0.4.3-session decision, not a v1.9.0-PR decision.
 
+## Rollout phase for v1.16.0 — `CLIENT_REGISTRATION` standard
+
+`v1.16.0` adds [`shared/standards/CLIENT_REGISTRATION.md`](./CLIENT_REGISTRATION.md), a Content standard codifying the bootstrap-token credential-provisioning contract: an unauthenticated `POST /register` exchanges a technician-supplied bootstrap token for a per-installation credential; the credential is stored encrypted-at-rest behind an `ICredentialStore` port (DPAPI `CurrentUser` on Windows) and replayed as an `X-Api-Key` header by a `DelegatingHandler`; machine/user identifiers are hashed (lowercase SHA-256 hex) before crossing an organizational boundary; and registration failure is a closed, `Result`-typed `RegistrationError` taxonomy (`400 DescriptorRejected | 401 TokenInvalid | 409 TokenAlreadyUsed | 410 TokenExpired | 423 TokenRevoked | 5xx ServerError | network/timeout`) that is surfaced, never thrown for expected failures, never swallowed. `button-panel-tester` (`specs/001-fetch-dictionary`) is the reference implementation the standard captures; [stem-device-manager#94](https://github.com/luca-veronelli-stem/stem-device-manager/issues/94) (a gitignored-`appsettings.Production.json` stopgap) and the planned `telemetry-manager` CLI host can cite it instead of re-deriving the contract. Closes [#138](https://github.com/luca-veronelli-stem/standards/issues/138).
+
+It is a **minor** bump — a new standard is additive (per "Choosing the bump level", `v1.5.0`/`v1.9.0` set the precedent), nothing previously compliant becomes non-compliant on re-roll, and adding a standard is the one-file registry change codified in `v1.5.1` ([#71](https://github.com/luca-veronelli-stem/standards/issues/71)): the `$standardPurpose` entry in `eng/apply-repo-standard.ps1` plus the `.md` file, the README counts/table/F#-coverage rows, and this section. No template or rollout-script behaviour change beyond the registry entry; the dynamic standards-count assertion in `eng/tests/Apply-RepoStandard.Tests.ps1` derives its expected value from `shared/standards/*.md`, so it absorbs the new file without edit.
+
+**Scope note:** the standard covers registration + credential storage + the authenticated-call handler only. The observable seed→cache→live *resource* fallback (degraded-mode-as-visible-state) that `button-panel-tester` pairs with registration is an adjacent concern with a single consumer so far, deliberately left out — it has not yet cleared the cross-repo bar and would get its own standard when a second consumer earns it.
+
+Per-repo adoption PR (`chore: bump standards to v1.16.0`):
+
+1. Re-run `eng/apply-repo-standard.ps1 -StandardVersion v1.16.0`. The diff is the new `docs/Standards/CLIENT_REGISTRATION.md` inline copy, the refreshed `docs/Standards/README.md` index, and the version stamps the rollout refreshes (`CLAUDE.md`'s `**Standard version:**` line, the top-level `README.md`). No template, workflow, or source-code churn.
+2. Bump the per-repo `CLAUDE.md` `**Standard version:**` line to `v1.16.0`.
+3. Update `state/repos.md` to reflect the bump.
+4. Single-commit PR.
+
+No source-code action required at adoption time — the standard documents a contract, it does not introduce an analyzer or a banned symbol. `button-panel-tester` already implements the contract end-to-end, so its bump is a pure documentation pin; a new consumer (`telemetry-manager`, `stem-device-manager` #94) implements the three adapters per the standard and cites it, rather than re-deriving the wire shape, error taxonomy, privacy posture, and storage format.
+
+## Rollout phase for v1.16.1 — root README "Creation Date" full date
+
+`v1.16.1` fixes the root `README.md` footer's **Creation Date** field, which rendered only a year because the rollout captured `(Get-Date).Year` at bootstrap. [`shared/templates/README.md.template`](../templates/README.md.template) now carries a `2026` placeholder; `eng/apply-repo-standard.ps1` captures the full bootstrap date (`yyyy-MM-dd`) into a new `creationDate` field in `.stem-standard.json` and persists it, so a re-roll preserves the original date instead of re-stamping the current one. A legacy config that predates the field (carries only `year`, no `creationDate`) keeps rendering the **year** — the placeholder coalesces to `$cfg.year` when `creationDate` is absent, with no fabricated month/day (option **c**). Patch bump — a rendering bug fix with no contract change, same shape as `v1.15.1`'s `README.md.template` hard-break fix; nothing previously compliant changes on re-roll. There is no urgency to roll this out on its own — it can ride with the next substantive bump. Closes [#141](https://github.com/luca-veronelli-stem/standards/issues/141).
+
+Per-repo adoption PR (`chore: bump standards to v1.16.1`):
+
+1. Re-run `eng/apply-repo-standard.ps1 -StandardVersion v1.16.1`. For a repo whose `.stem-standard.json` already carries a `creationDate` (bootstrapped after this release), the diff is the re-rendered top-level `README.md` footer (full `YYYY-MM-DD` Creation Date — version-stamped templates always iterate, see #87) plus the version stamps the rollout refreshes. An older adopter whose config predates the field sees the footer **year** unchanged (the option-c coalesce), so for them the only footer effect is the version stamp. No workflow or source-code change.
+2. Bump the per-repo `CLAUDE.md` `**Standard version:**` line to `v1.16.1`.
+3. Update `state/repos.md` to reflect the bump.
+4. Single-commit PR.
+
+No source-code action required at adoption time — the change is a template rendering fix.
+
 ## Rollout phase for v1.10.0 — `category-filter` input on the reusable `dotnet-ci.yml`
 
 `v1.10.0` adds a `category-filter` input on `on.workflow_call.inputs` in `.github/workflows/dotnet-ci.yml`, threaded through both `dotnet test` invocations (Linux per-project loop + Windows full leg), with a default of `Category!=Hardware`. Closes [#113](https://github.com/luca-veronelli-stem/standards/issues/113).
@@ -131,6 +161,19 @@ Per-repo adoption PR (`chore: bump standards to v1.11.0`):
 4. Single-commit PR.
 
 No source-code action required at adoption time. The first observable effect lands on the repo's next weekly Dependabot run: a major Avalonia (or any other group member's major) arrives as its own PR instead of poisoning a grouped bundle, and FuncUI bumps arrive separately from Avalonia-runtime bumps. To decline a specific major, comment `@dependabot ignore this major version` on the standalone PR (a per-repo decision — the template intentionally ships no `ignore` entries). Adopters whose `.github/dependabot.yml` has been hand-customised hit the local-edit guard and need `-Force` or a hand-merge (per the Pitfalls section).
+
+## Rollout phase for v1.15.1 — runner-image policy (float on `*-latest`) + README hard-break fix
+
+`v1.15.1` adds a **Runner-image policy (float on `*-latest`)** section to [`CI.md`](./CI.md), deciding — ahead of GitHub's `windows-latest` → `windows-2025-vs2026` redirect (June 15, 2026) — that the action tag-pinning determinism posture does **not** extend to runner images: every `runs-on:`/matrix value stays on the floating aliases. Pinning was rejected because a dated image is not a frozen toolchain (GitHub rolls its software weekly under the same label), the toolchain that matters is already pinned (`global.json` SDK, tag-pinned actions), and pinning renames the required status-check contexts (`build (windows-latest)`) — a branch-protection update in every adopted repo, repeated at every dated-image retirement. Refs [#134](https://github.com/luca-veronelli-stem/standards/issues/134). It also releases the `README.md.template` hard-break fix (PR [#130](https://github.com/luca-veronelli-stem/standards/pull/130)) that had been sitting on `main` unreleased. Patch bump — the policy section documents the existing posture as deliberate (a clarification, same shape as `v1.14.2`'s doc-only CI.md additions) and the template change is a rendering bug fix; nothing previously compliant changes on re-roll, and CI's stability marker stays at `v1.0.0`. There is no urgency to roll this out on its own — it can ride with the next substantive bump.
+
+Per-repo adoption PR (`chore: bump standards to v1.15.1`):
+
+1. Re-run `eng/apply-repo-standard.ps1 -StandardVersion v1.15.1`. The diff is the refreshed `docs/Standards/CI.md` inline copy, the re-rendered top-level `README.md` (version-stamped templates always iterate — see #87 — so it picks up the hard-break fix after `Bench tool to test STEM button-panel hardware over CAN`), plus the version stamps the rollout refreshes. No workflow or rollout-script change.
+2. Bump the per-repo `CLAUDE.md` `**Standard version:**` line to `v1.15.1`.
+3. Update `state/repos.md` to reflect the bump.
+4. Single-commit PR.
+
+No action is required for the June 15 redirect itself: floating means adopted repos ride the alias flip automatically, branch-protection contexts (`build (windows-latest)`) keep their names, and the stub's weekly scheduled CI run is the breakage detector. If a repo's first post-redirect run goes red, compare the `Set up job` log's `Runner Image` lines between the last green and the first red run (per the CI.md section) before suspecting repo-side changes.
 
 ## Rollout phase for v1.15.0 — unattended-only test suites
 

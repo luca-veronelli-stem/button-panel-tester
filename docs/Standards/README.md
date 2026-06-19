@@ -1,6 +1,6 @@
-# STEM standards (Standard version: v1.15.0)
+# STEM standards (Standard version: v1.16.1)
 
-These are inline copies pinned to `v1.15.0`. Upstream source of truth is [standards/shared/standards/](https://github.com/luca-veronelli-stem/standards/tree/v1.15.0/shared/standards).
+These are inline copies pinned to `v1.16.1`. Upstream source of truth is [standards/shared/standards/](https://github.com/luca-veronelli-stem/standards/tree/v1.16.1/shared/standards).
 
 | Standard | Purpose |
 | --- | --- |
@@ -24,6 +24,7 @@ These are inline copies pinned to `v1.15.0`. Upstream source of truth is [standa
 | [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md) | Fluent theme + light default (brand-aligned); 4-pt spacing scale; Fluent System Icons; Poppins typography; Stem brand palette; F# strings module for i18n; toast/banner/inline/modal error surfaces. |
 | [APP_SHELL.md](./APP_SHELL.md) | Canonical views (Settings, About, LanguagePicker, NotificationCenter, ConnectionStatus); typed ShellSlots record; Navigation pinned to left sidebar. |
 | [APP_DATA.md](./APP_DATA.md) | <LocalApplicationData>\Stem\<AppName>\ per-user data root; logs/cache/credentials/db sub-folders; transient migration helper for legacy roots. |
+| [CLIENT_REGISTRATION.md](./CLIENT_REGISTRATION.md) | Bootstrap-token /register exchange; hashed install descriptor; closed error taxonomy; DPAPI-port credential store; X-Api-Key handler. |
 
 ## Bumping the standard version
 
