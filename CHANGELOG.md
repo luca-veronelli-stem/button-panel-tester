@@ -13,6 +13,10 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 - `WhoIAmReassemblyObserver` no longer emits a per-fragment `Trace` line for the normal `reason=incomplete` buffering of a progressing WHO_I_AM reassembly — that path is now silent. It was ~4 lines per WHO_I_AM (every ~4 s per panel) whose `reason=incomplete` read like a drop and buried the genuine drop-axis diagnostics. The real drop traces (wrong-id / wrong-command / wrong-length) and the [#204](https://github.com/luca-veronelli-stem/button-panel-tester/issues/204) `Info`/`Debug` discovery logs are unchanged; reassembly/parse/observe behaviour is untouched ([#208](https://github.com/luca-veronelli-stem/button-panel-tester/issues/208)).
 
+### Fixed
+
+- Log levels are now bound from configuration: the `AddLogging` builder reads the `Logging` config section and `Program.fs` adds environment-variable configuration, so operators can raise verbosity (e.g. the #204 discovery `Debug`/`Trace` diagnostics) per deployment via `appsettings.json` `Logging:LogLevel` keys or `Logging__LogLevel__*` env vars without a rebuild. Quiet-by-default is unchanged (no `Logging` section → `Information`, `Microsoft`/`System.Net.Http` `Warning`) ([#207](https://github.com/luca-veronelli-stem/button-panel-tester/issues/207)).
+
 ## [0.3.0] - 2026-06-10
 
 Ships spec 003 (passive CAN panel discovery — the Panels-on-bus list) plus the structured discovery logging that landed with it.

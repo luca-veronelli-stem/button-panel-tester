@@ -9,6 +9,7 @@ open System.Threading.Tasks
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Logging.Configuration
 open Microsoft.Extensions.Options
 open NReco.Logging.File
 open Peak.Can.Basic.BackwardCompatibility
@@ -79,6 +80,38 @@ module CompositionRoot =
     let private guiAssembly () : Assembly =
         Assembly.GetExecutingAssembly()
 
+    /// Applies the effective log-LEVEL policy to `builder` — minimum level plus
+    /// the framework category floors plus the `Logging` config binding — and
+    /// returns it for the caller to chain providers onto. Deliberately
+    /// provider-free (no console / debug / NReco file sink) so the level rules
+    /// can be unit-tested against an in-memory `IConfiguration` without standing
+    /// up the full service graph or touching the filesystem (#207).
+    ///
+    /// The code defaults are applied first: app minimum `Information`, with the
+    /// `Microsoft.*` and `System.Net.Http*` categories held at `Warning` so
+    /// framework chatter (DI, options, HTTP request start/end) does not drown
+    /// app lines. `AddConfiguration` is added **last**, so an operator's
+    /// `Logging:LogLevel:*` rules — from `appsettings.json` or
+    /// `Logging__LogLevel__*` environment variables — win on equal-specificity
+    /// ties (`Microsoft.Extensions.Logging`: last-added rule wins), while an
+    /// **absent** `Logging` section contributes no rules and the defaults hold,
+    /// preserving quiet-by-default. This lets an operator raise verbosity (e.g.
+    /// the #204 discovery `Debug` / `Trace` diagnostics) per deployment without
+    /// a rebuild.
+    let configureLogLevels (config: IConfiguration) (builder: ILoggingBuilder) : ILoggingBuilder =
+        builder
+            .SetMinimumLevel(LogLevel.Information)
+            // Suppress framework chatter (DI, options, HTTP request start/end)
+            // at Information so app lines stay readable. `System.Net.Http`
+            // covers the `IHttpClientFactory` pipeline categories
+            // (`System.Net.Http.HttpClient.<name>.*`) — outside `Microsoft.*`.
+            .AddFilter("Microsoft", LogLevel.Warning)
+            .AddFilter("System.Net.Http", LogLevel.Warning)
+            // Bind the `Logging` config section LAST so operator-supplied
+            // `Logging:LogLevel` rules win on ties over the defaults above; an
+            // absent section adds nothing and the code defaults stand (#207).
+            .AddConfiguration(config.GetSection "Logging")
+
     /// Register the Phase 3 + Phase 4 service graph against
     /// `services`. Call site is `Program.main` (T035); test
     /// bootstraps register in-memory fakes directly without invoking
@@ -94,10 +127,11 @@ module CompositionRoot =
     ///     `%LOCALAPPDATA%\Stem\ButtonPanelTester\logs\app.log` per
     ///     STEM `APP_DATA.md` (v1.9.0) — the path
     ///     `specs/001-fetch-dictionary/quickstart.md` Troubleshooting
-    ///     tail tells supplier operators to inspect. Default minimum
-    ///     level is `Information`; the `Microsoft.*` category is held
-    ///     at `Warning` so framework chatter (HTTP, DI scopes) does
-    ///     not drown app lines.
+    ///     tail tells supplier operators to inspect. The effective
+    ///     levels come from `configureLogLevels` — default minimum
+    ///     `Information` with `Microsoft.*` / `System.Net.Http*` held
+    ///     at `Warning`, overridable per deployment via the `Logging`
+    ///     config section / `Logging__LogLevel__*` env vars (#207).
     ///   - `services.AddHttpClient()` so `HttpRegistrationClient`
     ///     can resolve an `HttpClient` per request from
     ///     `IHttpClientFactory`.
@@ -116,15 +150,11 @@ module CompositionRoot =
         let logPath = Path.Combine(StemAppData.logsDir (), "app.log")
 
         services.AddLogging(fun builder ->
-            builder
-                .SetMinimumLevel(LogLevel.Information)
-                // Suppress framework chatter (DI, options, HTTP request
-                // start/end) at Information so app lines stay readable.
-                // `System.Net.Http` covers the `IHttpClientFactory`
-                // pipeline categories (`System.Net.Http.HttpClient.<name>.*`)
-                // — they sit outside the `Microsoft.*` prefix.
-                .AddFilter("Microsoft", LogLevel.Warning)
-                .AddFilter("System.Net.Http", LogLevel.Warning)
+            // Levels (minimum + framework floors + the `Logging` config
+            // binding) come from the provider-free `configureLogLevels`
+            // helper; the providers/sinks below stay here so the helper
+            // remains hermetically testable (#207).
+            (configureLogLevels config builder)
                 .AddSimpleConsole()
                 .AddDebug()
                 .AddFile(
