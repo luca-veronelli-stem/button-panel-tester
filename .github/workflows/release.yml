@@ -18,8 +18,16 @@ permissions:
 
 jobs:
   release:
-    uses: luca-veronelli-stem/standards/.github/workflows/release-archetype-a.yml@v1.15.1
+    uses: luca-veronelli-stem/standards/.github/workflows/release-archetype-a.yml@v1.17.1
     with:
       app: ButtonPanelTester
       repo: button-panel-tester
       tag: ${{ inputs.tag }}
+      # Publish the release zip to this repo's Bitbucket Downloads. This slug is
+      # hard-coded, so the upstream upload step runs on every release -- you must
+      # provision the BITBUCKET_API_TOKEN secret (repository access token,
+      # repository:write, set manually per repo, same as BITBUCKET_SSH_KEY) or
+      # the upload fails 401.
+      bitbucket-repo: stem-fw/button-panel-tester
+    secrets:
+      BITBUCKET_API_TOKEN: ${{ secrets.BITBUCKET_API_TOKEN }}

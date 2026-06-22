@@ -14,7 +14,7 @@ From `v1.4.0`, the workflows the rollout writes into an adopted repo are **calle
 | **Release** (archetype A) | `.github/workflows/release.yml` | `.github/workflows/release-archetype-a.yml` | tag `v*.*.*` |
 | **Release** (archetype B) | `.github/workflows/release.yml` | `.github/workflows/release-archetype-b.yml` | tag `v*.*.*` |
 
-The stubs live under `shared/templates/.github/workflows/` (common: `ci.yml`, `mirror-bitbucket.yml`) and `shared/templates/archetypes/{A,B}/.github/workflows/release.yml` (archetype overlays) and are copied into each repo by the rollout script (see REPO_STRUCTURE). The rollout substitutes `v1.16.1` into the `uses:` pin at bump time, so each adopted repo references the exact tag it is pinned to. Migrating an existing repo across this shape change is covered in MIGRATION.md → "Rollout phase for v1.4.0".
+The stubs live under `shared/templates/.github/workflows/` (common: `ci.yml`, `mirror-bitbucket.yml`) and `shared/templates/archetypes/{A,B}/.github/workflows/release.yml` (archetype overlays) and are copied into each repo by the rollout script (see REPO_STRUCTURE). The rollout substitutes `v1.17.1` into the `uses:` pin at bump time, so each adopted repo references the exact tag it is pinned to. Migrating an existing repo across this shape change is covered in MIGRATION.md → "Rollout phase for v1.4.0".
 
 ## ci.yml — invariants
 
@@ -200,12 +200,34 @@ Triggered on `v*.*.*` tag push. Steps:
 2. `dotnet publish src/<App>.GUI -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true`.
 3. `Compress-Archive` to `<app>-<version>-win-x64.zip`.
 4. `softprops/action-gh-release@v3` — creates a GitHub Release with the zip attached and the matching CHANGELOG entry as body.
+5. **Bitbucket Downloads upload** (optional, gated) — when the caller passes a `bitbucket-repo` slug, `POST` the same zip to that repo's Bitbucket **Downloads** section so the firmware team can fetch released builds without GitHub access. GitHub Releases stay primary; this is additive.
 
 Why archetype A needs a release workflow: the desktop app's distributable is a self-contained zip. Without it, "release" means "open the IDE and copy bin/Release somewhere" — fragile and unreproducible.
 
 `IncludeNativeLibrariesForSelfExtract=true` packs the native binaries (Avalonia/Skia, Plugin.BLE, PCAN, `System.IO.Ports`, …) into the `.exe` bundle's self-extract section so the published artifact is a true single `.exe` — draggable, USB-launchable, no companion `runtimes/win-x64/native/` directory required to run. Pairs with `PublishSingleFile=true` (which alone only bundles the managed DLLs and leaves native deps as siblings). The flag trades default behaviour for shape: on first launch per user per release, the bundle extracts to `%LOCALAPPDATA%\.net\<App>\<content-hash>\` and subsequent launches reuse the extracted copy — invisible in steady state.
 
 The escape hatch for hardened environments where the default extraction path is blocked (EDR products quarantining freshly-materialized `.dll` files, read-only `%LOCALAPPDATA%`) is the `DOTNET_BUNDLE_EXTRACT_BASE_DIR` environment variable: set it to an app-writable path before launch, and the bundle extracts there instead. Rare in supplier-workshop / bench-tech target environments, documented here because adopters debugging a launch failure in a customer site will want one entry point that names the variable.
+
+### Bitbucket Downloads upload (`v1.17.0`)
+
+From `v1.17.0` the reusable workflow can also publish the release zip to a repo's Bitbucket **Downloads** section, so the firmware team can download released builds straight from Bitbucket without a GitHub account. It is **additive** — the GitHub Release is still the primary publish target — and **opt-in per repo**:
+
+- The reusable workflow gains an optional `bitbucket-repo` input (default `''`) and an optional `BITBUCKET_API_TOKEN` secret. The upload step is gated `if: inputs.bitbucket-repo != ''`, so a caller that passes no slug — a hand-rolled stub, or a future archetype A repo with no Bitbucket mirror — skips it cleanly.
+- The archetype A caller stub passes `bitbucket-repo: stem-fw/<repo>` and forwards the `BITBUCKET_API_TOKEN` secret. Because the stub **hard-codes** the slug, the gate is always satisfied for a re-rolled adopter — the step is not silently dormant. Re-rolling the stub to `v1.17.0` and provisioning the token are therefore one coupled rollout step: until the secret is set, the `curl -sSf` upload fails the release with `401 Unauthorized` (a missing/empty Bearer token). MIGRATION.md → "Rollout phase for v1.17.0" makes the two-part bump explicit, same as how adopting the mirror couples the stub with `BITBUCKET_SSH_KEY`.
+
+The upload is a single `curl` against the Bitbucket Downloads REST API — the GitHub-Release-asset equivalent:
+
+```bash
+curl -sSf -H "Authorization: Bearer $TOKEN" \
+  "https://api.bitbucket.org/2.0/repositories/<workspace>/<repo>/downloads" \
+  -F files=@"$ZIP"
+```
+
+Three load-bearing points:
+
+- **Auth is a Bitbucket repository access token**, passed as `Authorization: Bearer`, stored in the `BITBUCKET_API_TOKEN` Actions secret. It needs `repository:write` scope and is created per repo at *Repository settings → Access tokens*. **Not** a workspace or project access token — those are a Bitbucket **Premium** feature and STEM is not on Premium; repository access tokens are available on every plan and use the same Bearer auth. **Not** an app password either (Atlassian is removing those mid-2026). This is an **HTTPS REST** credential, entirely separate from the **SSH** `BITBUCKET_SSH_KEY` the git mirror uses (`dual-remote` rule) — different transport, different secret, different lifecycle. Provisioning it is a manual per-repo step, same as `BITBUCKET_SSH_KEY`; the rollout script does not set Actions secrets.
+- **Idempotent on tag re-runs.** Re-POSTing a file with the same name **replaces** the existing download rather than erroring or duplicating, so re-running a release tag (or a `workflow_dispatch` with the same tag) overwrites the Downloads entry in place.
+- **`shell: bash` on purpose.** This workflow's steps default to `pwsh` on `windows-latest` (see the Publish step's backtick continuations), so the upload step pins `shell: bash` to let the `\` line continuations and `curl -F files=@` work as written. `curl` ships on the GitHub Windows runner image.
 
 ## Release workflow — archetype B
 

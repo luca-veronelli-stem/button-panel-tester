@@ -1,9 +1,9 @@
 # CLAUDE.md — ButtonPanelTester
 
 **Archetype:** A
-**Standard version:** v1.16.1
+**Standard version:** v1.17.1
 
-This repo follows the STEM standards documented in [`docs/Standards/`](./docs/Standards/) (inline copies pinned to the version above). Upstream source of truth lives in [`standards`](https://github.com/luca-veronelli-stem/standards/tree/v1.16.1/shared/standards).
+This repo follows the STEM standards documented in [`docs/Standards/`](./docs/Standards/) (inline copies pinned to the version above). Upstream source of truth lives in [`standards`](https://github.com/luca-veronelli-stem/standards/tree/v1.17.1/shared/standards).
 
 ## Repo-specific notes
 
