@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#license)
 
 > **Bench tool to test STEM button-panel hardware over CAN.**  
-> **Standard:** v1.16.1 — see [`docs/Standards/`](./docs/Standards/).
+> **Standard:** v1.17.1 — see [`docs/Standards/`](./docs/Standards/).
 
 ---
 
@@ -51,7 +51,7 @@ eng/                             build / release scripts
 - Passive panel discovery walkthrough: [`specs/003-panel-discovery/quickstart.md`](./specs/003-panel-discovery/quickstart.md).
 - Baptism (claim / reset-to-virgin) walkthrough: [`specs/004-baptism-workflow/quickstart.md`](./specs/004-baptism-workflow/quickstart.md).
 - Roadmap: [`docs/ROADMAP.md`](./docs/ROADMAP.md) — shipped state, next spec, provisional order, v1.0 definition.
-- Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.16.1`.
+- Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.17.1`.
 - Changelog: [`CHANGELOG.md`](./CHANGELOG.md).
 - Repo-specific notes: [`CLAUDE.md`](./CLAUDE.md).
 
