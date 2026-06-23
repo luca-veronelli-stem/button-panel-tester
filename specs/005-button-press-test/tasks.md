@@ -218,14 +218,14 @@ stopgap**), composition wiring. Contract:
 **C2** = {T015, T016} (production adapter + its frame-synthesis tests, one commit). **C3** = {T017}
 (composition wiring + smoke extension).
 
-- [ ] T013 **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/Ports.fs` with `IButtonStateObserver`
+- [X] T013 **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/Ports.fs` with `IButtonStateObserver`
       exactly per the port contract: `abstract member ButtonStateObserved : IObservable<ButtonStateFrame>`
       (hot, fan-out; late subscribers do not replay). XML docs carry the contract's semantics — emits
       one `ButtonStateFrame` per accepted `VAR_WRITE` on a recognised button-state address; the virgin
       sentinel `0x80FE` and non-button addresses are dropped; **edge detection is the consumer's job**
       (the observer is stateless w.r.t. press/release). Add directly after `IWhoIAmObserver`; `Ports.fs`
       already follows `ButtonStateFrame.fs` in the fsproj (T005 ordering). (Constitution III; R5)
-- [ ] T014 **[NEW]** Add `tests/ButtonPanelTester.Tests/Fakes/Can/InMemoryButtonStateObserver.fs`:
+- [X] T014 **[NEW]** Add `tests/ButtonPanelTester.Tests/Fakes/Can/InMemoryButtonStateObserver.fs`:
       `Emit(frame)` pushes synchronously to subscribers — the deterministic test driver (mirror
       `InMemoryWhoIAmObserver`). Insert after `Fakes/Can/InMemoryMasterSequenceTransmitter.fs` in
       the test fsproj. Lands with T013 (C1 commit). (Constitution III/IV)

@@ -16,6 +16,7 @@
         <Compile Include="Fakes/Can/InMemoryWhoIAmObserver.fs" />
         <Compile Include="Fakes/Can/InMemorySetAddressAckObserver.fs" />
         <Compile Include="Fakes/Can/InMemoryMasterSequenceTransmitter.fs" />
+        <Compile Include="Fakes/Can/InMemoryButtonStateObserver.fs" />
         <Compile Include="Property/DictionarySerializationTests.fs" />
         <Compile Include="Property/ContentHashTests.fs" />
         <Compile Include="Property/FetchFailureReasonClosureTests.fs" />
