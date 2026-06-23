@@ -1,0 +1,52 @@
+{
+    "$schema-description": "Button-state VAR_WRITE fixture set per specs/005-button-press-test/contracts/button-state-wire-format.md §App-layer payload, 5-byte layout: [0] 0x00 command high, [1] 0x02 command low (SP_APP_CMD_ID_VAR_WRITE), [2..3] variable address big-endian (0x80NN), [4] key-state byte (TxTasti; pressed = bit 0, released/idle = bit 1). This is an RX fixture: the bytes are the contract's normative payloads, firmware-source-verified against UserMain.c:429-449/215-246 (the live-panel proof is Phase G). Bit assignment: UP=bit0 DOWN=bit1 P1=bit2 P2=bit3 P3=bit4 MEM=bit5 STOP=bit6 LIGHT=bit7. Each entry carries name, 5-byte hex payload (the malformed entry is intentionally 4 bytes), expected parse outcome, expected address/bitmap, and a provenance source/reason. parse rejects on length only (command/address filtering is the observer's job, Phase C); the virgin sentinel 0x80FE parses to a frame the observer later drops. Loaded by Tests/Unit/Can/ButtonStateFrameFixtureTests.fs (T007).",
+    "fixtures": [
+        {
+            "name": "idle_all_released",
+            "source": "Contract §Bitmap semantics: no-buttons-pressed steady state is all-active-bits-1. Standard board-1 address 0x8000, bitmap 0xFF (every bit released).",
+            "payload": "00028000FF",
+            "expectsParse": true,
+            "expectedAddress": 32768,
+            "expectedBitmap": 255
+        },
+        {
+            "name": "optimus_light_pressed",
+            "source": "OPTIMUS-XP 'Light' decal = firmware DOWN = bit1 (data-model §3). Pressed clears the bit: 0xFF & ~0x02 = 0xFD, a press edge from idle.",
+            "payload": "00028000FD",
+            "expectsParse": true,
+            "expectedAddress": 32768,
+            "expectedBitmap": 253
+        },
+        {
+            "name": "optimus_suspension_pressed",
+            "source": "OPTIMUS-XP 'Suspension' decal = firmware P1 = bit2 (data-model §3). Pressed clears the bit: 0xFF & ~0x04 = 0xFB.",
+            "payload": "00028000FB",
+            "expectsParse": true,
+            "expectedAddress": 32768,
+            "expectedBitmap": 251
+        },
+        {
+            "name": "two_button_transition",
+            "source": "Synthetic — DOWN (bit1) and P1 (bit2) both pressed: 0xFF & ~0x06 = 0xF9. Exercises a multi-bit frame the detector resolves per active bit.",
+            "payload": "00028000F9",
+            "expectsParse": true,
+            "expectedAddress": 32768,
+            "expectedBitmap": 249
+        },
+        {
+            "name": "virgin_sentinel",
+            "source": "Contract §App-layer payload: 0x80FE is the virgin sentinel (unbaptized panel) and MUST NOT be a test result. It PARSES (length-only reject) to a frame whose address is the marker; the observer drops it (Phase C), not the parser.",
+            "payload": "000280FEFF",
+            "expectsParse": true,
+            "expectedAddress": 33022,
+            "expectedBitmap": 255
+        },
+        {
+            "name": "malformed_too_short",
+            "source": "Synthetic — idle_all_released minus its key-state byte (4 bytes). Length-only reject.",
+            "payload": "00028000",
+            "expectsParse": false,
+            "reason": "Length is 4 bytes — wire contract requires exactly 5 (silent drop, length-only reject)."
+        }
+    ]
+}
