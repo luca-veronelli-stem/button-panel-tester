@@ -37,5 +37,6 @@ let Composition_ResolvesCanGraph_BindsRealPcanFrameStream () =
         Assert.IsType<SetAddressAckObserver>(ackObserver) |> ignore
         Assert.IsType<ProtocolMasterSequenceTransmitter>(transmitter) |> ignore
         Assert.IsType<BaptismService>(sp.GetRequiredService<IBaptismService>()) |> ignore
+        Assert.IsType<ButtonPressTestService>(sp.GetRequiredService<IButtonPressTestService>()) |> ignore
     finally
         (sp :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult()

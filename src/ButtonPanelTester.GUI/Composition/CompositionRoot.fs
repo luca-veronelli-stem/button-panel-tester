@@ -370,3 +370,19 @@ module CompositionRoot =
                 let logger = sp.GetRequiredService<ILogger<BaptismService>>()
                 new BaptismService(transmitter, whoIAm, setAddressAck, discovery, link, clock, logger)
                 :> IBaptismService)
+            // Button-press-test FSM driver (spec-005 Phase E): drives the pure
+            // button-press FSM (`ButtonPressTest.step`, Core) over the consumed
+            // RX observables — the button-state observer, the discovery
+            // snapshot, and the link state — plus an `IClock`-armed per-button
+            // deadline. RX-only (no transmitter): the technician presses the
+            // physical buttons. Modal, single-attempt, no auto-retry. All
+            // dependencies are bound earlier in this graph; registered as the
+            // LAST CAN service in the chain.
+            .AddSingleton<IButtonPressTestService>(fun sp ->
+                let buttons = sp.GetRequiredService<IButtonStateObserver>()
+                let discovery = sp.GetRequiredService<IPanelDiscoveryService>()
+                let link = sp.GetRequiredService<ICanLinkService>()
+                let clock = sp.GetRequiredService<IClock>()
+                let logger = sp.GetRequiredService<ILogger<ButtonPressTestService>>()
+                new ButtonPressTestService(buttons, discovery, link, clock, logger)
+                :> IButtonPressTestService)
