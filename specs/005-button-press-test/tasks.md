@@ -182,7 +182,7 @@ labels + `Provisional` flag, FR-016) — OPTIMUS-XP authoritative, the other thr
       canonical firmware order filtered by the active mask — total, order-preserving, no inactive
       bit). Extend the `Phase4.lean` umbrella; `lake build` green, `sorry`-free, standard axioms
       only. (Constitution I; FR-016; supports `test_visits_active_only`)
-- [ ] T011 **[NEW]** Add `src/ButtonPanelTester.Core/Can/ButtonSchema.fs`: the closed DU
+- [X] T011 **[NEW]** Add `src/ButtonPanelTester.Core/Can/ButtonSchema.fs`: the closed DU
       `FirmwareButton = UP | DOWN | P1 | P2 | P3 | MEM | STOP | LIGHT` (canonical = declaration
       order, R3), `ActiveButton = { Button; Bit; Decal }`, `ButtonSchema = { Variant: MarketingVariant;
       ActiveMask: byte; Active: ActiveButton list; Provisional: bool }`, and the four-variant table
@@ -191,7 +191,7 @@ labels + `Provisional` flag, FR-016) — OPTIMUS-XP authoritative, the other thr
       enums, `Provisional = true`. `Active` is computed as the canonical order filtered by
       `ActiveMask`. XML docs cite Lean `canonical_order_total` (T010) + [research.md](./research.md)
       R3/R4. Insert **after `KeyStateBitmap.fs`** (uses `MarketingVariant`). (FR-004/FR-016; R3/R4)
-- [ ] T012 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/ButtonSchemaProperties.fs`:
+- [X] T012 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/ButtonSchemaProperties.fs`:
       `SchemaActiveOnlyInOrder` (mirrors `canonical_order_total` — for every variant, `Active` is
       exactly the canonical firmware order filtered by `ActiveMask`: order preserved, every entry's
       bit set in the mask, no inactive bit present), plus an OPTIMUS-XP exactness fact (the four
