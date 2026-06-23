@@ -342,7 +342,7 @@ one commit). **E3** = {T023} (service + composition). **E4** = {T024, T025, T026
       the unmet condition" (the SC-008 basis). XML docs cite `Phase4/Enablement.lean` (T021). One commit
       (E2). *(No story label — serves FR-001/US1 surface and AC-3/US3 unavailable path; see §Format.)*
       (FR-001; SC-008)
-- [ ] T023 [US1] **[NEW]** Add `src/ButtonPanelTester.Services/Can/IButtonPressTestService.fs` +
+- [X] T023 [US1] **[NEW]** Add `src/ButtonPanelTester.Services/Can/IButtonPressTestService.fs` +
       `ButtonPressTestService.fs` (house pattern — interface file beside the service): drive the pure
       `step` over the consumed surfaces — ctor `(buttons: IButtonStateObserver, discovery:
       IPanelDiscoveryService, link: ICanLinkService, clock: IClock, logger:
