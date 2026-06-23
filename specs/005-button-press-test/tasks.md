@@ -331,7 +331,7 @@ one commit). **E3** = {T023} (service + composition). **E4** = {T024, T025, T026
       (the test is enabled **iff** the CAN link is `Connected` ∧ a panel is selected and baptized ∧ that
       panel is observable on the bus — FR-001), priority-ordered (link → selected-baptized → observable).
       Extend the `Phase4.lean` umbrella; `lake build` green. (Constitution I; FR-001)
-- [ ] T022 **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/ButtonPressTest.fs` with the enablement
+- [X] T022 **[EXTEND]** Extend `src/ButtonPanelTester.Core/Can/ButtonPressTest.fs` with the enablement
       surface (data-model §6, reusing the `Enablement = Enabled | Disabled of explanation` DU from
       `Baptism.fs`): `testEnablement : CanLinkState -> selectedBaptized: bool -> observable: bool ->
       Enablement` — `Disabled` always carries the unmet-condition explanation (link not Connected / no
