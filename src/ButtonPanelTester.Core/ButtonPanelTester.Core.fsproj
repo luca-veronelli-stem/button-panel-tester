@@ -17,6 +17,7 @@
         <Compile Include="Can/ButtonStateFrame.fs" />
         <Compile Include="Can/KeyStateBitmap.fs" />
         <Compile Include="Can/ButtonSchema.fs" />
+        <Compile Include="Can/ButtonPressTest.fs" />
         <Compile Include="Can/Ports.fs" />
         <Compile Include="Dictionary/ButtonPanelDictionary.fs" />
         <Compile Include="Dictionary/ContentHash.fs" />
