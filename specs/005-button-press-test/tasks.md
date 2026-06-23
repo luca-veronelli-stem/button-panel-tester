@@ -272,7 +272,7 @@ XML-doc citations (T019).
 **Constitution order**: Lean → F# + FsCheck. **Commit grouping**: **D1** = {T018} (Lean-only).
 **D2** = {T019, T020} (pure FSM + its properties, one commit).
 
-- [ ] T018 [US1] **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonPressTest.lean`: states,
+- [X] T018 [US1] **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonPressTest.lean`: states,
       events (`PressEdge | Tick | Retry | Skip | LinkChanged | PanelPresence`), the per-button
       `ButtonOutcome` (`Pending | Pass | Missed | Skipped`), `InterruptReason` (`LinkLost | PanelLost`),
       and the transition relation exactly per [data-model.md](./data-model.md) §4. Prove the seven
