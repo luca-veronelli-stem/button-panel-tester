@@ -121,7 +121,7 @@ contract's `[0x00,0x02,0x80,var_low,bitmap]` payloads verified against the on-di
       `Phase3.lean` — imports the Phase4 modules as they land) and register the new lib in
       `lean/lakefile.toml`: `[[lean_lib]] name = "Stem.ButtonPanelTester.Phase4"` + append to
       `defaultTargets`. `cd lean; lake build` green. Rides in the A1 commit. (Constitution I)
-- [ ] T005 **[NEW]** Add `src/ButtonPanelTester.Core/Can/ButtonStateFrame.fs`: the single-case
+- [X] T005 **[NEW]** Add `src/ButtonPanelTester.Core/Can/ButtonStateFrame.fs`: the single-case
       wrappers `VariableAddress of uint16` and `KeyStateBitmap of byte` (data-model §1 — prevent
       primitive confusion; `KeyStateBitmap` is the raw wire byte, `0` = pressed bit), the
       `ButtonStateFrame = { Address; Bitmap }` record, `parse : ReadOnlyMemory<byte> ->
@@ -129,13 +129,13 @@ contract's `[0x00,0x02,0x80,var_low,bitmap]` payloads verified against the on-di
       docs cite [contracts/button-state-wire-format.md](./contracts/button-state-wire-format.md) +
       Lean `parse_encode_roundtrip` (T002). Insert in `ButtonPanelTester.Core.fsproj` **after
       `Can/Baptism.fs`** (before `Can/Ports.fs`). (FR-006; R1; contract §App-layer payload)
-- [ ] T006 **[NEW]** Add `tests/ButtonPanelTester.Tests/Fixtures/Can/buttonStateFixtures.json`:
+- [X] T006 **[NEW]** Add `tests/ButtonPanelTester.Tests/Fixtures/Can/buttonStateFixtures.json`:
       `idle_all_released` (`00 02 80 00 FF` — no buttons pressed, all-active-bits-`1`),
       `optimus_light_pressed` (DOWN/bit1 cleared from idle), `optimus_suspension_pressed`
       (P1/bit2 cleared), a two-bit transition frame, `virgin_sentinel` (address `0x80FE` — MUST NOT
       be a result), `malformed_too_short`. Bytes are the contract's normative payloads
       (firmware-source-verified, see Phase A preamble). (FR-006; FR-014; R1)
-- [ ] T007 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/ButtonStateFrameProperties.fs`
+- [X] T007 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/ButtonStateFrameProperties.fs`
       (`ButtonStateFrameRoundtrip` over arbitrary address/bitmap; `ButtonStateFrameRejectsWrongLength`
       — length-only) and `tests/ButtonPanelTester.Tests/Unit/Can/ButtonStateFrameFixtureTests.fs`:
       for each T006 fixture assert `encode frame = fixture bytes` and the parse round-trip;

@@ -14,6 +14,7 @@
         <Compile Include="Can/PanelsOnBus.fs" />
         <Compile Include="Can/Pruning.fs" />
         <Compile Include="Can/Baptism.fs" />
+        <Compile Include="Can/ButtonStateFrame.fs" />
         <Compile Include="Can/Ports.fs" />
         <Compile Include="Dictionary/ButtonPanelDictionary.fs" />
         <Compile Include="Dictionary/ContentHash.fs" />
