@@ -327,7 +327,7 @@ real service graph with manual fakes.
 one commit). **E3** = {T023} (service + composition). **E4** = {T024, T025, T026, T027, T028}
 (integration suites). **E5** = {T029} (forensic logging + test).
 
-- [ ] T021 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/Enablement.lean`: prove `test_enabled_iff`
+- [X] T021 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/Enablement.lean`: prove `test_enabled_iff`
       (the test is enabled **iff** the CAN link is `Connected` ∧ a panel is selected and baptized ∧ that
       panel is observable on the bus — FR-001), priority-ordered (link → selected-baptized → observable).
       Extend the `Phase4.lean` umbrella; `lake build` green. (Constitution I; FR-001)

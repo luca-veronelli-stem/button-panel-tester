@@ -7,6 +7,7 @@
 --   * Phase4.KeyStateBitmap   — T003 (masked press-edge detector)
 --   * Phase4.ButtonSchema     — T010 (per-variant active-button schema)
 --   * Phase4.ButtonPressTest  — T018 (button-press-test session FSM)
+--   * Phase4.Enablement       — T021 (button-press-test enablement guard)
 --
 -- Each sub-module is `import`-ed below as it lands so `lake build` on the
 -- umbrella forces every Phase-4 theorem file to elaborate.
@@ -15,6 +16,7 @@ import Stem.ButtonPanelTester.Phase4.ButtonStateFrame
 import Stem.ButtonPanelTester.Phase4.KeyStateBitmap
 import Stem.ButtonPanelTester.Phase4.ButtonSchema
 import Stem.ButtonPanelTester.Phase4.ButtonPressTest
+import Stem.ButtonPanelTester.Phase4.Enablement
 
 namespace Stem.ButtonPanelTester.Phase4
 end Stem.ButtonPanelTester.Phase4
