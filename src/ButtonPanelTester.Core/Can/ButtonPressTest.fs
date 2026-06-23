@@ -184,3 +184,56 @@ module ButtonPressTest =
         | Interrupted _ -> (state, NoAction)
         | Idle -> (state, NoAction)
         | Prompting(index, deadline, results) -> stepPrompting schema index deadline results event
+
+    /// The per-button countdown budget: 10 s, per `data-model.md` §2/§4 and
+    /// research R7 (FR-005, default 10 s) — a `research`-config constant in
+    /// CODE, NOT a UI setting. The pure FSM never reads a clock; the SERVICE
+    /// arms each `Prompting` deadline as `clock.UtcNow() + testBudget` and
+    /// re-arms it on every `AdvancePrompt` / `Retry`. Mirrors the baptism
+    /// budgets (`Baptism.announceBudget`), `TimeSpan` not UI.
+    let testBudget: TimeSpan = TimeSpan.FromSeconds 10.0
+
+    /// Explanation a `Disabled` button-press-test guard carries when a panel
+    /// is selected but NOT baptized — or no panel is selected at all (the
+    /// selected-and-baptized conjunct, FR-001). The test only runs on an
+    /// addressed panel (a baptized panel transmits its button state, R1).
+    [<Literal>]
+    let NoBaptizedPanelSelectedExplanation =
+        "Select a baptized panel before running the button-press test."
+
+    /// Explanation a `Disabled` button-press-test guard carries when the
+    /// selected baptized panel is not observable on the bus (the observable
+    /// conjunct, FR-001): no button-state frames are arriving from it, so a
+    /// run could not score any press.
+    [<Literal>]
+    let PanelNotObservableExplanation =
+        "The selected panel is not observable on the bus; no button-state frames are arriving."
+
+    /// `true` iff the link state is `Connected` — the one bit the enablement
+    /// guard reads off the link (`data-model.md` §6). Mirrors `Baptism`'s
+    /// private `isConnected` and Lean `isConnected`.
+    let private isConnected (link: CanLinkState) : bool =
+        match link with
+        | Connected _ -> true
+        | _ -> false
+
+    /// Button-press-test enablement guard (`data-model.md` §6, FR-001):
+    /// `Enabled` IFF the link is `Connected`, a baptized panel is selected, AND
+    /// that panel is observable on the bus. Priority-ordered case analysis —
+    /// link down / no baptized panel selected / panel not observable — each
+    /// `Disabled` branch naming its one unmet conjunct (the link-down text is
+    /// the shared `Baptism.LinkNotConnectedExplanation`). Reuses the
+    /// `Enablement` DU from `Baptism.fs` (data-model §6 — the test shares the
+    /// baptism enablement shape). The Lean theorem `test_enabled_iff` in
+    /// `lean/Stem/ButtonPanelTester/Phase4/Enablement.lean` (T021) proves this
+    /// ordered analysis equivalent to the flat conjunction; the FsCheck
+    /// `TestEnablementGuards` property in
+    /// `Tests/Property/Can/ButtonPressTestEnablementProperties.fs` (T022)
+    /// witnesses it at the value level — the SC-008 basis (the test is
+    /// unavailable, with a reason, on a non-baptized panel or a non-`Connected`
+    /// link).
+    let testEnablement (link: CanLinkState) (selectedBaptized: bool) (observable: bool) : Enablement =
+        if not (isConnected link) then Disabled Baptism.LinkNotConnectedExplanation
+        elif not selectedBaptized then Disabled NoBaptizedPanelSelectedExplanation
+        elif not observable then Disabled PanelNotObservableExplanation
+        else Enabled

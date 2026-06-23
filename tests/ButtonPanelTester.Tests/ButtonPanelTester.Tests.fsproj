@@ -36,6 +36,7 @@
         <Compile Include="Property/Can/KeyStateBitmapProperties.fs" />
         <Compile Include="Property/Can/ButtonSchemaProperties.fs" />
         <Compile Include="Property/Can/ButtonPressTestProperties.fs" />
+        <Compile Include="Property/Can/ButtonPressTestEnablementProperties.fs" />
         <Compile Include="Integration/Can/CanLinkServiceLifecycleTests.fs" />
         <Compile Include="Integration/Can/DiscoveryE2ETests.fs" />
         <Compile Include="Integration/Can/BaptismE2ETests.fs" />
