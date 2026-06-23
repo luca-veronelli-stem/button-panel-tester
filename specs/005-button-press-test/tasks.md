@@ -176,7 +176,7 @@ labels + `Provisional` flag, FR-016) — OPTIMUS-XP authoritative, the other thr
 **Constitution order**: Lean → F# + FsCheck. **Commit grouping**: **B1** = {T010} (Lean-only).
 **B2** = {T011, T012} (schema + properties, one commit).
 
-- [ ] T010 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonSchema.lean`: model the fixed
+- [X] T010 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonSchema.lean`: model the fixed
       firmware button order `[UP;DOWN;P1;P2;P3;MEM;STOP;LIGHT]` and the active-only ordered schema
       per [data-model.md](./data-model.md) §3; prove `canonical_order_total` (the active list is the
       canonical firmware order filtered by the active mask — total, order-preserving, no inactive

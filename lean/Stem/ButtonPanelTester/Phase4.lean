@@ -5,12 +5,14 @@
 --
 --   * Phase4.ButtonStateFrame — T002 (VAR_WRITE button-state codec)
 --   * Phase4.KeyStateBitmap   — T003 (masked press-edge detector)
+--   * Phase4.ButtonSchema     — T010 (per-variant active-button schema)
 --
 -- Each sub-module is `import`-ed below as it lands so `lake build` on the
 -- umbrella forces every Phase-4 theorem file to elaborate.
 
 import Stem.ButtonPanelTester.Phase4.ButtonStateFrame
 import Stem.ButtonPanelTester.Phase4.KeyStateBitmap
+import Stem.ButtonPanelTester.Phase4.ButtonSchema
 
 namespace Stem.ButtonPanelTester.Phase4
 end Stem.ButtonPanelTester.Phase4
