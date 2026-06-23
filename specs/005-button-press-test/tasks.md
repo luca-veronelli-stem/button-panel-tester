@@ -142,7 +142,7 @@ contract's `[0x00,0x02,0x80,var_low,bitmap]` payloads verified against the on-di
       `virgin_sentinel` parses to a frame whose address is the virgin marker (the **observer**, not
       the parser, drops it — T015); `malformed_too_short` → `None`. Lands with T005–T006 (A2
       commit). (Constitution II; FR-006)
-- [ ] T008 **[NEW]** Add `src/ButtonPanelTester.Core/Can/KeyStateBitmap.fs`: `[<Literal>] let
+- [X] T008 **[NEW]** Add `src/ButtonPanelTester.Core/Can/KeyStateBitmap.fs`: `[<Literal>] let
       PressedBit = 0uy` (data-model §2 — firmware press clears the bit, `UserMain.c:1369,:978`) and
       the pure `pressEdges : activeMask: byte -> prior: KeyStateBitmap -> next: KeyStateBitmap ->
       Set<int>` returning the active-masked bit positions that went `1 → 0`. XML docs cite
@@ -150,7 +150,7 @@ contract's `[0x00,0x02,0x80,var_low,bitmap]` payloads verified against the on-di
       `press_edge_iff_high_to_low` (T003), noting `PressedBit` is the **one-line-flip** point for a
       bench surprise. Insert **after `ButtonStateFrame.fs`** (uses the `KeyStateBitmap` type).
       (FR-006/FR-014; R2)
-- [ ] T009 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/KeyStateBitmapProperties.fs`:
+- [X] T009 **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/KeyStateBitmapProperties.fs`:
       `PressEdgeDetectsHighToLow` (mirrors `press_edge_iff_high_to_low` — a button is reported iff
       its active bit was `1` in `prior` and `0` in `next`), `InactiveBitsIgnored` (mirrors
       `inactive_bits_ignored` — bits outside `activeMask` never appear), and a baseline property
