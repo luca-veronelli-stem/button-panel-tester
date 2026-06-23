@@ -40,6 +40,11 @@
         <Compile Include="Integration/Can/CanLinkServiceLifecycleTests.fs" />
         <Compile Include="Integration/Can/DiscoveryE2ETests.fs" />
         <Compile Include="Integration/Can/BaptismE2ETests.fs" />
+        <Compile Include="Integration/Can/ButtonPressTestE2ETests.fs" />
+        <Compile Include="Integration/Can/ButtonPressTimeoutTests.fs" />
+        <Compile Include="Integration/Can/ButtonPressRecoveryTests.fs" />
+        <Compile Include="Integration/Can/ButtonPressInterruptionTests.fs" />
+        <Compile Include="Integration/Can/ButtonPressRerunTests.fs" />
         <Compile Include="Integration/Can/ResetE2ETests.fs" />
         <Compile Include="Integration/Can/TimeoutE2ETests.fs" />
         <Compile Include="Integration/Can/LinkLossAbortsTests.fs" />

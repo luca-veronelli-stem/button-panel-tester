@@ -358,30 +358,30 @@ one commit). **E3** = {T023} (service + composition). **E4** = {T024, T025, T026
       no auto-retry (Retry is technician-driven). Register `IButtonPressTestService` in
       `CompositionRoot.fs` and extend `CompositionRootCanTests` to resolve it (hardware-free). (FR-002/003/
       005/006/007/009/010/013; R7/R8)
-- [ ] T024 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressTestE2ETests.fs`
+- [X] T024 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressTestE2ETests.fs`
       over `InMemoryButtonStateObserver` + the discovery service + a real `CanLinkService` wrapping
       `InMemoryCanLink` + `FrozenClock` (spec-003/004 integration pattern): the happy path — a panel
       baptized OPTIMUS-XP, the four active buttons pressed in order (emit idle→pressed frames), each
       scored `Pass` within the window and the prompt advancing (`Light → Suspension → Up → Down`), the
       final grid showing four `Pass` and `allActivePassed = true` (SC-001/SC-002 logic side). Lands in
       the E4 commit. (FR-002/006/010/011; SC-001/SC-002)
-- [ ] T025 [P] [US2] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressTimeoutTests.fs`
+- [X] T025 [P] [US2] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressTimeoutTests.fs`
       (`FrozenClock`-driven): advance to just under the 10 s deadline → still prompting; cross the
       deadline → `Missed` with Retry/Skip offered (SC-003, within ~1 s of the window elapsing); a
       **matching press after the reported `Missed` does NOT flip the outcome** (the `terminal_absorbs` /
       never-flip rule). Rides in the E4 commit. (FR-005/FR-007; SC-003)
-- [ ] T026 [P] [US2] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressRecoveryTests.fs`:
+- [X] T026 [P] [US2] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressRecoveryTests.fs`:
       a wrong **active** button while X is prompted → recorded `Unexpected` (visible in the log, **not**
       counted as X's result), prompt for X stays active (FR-008 / SC-004 logic side); `Retry` re-arms the
       same button with a fresh countdown (FR-009); `Skip` records `Skipped` (**≠ Pass**) and advances
       (FR-009); a held button registers once and a bouncing repeat scores once (edge cases). Rides in the
       E4 commit. (FR-008/FR-009/FR-010; SC-004)
-- [ ] T027 [P] [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressInterruptionTests.fs`:
+- [X] T027 [P] [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressInterruptionTests.fs`:
       the link leaving `Connected` mid-prompt → `Interrupted LinkLost`, never `allActivePassed`; the
       selected panel disappearing from discovery mid-prompt → `Interrupted PanelLost`; a press for an
       **inactive** position (outside the variant mask) is ignored, never a prompted-button result
       (FR-014). Rides in the E4 commit. (FR-013/FR-014; SC-005)
-- [ ] T028 [P] [US3] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressRerunTests.fs`:
+- [X] T028 [P] [US3] **[NEW]** Add `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressRerunTests.fs`:
       after a completed run, Re-run clears all prior per-button results and starts a fresh sequence
       (SC-007); a panel baptized as a full-set provisional variant (EDEN-XP) drives all-eight prompts with
       that variant's labels (the prompted set/labels track the schema — US3 AC-2); the enablement guard
