@@ -285,7 +285,7 @@ XML-doc citations (T019).
       `terminal_absorbs` (a late press after `Missed`/terminal does not change a recorded outcome —
       never-flip). Extend the `Phase4.lean` umbrella; `lake build` green, `sorry`-free, standard axioms
       only. (Constitution I; FR-002/006/009/011/013)
-- [ ] T019 [US1] **[NEW]** Add `src/ButtonPanelTester.Core/Can/ButtonPressTest.fs`: the FSM types —
+- [X] T019 [US1] **[NEW]** Add `src/ButtonPanelTester.Core/Can/ButtonPressTest.fs`: the FSM types —
       `ButtonOutcome` (the closed DU of data-model §4), `InterruptReason`, `ButtonPressTestState`
       (`Idle | Prompting of index * deadline * results | Completed of results | Interrupted of reason *
       partial`), `TestEvent`, `TestAction` (`NoAction | RecordUnexpected of bit | AdvancePrompt of
@@ -299,7 +299,7 @@ XML-doc citations (T019).
       `Phase4/ButtonPressTest.lean` (T018) + data-model §4. Insert **after `ButtonSchema.fs`** (uses
       `ButtonSchema`) and after `Baptism.fs` (the `Enablement` DU it reuses in Phase E). (FR-002..014;
       stem-fp closed-DU triple)
-- [ ] T020 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/ButtonPressTestProperties.fs`
+- [X] T020 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests/Property/Can/ButtonPressTestProperties.fs`
       (custom `Arbitrary` for scripted event sequences, `stem-fp-discipline` §9): the seven FsCheck
       properties mirroring T018 — `TestVisitsActiveOnly`, `ResultVectorLength`, `TestOutcomeTotal`,
       `PassRequiresPressEdge`, `SkipNeverPass`, `InterruptExcludesAllPassed`, `TerminalAbsorbs`. Lands
