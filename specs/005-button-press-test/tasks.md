@@ -388,7 +388,7 @@ one commit). **E3** = {T023} (service + composition). **E4** = {T024, T025, T026
       reports `Disabled` (unavailable) when no panel is selected or the selected panel is not baptized
       (US3 AC-3 / FR-001, the service-seam projection of SC-008). Rides in the E4 commit. (FR-001/FR-003/
       FR-016; SC-007/SC-008)
-- [ ] T029 [US1] **[NEW]** Add `src/ButtonPanelTester.Services/Can/ButtonPressTestLogging.fs` +
+- [X] T029 [US1] **[NEW]** Add `src/ButtonPanelTester.Services/Can/ButtonPressTestLogging.fs` +
       `tests/ButtonPanelTester.Tests/Unit/Can/ButtonPressTestLoggingTests.fs`: structured forensic records
       via `ILogger<ButtonPressTestService>` template messages + named parameters (`stem-logging`,
       archetype-A required — **no** string interpolation, **no** `Console.WriteLine`): each prompt, each

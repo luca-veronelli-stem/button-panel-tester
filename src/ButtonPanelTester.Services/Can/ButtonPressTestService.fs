@@ -1,6 +1,7 @@
 namespace Stem.ButtonPanelTester.Services.Can
 
 open System
+open System.Globalization
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging
@@ -126,12 +127,110 @@ type ButtonPressTestService
         | Completed _
         | Interrupted _ -> next
 
-    /// Publish the new state OUTSIDE the lock and, on a terminal transition,
-    /// complete the run's `TaskCompletionSource`. Terminal idempotence is
-    /// enforced by `apply` (a step out of a terminal state is absorbed before
-    /// reaching here), so the completion fires exactly once.
-    let commit (next: ButtonPressTestState) (attemptTcs: TaskCompletionSource<ButtonPressTestState>) =
-        stateSubject.OnNext next // publish OUTSIDE the lock
+    /// Render an instant as ISO-8601 round-trip ("O", invariant culture) for the
+    /// forensic record's `{At}` field (the `BaptismService.iso` precedent).
+    let iso (instant: DateTimeOffset) = instant.ToString("O", CultureInfo.InvariantCulture)
+
+    /// A `BeginScope` correlating every forensic record of a run to the selected
+    /// panel's UUID hex — a device HARDWARE identifier, NOT operator identity
+    /// (Principle V). Reads `selected` under a short lock that is released before
+    /// the scope is used (never held across the log emission).
+    let runScope () : IDisposable =
+        let runKey =
+            lock stateLock (fun () -> selected)
+            |> Option.map ButtonPressTestLogging.uuidText
+            |> Option.defaultValue "-"
+
+        // `ILogger.BeginScope` may return null (no scope provider configured);
+        // fall back to a no-op disposable so `use _scope` is always safe.
+        match logger.BeginScope(dict [ "Run", box runKey ]) with
+        | null -> { new IDisposable with member _.Dispose() = () }
+        | scope -> scope
+
+    /// Emit the FR-012 forensic records (R10) for one FSM transition, OUTSIDE the
+    /// lock and within the run-correlation scope. The `event` + `action` + the
+    /// prev→next delta select the records: a scoring press logs `Pass` then the
+    /// next `Prompt` (or `Completed`); a wrong active press logs `Unexpected`; a
+    /// timeout logs `Missed`; a re-arm logs `Retry`; a skip logs `Skipped` then
+    /// the next `Prompt` (or `Completed`); a halt logs `Interrupted`. Level
+    /// discipline lives in `ButtonPressTestLogging` (Information vs Warning).
+    let logForensic
+        (sch: ButtonSchema)
+        (now: DateTimeOffset)
+        (prev: ButtonPressTestState)
+        (event: TestEvent)
+        (action: TestAction)
+        (next: ButtonPressTestState)
+        =
+        let at = iso now
+        let active = sch.Active
+        use _scope = runScope ()
+
+        let logAdvanceTarget () =
+            match action, next with
+            | AdvancePrompt ni, _ -> ButtonPressTestLogging.logPrompt logger ni active.[ni].Decal active.[ni].Bit at
+            | FinishCompleted, Completed results ->
+                ButtonPressTestLogging.logCompleted logger (ButtonPressTest.allActivePassed results) at
+            | _ -> ()
+
+        match prev with
+        | Prompting(pi, _, prevResults) ->
+            match event, action with
+            | TestEvent.PressEdge bit, (AdvancePrompt _ | FinishCompleted) ->
+                ButtonPressTestLogging.logPass logger pi active.[pi].Decal bit at
+                logAdvanceTarget ()
+            | TestEvent.PressEdge bit, RecordUnexpected _ -> ButtonPressTestLogging.logUnexpected logger pi bit at
+            | TestEvent.Skip, (AdvancePrompt _ | FinishCompleted) ->
+                ButtonPressTestLogging.logSkipped logger pi active.[pi].Decal active.[pi].Bit at
+                logAdvanceTarget ()
+            | TestEvent.Tick _, _ ->
+                match next with
+                | Prompting(_, _, nextResults) when prevResults.[pi] = Pending && nextResults.[pi] = Missed ->
+                    ButtonPressTestLogging.logMissed logger pi active.[pi].Decal active.[pi].Bit at
+                | _ -> ()
+            | TestEvent.Retry, _ ->
+                match next with
+                | Prompting(_, _, nextResults) when prevResults.[pi] = Missed && nextResults.[pi] = Pending ->
+                    ButtonPressTestLogging.logRetry logger pi active.[pi].Decal active.[pi].Bit at
+                | _ -> ()
+            | _ -> ()
+        | ButtonPressTestState.Idle
+        | Completed _
+        | Interrupted _ -> ()
+
+        match action with
+        | Halt reason -> ButtonPressTestLogging.logInterrupted logger reason at
+        | _ -> ()
+
+    /// Emit the FR-012 forensic record for the run start: the initial `Prompt`
+    /// (button 0), or `Completed` for a variant with no active buttons.
+    let logStart (sch: ButtonSchema) (startState: ButtonPressTestState) =
+        let at = iso (clock.UtcNow())
+        use _scope = runScope ()
+
+        match startState with
+        | Prompting(i, _, _) -> ButtonPressTestLogging.logPrompt logger i sch.Active.[i].Decal sch.Active.[i].Bit at
+        | Completed results -> ButtonPressTestLogging.logCompleted logger (ButtonPressTest.allActivePassed results) at
+        | ButtonPressTestState.Idle
+        | Interrupted _ -> ()
+
+    /// Emit the forensic records for the transition, then publish the new state
+    /// OUTSIDE the lock — but only when it actually CHANGED (a self-loop /
+    /// `Unexpected` / no-op deadline tick leaves the state untouched, so it does
+    /// not re-notify subscribers). On a terminal transition, complete the run's
+    /// `TaskCompletionSource` (idempotence enforced by `apply`, so once only).
+    let commit
+        (sch: ButtonSchema)
+        (prev: ButtonPressTestState)
+        (event: TestEvent)
+        (action: TestAction)
+        (next: ButtonPressTestState)
+        (attemptTcs: TaskCompletionSource<ButtonPressTestState>)
+        =
+        logForensic sch (clock.UtcNow()) prev event action next
+
+        if next <> prev then
+            stateSubject.OnNext next // publish OUTSIDE the lock, only on an actual change
 
         if isTerminal next then
             attemptTcs.TrySetResult next |> ignore
@@ -160,10 +259,10 @@ type ButtonPressTestService
                         if isTerminal next then
                             running <- false
 
-                        Some(next, tcs))
+                        Some(sch, current, next, action, tcs))
 
         match work with
-        | Some(next, attemptTcs) -> commit next attemptTcs
+        | Some(sch, prev, next, action, attemptTcs) -> commit sch prev event action next attemptTcs
         | None -> ()
 
     /// Button-state ingest. Converts consecutive observed frames into
@@ -269,6 +368,7 @@ type ButtonPressTestService
     /// schema), and wire cancellation to cancel the run's `Task`.
     let beginRun (panel: PanelUuid) (sch: ButtonSchema) (cancellationToken: CancellationToken) : Task<ButtonPressTestState> =
         let startState, attemptTcs = startRun panel sch
+        logStart sch startState // forensic: the initial prompt (or immediate completion)
         stateSubject.OnNext startState // publish OUTSIDE the lock
 
         if isTerminal startState then

@@ -66,6 +66,7 @@
         <Compile Include="Unit/Can/CanLinkLoggingTests.fs" />
         <Compile Include="Unit/Can/PanelDiscoveryLoggingTests.fs" />
         <Compile Include="Unit/Can/BaptismLoggingTests.fs" />
+        <Compile Include="Unit/Can/ButtonPressTestLoggingTests.fs" />
     </ItemGroup>
 
     <ItemGroup>
