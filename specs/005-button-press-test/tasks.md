@@ -241,7 +241,7 @@ stopgap**), composition wiring. Contract:
       (the shipped `WhoIAmReassemblyObserverTests` pattern), assert the observer emits the matching
       `ButtonStateFrame`; a `0x80FE` virgin frame and a non-button address (`0x0024` WHO_I_AM) are
       **dropped**; a wrong command is dropped. Lands with T015 (C2 commit). (Constitution IV; R5/R6)
-- [ ] T017 **[EXTEND]** Extend `src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs`: register
+- [X] T017 **[EXTEND]** Extend `src/ButtonPanelTester.GUI/Composition/CompositionRoot.fs`: register
       `IButtonStateObserver → ButtonStateReassemblyObserver` as a singleton over the existing shared
       `ICanFrameStream` + a `PacketReassembler` (same RX path the WHO_I_AM observer taps). Extend
       `tests/ButtonPanelTester.Tests.Windows/Integration/Can/CompositionRootCanTests.fs` to resolve

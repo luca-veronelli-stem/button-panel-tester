@@ -289,6 +289,19 @@ module CompositionRoot =
                 let frameStream = sp.GetRequiredService<ICanFrameStream>()
                 let logger = sp.GetRequiredService<ILogger<WhoIAmReassemblyObserver>>()
                 new WhoIAmReassemblyObserver(frameStream, logger) :> IWhoIAmObserver)
+            // Button-state RX observer (spec-005 Phase C): taps the SAME bound
+            // `ICanFrameStream` the WHO_I_AM observer does — so it transitively rides the shared
+            // `CanPortShare` and needs no eager PEAK build — reassembles segmented SP_APP frames,
+            // command-filters VAR_WRITE (0x00:0x02) + the button-state address set {0x8000, 0x803E},
+            // parses, and republishes decoded `ButtonStateFrame`s on `IButtonStateObserver`. The
+            // observer builds its OWN `PacketReassembler` internally (like the WHO_I_AM one — each
+            // observer buffers independently); only the `ICanFrameStream` is shared. The Phase E
+            // `ButtonPressTestService` consumes this; nothing resolves it yet beyond the composition
+            // smoke.
+            .AddSingleton<IButtonStateObserver>(fun sp ->
+                let frameStream = sp.GetRequiredService<ICanFrameStream>()
+                let logger = sp.GetRequiredService<ILogger<ButtonStateReassemblyObserver>>()
+                new ButtonStateReassemblyObserver(frameStream, logger) :> IButtonStateObserver)
             // SET_ADDRESS ACK RX observer (spec-004 confirmation rework, D1): taps the SAME bound
             // `ICanFrameStream` the WHO_I_AM observer does — so it transitively rides the shared
             // `CanPortShare` and needs no eager PEAK build — and surfaces the `0x80|0x25`
