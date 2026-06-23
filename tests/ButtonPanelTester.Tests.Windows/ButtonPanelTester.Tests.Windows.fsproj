@@ -40,6 +40,7 @@
         <Compile Include="Unit/Can/PcanCanLinkErrorTextTests.fs" />
         <Compile Include="Unit/Can/PcanCanFrameStreamTests.fs" />
         <Compile Include="Unit/Can/WhoIAmReassemblyObserverTests.fs" />
+        <Compile Include="Unit/Can/ButtonStateReassemblyObserverTests.fs" />
         <Compile Include="Unit/Can/SetAddressAckObserverTests.fs" />
         <Compile Include="Unit/Can/ProtocolMasterSequenceTransmitterTests.fs" />
         <Compile Include="Integration/HttpRegistrationClientTests.fs" />

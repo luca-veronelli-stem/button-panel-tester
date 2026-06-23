@@ -229,14 +229,14 @@ stopgap**), composition wiring. Contract:
       `Emit(frame)` pushes synchronously to subscribers — the deterministic test driver (mirror
       `InMemoryWhoIAmObserver`). Insert after `Fakes/Can/InMemoryMasterSequenceTransmitter.fs` in
       the test fsproj. Lands with T013 (C1 commit). (Constitution III/IV)
-- [ ] T015 **[NEW]** Add `src/ButtonPanelTester.Infrastructure/Can/ButtonStateReassemblyObserver.fs`
+- [X] T015 **[NEW]** Add `src/ButtonPanelTester.Infrastructure/Can/ButtonStateReassemblyObserver.fs`
       (`net10.0-windows`): subscribe `ICanFrameStream.RawFramesReceived`, feed a reused
       `PacketReassembler`, filter command `0x00:0x02` + the button-state address set
       (`{0x8000, 0x803E}`; drop the `0x80FE` virgin sentinel and non-button addresses inline — R6,
       extending the inherited hardcoded-metadata set, **no new bypass**), call `ButtonStateFrame.parse`,
       republish via `SubjectFanOut<ButtonStateFrame>` (thread-safe, callback not held under the lock —
       spec-002/003 precedent). Mirror `WhoIAmReassemblyObserver.fs`. (Constitution III/VI; R5/R6)
-- [ ] T016 **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Unit/Can/ButtonStateReassemblyObserverTests.fs`:
+- [X] T016 **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Unit/Can/ButtonStateReassemblyObserverTests.fs`:
       drive raw chunks of a `VAR_WRITE` button frame through a file-private fake `ICanFrameStream`
       (the shipped `WhoIAmReassemblyObserverTests` pattern), assert the observer emits the matching
       `ButtonStateFrame`; a `0x80FE` virgin frame and a non-button address (`0x0024` WHO_I_AM) are
