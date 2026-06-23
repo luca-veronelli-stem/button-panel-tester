@@ -107,17 +107,17 @@ contract's `[0x00,0x02,0x80,var_low,bitmap]` payloads verified against the on-di
 **A2** = {T005, T006, T007} (codec vertical: impl + fixture + tests, one commit).
 **A3** = {T008, T009} (detector vertical: impl + tests, one commit).
 
-- [ ] T002 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonStateFrame.lean`: model the
+- [X] T002 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonStateFrame.lean`: model the
       `VAR_WRITE` button-frame codec per [data-model.md](./data-model.md) §1 (variable address
       `0x80NN`, key-state byte); prove `parse_encode_roundtrip` and `encode_length`. `sorry`-free,
       axioms ⊆ {`propext`, `Classical.choice`, `Quot.sound`}. (Constitution I; FR-006; R1)
-- [ ] T003 [P] **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/KeyStateBitmap.lean`: model the
+- [X] T003 [P] **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/KeyStateBitmap.lean`: model the
       masked bitmap + press-edge detector per [data-model.md](./data-model.md) §2; prove
       `press_edge_iff_high_to_low` (an active bit is a press **iff** it was `1` and is now `0` —
       pressed = `0` per firmware R2) and `inactive_bits_ignored` (bits outside the active mask never
       appear in the edge set — FR-014). `sorry`-free, standard axioms only. (Constitution I;
       FR-006/FR-014; R2)
-- [ ] T004 **[NEW]** Add the umbrella `lean/Stem/ButtonPanelTester/Phase4.lean` (mirroring
+- [X] T004 **[NEW]** Add the umbrella `lean/Stem/ButtonPanelTester/Phase4.lean` (mirroring
       `Phase3.lean` — imports the Phase4 modules as they land) and register the new lib in
       `lean/lakefile.toml`: `[[lean_lib]] name = "Stem.ButtonPanelTester.Phase4"` + append to
       `defaultTargets`. `cd lean; lake build` green. Rides in the A1 commit. (Constitution I)
