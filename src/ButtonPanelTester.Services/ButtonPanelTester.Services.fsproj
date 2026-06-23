@@ -14,6 +14,7 @@
         <Compile Include="Can/BaptismLogging.fs" />
         <Compile Include="Can/BaptismService.fs" />
         <Compile Include="Can/IButtonPressTestService.fs" />
+        <Compile Include="Can/ButtonPressTestLogging.fs" />
         <Compile Include="Can/ButtonPressTestService.fs" />
         <Compile Include="Dictionary/DictionaryOptions.fs" />
         <Compile Include="Dictionary/IDictionaryService.fs" />
