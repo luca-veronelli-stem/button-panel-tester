@@ -15,21 +15,33 @@ $failures = @()
 git diff --check
 if ($LASTEXITCODE -ne 0) { $failures += 'git diff --check' }
 
-# STEM .NET default - uncomment + adjust per repo:
-# dotnet build -c Release
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
-# dotnet test Tests/Tests.csproj --framework net10.0
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test' }
-# dotnet format --verify-no-changes
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet format' }
+# Build the whole solution in Release (src + tests + GUI).
+dotnet build Stem.ButtonPanelTester.slnx -c Release
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build (slnx, Release)' }
 
-# Lean formalization (for repos with specs/ Lean projects):
-# lake build
-# if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+# Test legs are per-project (standards dotnet-ci.yml). Cross-platform *.Tests
+# run WITH --framework net10.0; Windows-only *.Tests.Windows run WITHOUT it
+# (NETSDK1005 guard: a net10.0-windows-only project has no net10.0 target).
 
-# Ticket-specific proof (extend per ticket, same capture pattern):
-# dotnet test Tests/Tests.csproj --filter FullyQualifiedName~<focused-pattern>
-# if ($LASTEXITCODE -ne 0) { $failures += '<focused-pattern>' }
+# Cross-platform leg: Core/Services FsCheck + xUnit + integration. No hardware.
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj --framework net10.0 -c Release --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test ButtonPanelTester.Tests' }
+
+# Windows leg: Infrastructure/GUI/Integration (Avalonia.Headless GUI tests live
+# here). Hardware excluded, no --framework.
+dotnet test tests/ButtonPanelTester.Tests.Windows/ButtonPanelTester.Tests.Windows.fsproj -c Release --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test ButtonPanelTester.Tests.Windows' }
+
+# Lean formalization: the Phase 4 theorems must still compile with no sorry
+# (Phase F is GUI-only and adds no Lean, but the gate keeps the proofs honest).
+Push-Location lean
+lake build
+if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+Pop-Location
+
+# Phase F focused proof: the button-press GUI view Headless suites (Windows leg).
+dotnet test tests/ButtonPanelTester.Tests.Windows/ButtonPanelTester.Tests.Windows.fsproj -c Release --filter "Category!=Hardware&FullyQualifiedName~ButtonPressTestView"
+if ($LASTEXITCODE -ne 0) { $failures += 'focused: ButtonPressTestView' }
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
