@@ -150,6 +150,7 @@ type MainWindow(services: IServiceProvider) as this =
     let panelDiscovery = services.GetRequiredService<IPanelDiscoveryService>()
     let baptismService = services.GetRequiredService<IBaptismService>()
     let buttonPressTestService = services.GetRequiredService<IButtonPressTestService>()
+    let buttonStateObserver = services.GetRequiredService<IButtonStateObserver>()
     let credentialStore = services.GetRequiredService<ICredentialStore>()
     let registrationClient = services.GetRequiredService<IRegistrationClient>()
     let descriptorProvider =
@@ -236,10 +237,45 @@ type MainWindow(services: IServiceProvider) as this =
     let mutable lastButtonPressState: ButtonPressTestState = ButtonPressTestState.Idle
 
     /// The `ButtonSchema` of the in-flight / last button-press run (spec-005
-    /// Phase F). Set at Run-press time from the selected baptized panel's variant
-    /// so `ButtonPressTestView.view` renders the result grid against the schema
-    /// the run was actually started with (FR-004/016).
+    /// Phase F). Set at Run-press time from the heartbeating panel's variant so
+    /// `ButtonPressTestView.view` renders the result grid against the schema the
+    /// run was actually started with (FR-004/016).
     let mutable lastButtonPressSchema: ButtonSchema option = None
+
+    /// The instant the last button-state heartbeat was observed (spec-005 Phase
+    /// F, fix #270), via `IButtonStateObserver`. `None` until the first frame; the
+    /// subscription below sets it. A baptized panel is silent on WHO_I_AM, so this
+    /// heartbeat — NOT discovery — is the presence signal: the button-press
+    /// surface keys observability off its recency (`ButtonPressTest.observableWindow`).
+    let mutable lastButtonStateObservedAt: DateTimeOffset option = None
+
+    /// The `MarketingVariant` the last observed heartbeat decoded from its directed
+    /// CAN ID (spec-005 Phase F, fix #270). `None` until the first frame; drives
+    /// the prompt schema + the baptized/variant enablement conjunct, auto-targeting
+    /// the single heartbeating panel under test.
+    let mutable lastButtonStateVariant: MarketingVariant option = None
+
+    /// Whether the surface last rendered the panel as observable — so the 1 Hz
+    /// idle tick repaints the button-press surface only when heartbeat recency
+    /// actually flips (a steady idle state does not repaint every second).
+    let mutable lastButtonStateShownObservable = false
+
+    /// Forensic run-correlation key for a button-press run (fix #270): a baptized
+    /// panel is silent on WHO_I_AM, so its UUID is unavailable in the button-press
+    /// path. With one panel under test at a time the run scope keys off this
+    /// sentinel instead of a per-panel UUID; the variant (the real identity the
+    /// heartbeat carries) drives the schema.
+    let buttonPressRunKey = PanelUuid(0u, 0u, 0u)
+
+    /// `true` when a button-state heartbeat has arrived within
+    /// `ButtonPressTest.observableWindow` (spec-005 Phase F, fix #270): the
+    /// recency-based observability signal that replaces the discovery list-membership
+    /// check. A heartbeat only ever decodes to a known `Marketing` variant (the
+    /// observer drops the rest), so an observable heartbeat IS a baptized panel.
+    let buttonStateObservable () : bool =
+        match lastButtonStateObservedAt with
+        | Some seenAt -> clock.UtcNow() - seenAt <= ButtonPressTest.observableWindow
+        | None -> false
 
     // Active Avalonia theme. Initial value read once at construction
     // from `Application.Current.ActualThemeVariant`; every render
@@ -452,25 +488,25 @@ type MainWindow(services: IServiceProvider) as this =
         ()
 
     /// Run-button callback wired into `ButtonPressTestView.view` (spec-005 Phase F,
-    /// FR-002/004/005). Resolves the selected baptized panel's variant → its
-    /// `ButtonSchema`, then starts ONE modal run via `IButtonPressTestService.RunAsync`
-    /// — fire-and-forget, mirroring `onBaptize`: the prompt / score / terminal grid
-    /// surface via the `StateChanged` subscription, so the task body only swallows
-    /// cancellation and logs any other fault. A no-op when no resolvable baptized
-    /// panel is selected (the Run control is disabled in that case, SC-008).
+    /// FR-002/004/005; observability re-keyed in fix #270). Auto-targets the single
+    /// heartbeating panel: its `MarketingVariant` (decoded from the directed-id
+    /// heartbeat, `lastButtonStateVariant`) resolves its `ButtonSchema`, then starts
+    /// ONE modal run via `IButtonPressTestService.RunAsync` — fire-and-forget,
+    /// mirroring `onBaptize`: the prompt / score / terminal grid surface via the
+    /// `StateChanged` subscription, so the task body only swallows cancellation and
+    /// logs any other fault. A no-op when no baptized panel is heartbeating (the Run
+    /// control is disabled then, SC-008). No UUID selection — the run scope keys off
+    /// `buttonPressRunKey`.
     let onRunButtonPressTest () =
         let resolved =
-            selectedPanel
-            |> Option.bind (fun u -> Map.tryFind u lastPanelsOnBus)
-            |> Option.bind (fun o ->
-                match o.VariantIdentity with
-                | Marketing v -> Some(o.Uuid, ButtonSchema.forVariant v)
-                | Virgin
-                | Unknown _ -> None)
+            if buttonStateObservable () then
+                lastButtonStateVariant |> Option.map ButtonSchema.forVariant
+            else
+                None
 
         match resolved with
         | None -> ()
-        | Some(uuid, sch) ->
+        | Some sch ->
             lastButtonPressSchema <- Some sch
 
             // Enter the running state synchronously on THIS UI turn so the Run
@@ -483,7 +519,7 @@ type MainWindow(services: IServiceProvider) as this =
             let _ : Task =
                 task {
                     try
-                        let! _ = buttonPressTestService.RunAsync(uuid, sch, CancellationToken.None)
+                        let! _ = buttonPressTestService.RunAsync(buttonPressRunKey, sch, CancellationToken.None)
                         ()
                     with
                     | :? OperationCanceledException -> ()
@@ -616,28 +652,22 @@ type MainWindow(services: IServiceProvider) as this =
             let resetEnablement =
                 Baptism.resetEnablement lastCanState (Map.count lastPanelsOnBus)
 
-            // Button-press test surface (spec-005 Phase F, FR-001): the
-            // enablement verdict is computed in Core from the live link + the
-            // selected panel's baptized status + its observability on the bus. A
-            // selection is always present in `lastPanelsOnBus` (stale selections
-            // are pruned on `PanelsOnBusChanged`), so `observable` is "selected",
-            // and "baptized" is "the selected panel announces a known Marketing
-            // variant" (Virgin / Unknown are not baptized). The schema feeding the
-            // decal prompts (FR-004) comes from that variant; during a run it is
-            // the schema the run was started with (`lastButtonPressSchema`).
-            let testObservation =
-                selectedPanel |> Option.bind (fun u -> Map.tryFind u lastPanelsOnBus)
+            // Button-press test surface (spec-005 Phase F, FR-001; observability
+            // re-keyed in fix #270): the enablement verdict is computed in Core
+            // from the live link + the heartbeating panel's baptized status + its
+            // observability — keyed off the button-state HEARTBEAT, not discovery.
+            // A baptized panel is silent on WHO_I_AM, so a button-state frame seen
+            // within `ButtonPressTest.observableWindow` IS the evidence a baptized
+            // panel of a known Marketing variant is present and observable; the
+            // tool auto-targets that single heartbeating panel. The schema feeding
+            // the decal prompts (FR-004) comes from the observed variant; during a
+            // run it is the schema the run was started with (`lastButtonPressSchema`).
+            let testObservable = buttonStateObservable ()
 
-            let testSelectedBaptized =
-                match testObservation with
-                | Some o ->
-                    match o.VariantIdentity with
-                    | Marketing _ -> true
-                    | Virgin
-                    | Unknown _ -> false
-                | None -> false
-
-            let testObservable = Option.isSome testObservation
+            // The directed-id heartbeat only ever decodes to a Marketing variant
+            // (the observer drops broadcast / virgin / SRID), so an observable
+            // heartbeat carrying a variant IS a baptized panel.
+            let testSelectedBaptized = testObservable && Option.isSome lastButtonStateVariant
 
             let buttonPressEnablement =
                 ButtonPressTest.testEnablement lastCanState testSelectedBaptized testObservable
@@ -645,15 +675,17 @@ type MainWindow(services: IServiceProvider) as this =
             let buttonPressSchema =
                 match lastButtonPressState with
                 | ButtonPressTestState.Idle ->
-                    testObservation
-                    |> Option.bind (fun o ->
-                        match o.VariantIdentity with
-                        | Marketing v -> Some(ButtonSchema.forVariant v)
-                        | Virgin
-                        | Unknown _ -> None)
+                    if testObservable then
+                        lastButtonStateVariant |> Option.map ButtonSchema.forVariant
+                    else
+                        None
                 | Prompting _
                 | ButtonPressTestState.Completed _
                 | Interrupted _ -> lastButtonPressSchema
+
+            // Record the observability the surface is rendering so the 1 Hz idle
+            // tick repaints only when heartbeat recency flips (fix #270).
+            lastButtonStateShownObservable <- testObservable
 
             let combinedView : IView =
                 StackPanel.create [
@@ -780,6 +812,26 @@ type MainWindow(services: IServiceProvider) as this =
                     lastButtonPressState <- st
                     renderCombined ()))
 
+        // Button-state heartbeat → track recency + variant on the UI thread
+        // (spec-005 Phase F, fix #270). The observer fires from the vendored read
+        // thread (or a synchronous test caller); marshal to the UI thread like the
+        // other CAN subscriptions. A directed-id heartbeat IS the presence +
+        // variant signal — the re-key replacement for discovery. Repaint only on a
+        // VISIBLE change (the panel newly observable, or its variant changing) so a
+        // steady ~5 Hz heartbeat does not rebuild the surface every frame; the
+        // observable->stale decay is handled by the 1 Hz tick below.
+        let _ : IDisposable =
+            buttonStateObserver.ButtonStateObserved
+            |> Observable.subscribe (fun observation ->
+                Dispatcher.UIThread.Post(fun () ->
+                    let rising = not (buttonStateObservable ())
+                    let variantChanged = lastButtonStateVariant <> Some observation.Variant
+                    lastButtonStateObservedAt <- Some(clock.UtcNow())
+                    lastButtonStateVariant <- Some observation.Variant
+
+                    if rising || variantChanged then
+                        renderCombined ()))
+
         // Live per-button countdown (FR-005): the pure view renders the remaining
         // whole seconds from the `Prompting` deadline against the `now` the host
         // threads in, but `StateChanged` only fires on an actual transition — not
@@ -793,7 +845,13 @@ type MainWindow(services: IServiceProvider) as this =
             | Prompting _ -> renderCombined ()
             | ButtonPressTestState.Idle
             | ButtonPressTestState.Completed _
-            | Interrupted _ -> ())
+            | Interrupted _ ->
+                // Reflect the heartbeat recency decay (fix #270): when the panel
+                // falls silent the surface must flip to unavailable (and back when
+                // it resumes). Repaint only when observability actually changed so a
+                // steady idle state does not rebuild the surface every second.
+                if buttonStateObservable () <> lastButtonStateShownObservable then
+                    renderCombined ())
 
         countdownTimer.Start()
 
