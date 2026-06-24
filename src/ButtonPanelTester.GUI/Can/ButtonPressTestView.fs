@@ -69,6 +69,16 @@ module ButtonPressTestView =
     let runEnabled (enablement: Enablement) (schema: ButtonSchema option) (state: ButtonPressTestState) : bool =
         enablement = Enabled && Option.isSome schema && not (isRunning state)
 
+    /// The decal of the active button carrying wire `bit`, for the transient
+    /// `Unexpected` notice (FR-008). A `RecordUnexpected` is always a wrong but
+    /// ACTIVE button, so the bit is in the schema; the `bit N` fallback keeps the
+    /// lookup total.
+    let unexpectedDecal (schema: ButtonSchema) (bit: int) : string =
+        schema.Active
+        |> List.tryFind (fun a -> a.Bit = bit)
+        |> Option.map (fun a -> a.Decal)
+        |> Option.defaultValue (sprintf "bit %d" bit)
+
     /// The per-button results vector carried by every non-`Idle` FSM state — the
     /// grid source (FR-011). `Prompting`/`Completed` carry the live vector,
     /// `Interrupted` the partial at the moment of the halt; `Idle` has no run, so
@@ -83,18 +93,24 @@ module ButtonPressTestView =
     /// Pure render of the button-press test surface. The host supplies the
     /// `ButtonPressTest.testEnablement` verdict, the latest FSM `state`, the
     /// run's `schema` (`None` until a baptized variant is resolvable), the clock
-    /// `now` (for the FR-005 countdown), the Run callback, and the theme. The
-    /// current prompt renders by decal (FR-004, firmware name a secondary
-    /// diagnostic) with the per-button countdown (FR-005); the result grid
-    /// renders one decal+outcome row per active button in canonical order; the
-    /// aggregate all-active-passed indicator (FR-011) shows ONLY on `Completed`
-    /// when every active button scored `Pass`.
+    /// `now` (for the FR-005 countdown), the transient `unexpected` wrong-active
+    /// press bit (FR-008, surfaced without advancing the prompt), and the Run /
+    /// Retry / Skip callbacks. The current prompt renders by decal (FR-004,
+    /// firmware name a secondary diagnostic) with the per-button countdown
+    /// (FR-005); a `Missed`/in-flight button offers Retry (re-arm) and Skip
+    /// (record Skipped + advance) (FR-009); the result grid renders one
+    /// decal+outcome row per active button in canonical order; the aggregate
+    /// all-active-passed indicator (FR-011) shows ONLY on `Completed` when every
+    /// active button scored `Pass`.
     let view
         (enablement: Enablement)
         (state: ButtonPressTestState)
         (schema: ButtonSchema option)
         (now: DateTimeOffset)
+        (unexpected: int option)
         (onRun: unit -> unit)
+        (onRetry: unit -> unit)
+        (onSkip: unit -> unit)
         (theme: ThemeVariant)
         : IView =
         ignore theme
@@ -137,6 +153,50 @@ module ButtonPressTestView =
                   ]
                   :> IView ]
             | _ -> []
+
+        // Transient Unexpected-press notice (FR-008): a wrong but ACTIVE button
+        // pressed while another is prompted is logged-not-counted and does NOT
+        // advance the prompt — surfaced here as an operator status line that
+        // leaves the prompt (above) on the same button.
+        let unexpectedView: IView list =
+            match unexpected, schema with
+            | Some bit, Some sch ->
+                [ TextBlock.create [
+                      TextBlock.name "ButtonPressUnexpected"
+                      TextBlock.text (
+                          sprintf "Unexpected press: %s — not counted; press the prompted button." (unexpectedDecal sch bit)
+                      )
+                      TextBlock.textWrapping TextWrapping.Wrap
+                  ]
+                  :> IView ]
+            | _ -> []
+
+        // Recovery controls (FR-009): Retry re-arms the current button with a
+        // fresh countdown (a `Missed` button returns to `Pending`); Skip records
+        // `Skipped` (≠ `Pass`) and advances. Offered while a run is `Prompting`
+        // (the in-flight or `Missed` button); the service decides the transition.
+        let recoveryView: IView list =
+            if isRunning state then
+                [ StackPanel.create [
+                      StackPanel.name "ButtonPressRecovery"
+                      StackPanel.orientation Orientation.Horizontal
+                      StackPanel.spacing 4.0
+                      StackPanel.children [
+                          Button.create [
+                              Button.name "ButtonPressRetry"
+                              Button.content "Retry"
+                              Button.onClick (fun _ -> onRetry ())
+                          ]
+                          Button.create [
+                              Button.name "ButtonPressSkip"
+                              Button.content "Skip"
+                              Button.onClick (fun _ -> onSkip ())
+                          ]
+                      ]
+                  ]
+                  :> IView ]
+            else
+                []
 
         // Per-button result grid (FR-011): one decal + outcome row per active
         // button, in the schema's canonical order. The decal blocks share a name
@@ -189,7 +249,7 @@ module ButtonPressTestView =
             | Interrupted _ -> []
 
         let children: IView list =
-            [ runButton ] @ promptView @ gridView @ allPassedView
+            [ runButton ] @ promptView @ unexpectedView @ recoveryView @ gridView @ allPassedView
 
         StackPanel.create [
             StackPanel.name "ButtonPressTestSurface"
