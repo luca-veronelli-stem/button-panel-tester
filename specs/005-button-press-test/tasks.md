@@ -656,3 +656,75 @@ implementing task and one test.)*
   inline-stopgap migration, decoupled from the parked #156).
 - Next: the parent epic + one ordered child PR per phase A–G (`resolve-epic`), then `/speckit-analyze`
   (cross-artifact consistency) before `/speckit-implement`.
+
+---
+
+## Phase I: Observability re-key (corrective — fix #270, 2026-06-24)
+
+**Why**: bench validation (#253) found the test's observability/selection mis-keyed to WHO_I_AM
+discovery. A baptized panel is silent on WHO_I_AM (`AAS_STAND_BY`; `CORRECTIONS.md` §C1) and instead
+heartbeats its button-state on a **directed CAN ID** whose machineType byte (bits 23–16) is the variant
+(OPTIMUS `0x000A0441`, Eden-XP `0x00030141`, R-3L `0x000B0481`). The shipped
+`ButtonStateReassemblyObserver` filtered **broadcast `0x1FFFFFFF` only** (`:66`, ignores non-broadcast
+at `:120`), so it observed nothing from a real panel — **Phase C is in scope, not just E/F/G**. See
+spec.md §Clarifications (Session 2026-06-24). Tool-side only; no firmware change.
+
+**Design (Luca-signed-off 2026-06-24)**: match-any-non-broadcast + variant-from-ID (no baptism
+plumbing); auto-target the single heartbeating baptized panel (drop `IPanelDiscoveryService` from the
+button-press path); observability/panel-loss off button-state frame recency with **configurable
+thresholds** (provisional defaults: observable window 2 s, panel-lost 3 s — bench-confirmed like the
+press-edge polarity; the ~12 s in the original note was CAN id `0x00000008`, a different message).
+
+**Commit grouping (bisect-safe)**: **I1** = {T044} (Lean-only). **I2** = {T045} (observation type +
+observer rework — one vertical commit: port + observer + fake + tests + minimal service adaptation).
+**I3** = {T046} (service presence/observability re-key + discovery drop). **I4** = {T047} (GUI). **I5** =
+{T048} (hardware E2E). **I6** = {T049} (contracts/data-model/CHANGELOG docs).
+
+- [ ] T044 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonStateObservation.lean`: model the
+      directed-CAN-ID → machineType extraction + variant decode; prove `machine_type_at_bits_23_16`
+      (machineType = `(id >>> 16) &&& 0xFF`) and `non_marketing_ids_rejected` (broadcast `0x1FFFFFFF`
+      → `0xFF` and the tool SRID `0x00000008` → `0x00` decode to non-marketing → not accepted). Extend
+      the `Phase4.lean` umbrella; `lake build` green, `sorry`-free, standard axioms only.
+      (Constitution I; FR-001)
+- [ ] T045 **[NEW/EXTEND]** The observation-carries-variant + directed-ID observer vertical, ONE commit:
+      (a) add `src/ButtonPanelTester.Core/Can/ButtonStateObservation.fs` — `ButtonStateObservation =
+      { Frame: ButtonStateFrame; Variant: MarketingVariant }` + `variantOfDirectedId : uint32 ->
+      VariantIdentity` reusing `PanelObservation.VariantDecoder.decode` on `(CanId >>> 16) &&& 0xFF`;
+      XML doc cites `Phase4/ButtonStateObservation.lean` (T044). (b) change `IButtonStateObserver`
+      (`Core/Can/Ports.fs`) to `ButtonStateObserved : IObservable<ButtonStateObservation>`. (c) rework
+      `src/ButtonPanelTester.Infrastructure/Can/ButtonStateReassemblyObserver.fs`: per-source-CanId
+      reassembly; accept a completed packet **iff** `(CanId>>>16)&0xFF` decodes to a `Marketing` variant
+      (drops broadcast/virgin/SRID inline), keep the cmd `0x0002` + addr `{0x8000,0x803E}` filter, emit
+      `ButtonStateObservation`. (d) update the fake `InMemoryButtonStateObserver.fs` + the observer
+      Windows tests (drive directed-ID frames, assert variant; broadcast/SRID rejected) + a FsCheck
+      property mirroring T044. (e) minimal `ButtonPressTestService` subscription adaptation so it still
+      compiles (`.Frame.Bitmap`). Mandatory triple on the new wire fact. (FR-001; Constitution I/II/III)
+- [ ] T046 **[EXTEND]** Re-key `src/ButtonPanelTester.Services/Can/ButtonPressTestService.fs`: presence
+      guard + observability off **button-state recency** (track last-frame time via `IClock`; no frame
+      for `panelLostThreshold` during a run → `Halt PanelLost`; a frame within `observableWindow` →
+      observable), **drop the `IPanelDiscoveryService` ctor dependency** from the button-press path, take
+      the variant from the observation. Add the threshold config constants (provisional 2 s / 3 s,
+      XML-doc noted bench-confirmed). Update the composition registration + `CompositionRootCanTests`.
+      Rework the integration tests that drove PanelLost from discovery pruning
+      (`ButtonPressInterruptionTests`, `ButtonPressRerunTests`, `ButtonPressTestE2ETests`) to the recency
+      model + variant-from-stream, `FrozenClock`-driven. (FR-001/FR-013; SC-005/SC-008)
+- [ ] T047 **[EXTEND]** Re-key `src/ButtonPanelTester.GUI/App.fs` (~lines 627–656): compute
+      `testObservable` / `testSelectedBaptized` / variant from the button-state observation stream
+      (recency + the observation's `Variant`), not `lastPanelsOnBus`; auto-target the single heartbeating
+      panel (no UUID selection). Update `ButtonPressTestView` enablement wiring as needed and the Headless
+      tests (`Gui/Can/ButtonPressTestViewTests.fs`) for the stream-driven enable matrix. (FR-001; SC-008)
+- [ ] T048 **[EXTEND]** Rework `tests/.../Hardware/ButtonPressTestHardwareTests.fs`: drop the
+      `waitForOptimusXpUuid` WHO_I_AM precondition; wait up to ~2 s for the first button-state
+      observation and assert its variant is OPTIMUS-XP; then run the existing button-press cases. Update
+      the #253 bench checklist hooks (observability = heartbeat arrival; thresholds confirmed on the rig).
+      (SC-001..006; FR-001/FR-013)
+- [ ] T049 **[EXTEND]** Update `specs/005-button-press-test/contracts/button-state-observer-port.md` and
+      `button-state-wire-format.md` for the directed-ID match rule + the `ButtonStateObservation`
+      envelope; update `data-model.md` (observation + thresholds); add a `CHANGELOG.md` `[Unreleased]`
+      line ("Re-key button-press observability to the button-state heartbeat (directed CAN ID), not
+      WHO_I_AM discovery — fixes the bench-surfaced defect").
+
+**Checkpoint I**: the observer catches a real baptized panel's directed-ID button-state, derives the
+variant from the CAN ID, and the service/GUI/test key observability + panel-loss off heartbeat recency
+with bench-tunable thresholds — no dependency on WHO_I_AM discovery. Re-run the #253 bench to validate
+(the Done line).
