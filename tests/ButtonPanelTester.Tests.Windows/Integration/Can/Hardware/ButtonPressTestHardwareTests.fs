@@ -219,7 +219,6 @@ let private buildButtonPressChain
     let service =
         new ButtonPressTestService(
             buttons,
-            discovery,
             (svc :> ICanLinkService),
             clock,
             NullLogger<ButtonPressTestService>.Instance)

@@ -50,12 +50,10 @@ type private Harness =
 let private newHarness () : Harness =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
-    let whoIAm = InMemoryWhoIAmObserver()
-    let discovery = new PanelDiscoveryService(whoIAm, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let buttons = InMemoryButtonStateObserver()
 
     let service =
-        new ButtonPressTestService(buttons, discovery, link, clock, NullLogger<ButtonPressTestService>.Instance)
+        new ButtonPressTestService(buttons, link, clock, NullLogger<ButtonPressTestService>.Instance)
 
     { Clock = clock
       Buttons = buttons
@@ -64,6 +62,15 @@ let private newHarness () : Harness =
 let private press (h: Harness) (bit: int) =
     h.Buttons.Emit idle
     h.Buttons.Emit(pressedFrame bit)
+
+/// Advance the frozen clock to `at`, emit a keep-alive idle heartbeat (so the
+/// panel stays observable under the recency model, fix #270 — a present panel
+/// heartbeats ~182 ms), then fire the deadline tick. Without it the 3 s
+/// panel-lost threshold would pre-empt the 10 s `Missed`.
+let private tickAt (h: Harness) (at: DateTimeOffset) =
+    h.Clock.SetTo at
+    h.Buttons.Emit idle
+    h.Service.RunDeadlineTick()
 
 // --- a wrong ACTIVE button is Unexpected: not counted, prompt stays ---
 
@@ -88,9 +95,8 @@ let ButtonPressRecovery_RetryReArmsCurrentButton () =
     let h = newHarness ()
     let _task = h.Service.RunAsync(selectedUuid, optimus, CancellationToken.None)
 
-    // Time out button 0 → Missed.
-    h.Clock.SetTo(fixedNow + TimeSpan.FromSeconds 11.0)
-    h.Service.RunDeadlineTick()
+    // Time out button 0 → Missed (keep-alive heartbeat keeps the panel observable).
+    tickAt h (fixedNow + TimeSpan.FromSeconds 11.0)
 
     // Retry re-arms the SAME button back to `Pending` with a fresh countdown.
     h.Service.Retry()

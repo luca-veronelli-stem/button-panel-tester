@@ -89,11 +89,9 @@ type private Harness =
 let private newHarness (linkFactory: IClock -> ICanLinkService) : Harness =
     let clock = FrozenClock(fixedNow)
     let link = linkFactory (clock :> IClock)
-    let whoIAm = InMemoryWhoIAmObserver()
-    let discovery = new PanelDiscoveryService(whoIAm, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let buttons = InMemoryButtonStateObserver()
     let logger = RecordingLogger<ButtonPressTestService>()
-    let service = new ButtonPressTestService(buttons, discovery, link, clock, logger)
+    let service = new ButtonPressTestService(buttons, link, clock, logger)
 
     { Clock = clock
       Buttons = buttons
@@ -104,6 +102,14 @@ let private newHarness (linkFactory: IClock -> ICanLinkService) : Harness =
 let private press (h: Harness) (bit: int) =
     h.Buttons.Emit idle
     h.Buttons.Emit(pressedFrame bit)
+
+/// Advance the frozen clock to `at`, emit a keep-alive idle heartbeat (so the
+/// panel stays observable under the recency model, fix #270), then fire the
+/// deadline tick. An idle (all-released) frame logs nothing — it scores no press.
+let private tickAt (h: Harness) (at: DateTimeOffset) =
+    h.Clock.SetTo at
+    h.Buttons.Emit idle
+    h.Service.RunDeadlineTick()
 
 /// The forensic records — every entry carrying the `Action` field (the scope's
 /// correlation key is captured separately, not in the message values).
@@ -158,8 +164,7 @@ let Timeout_EmitsMissed_AtWarning () =
     let h = newHarness connectedLink
     let _task = h.Service.RunAsync(selectedUuid, optimus, CancellationToken.None)
 
-    h.Clock.SetTo(fixedNow + TimeSpan.FromSeconds 11.0)
-    h.Service.RunDeadlineTick()
+    tickAt h (fixedNow + TimeSpan.FromSeconds 11.0)
 
     let missed = records h |> List.filter (fun e -> string e.Values.["Action"] = "Missed")
     Assert.Equal(1, missed.Length)

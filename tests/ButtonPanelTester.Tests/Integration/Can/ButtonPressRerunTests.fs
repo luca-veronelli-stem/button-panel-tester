@@ -53,12 +53,10 @@ type private Harness =
 let private newHarness () : Harness =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
-    let whoIAm = InMemoryWhoIAmObserver()
-    let discovery = new PanelDiscoveryService(whoIAm, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let buttons = InMemoryButtonStateObserver()
 
     let service =
-        new ButtonPressTestService(buttons, discovery, link, clock, NullLogger<ButtonPressTestService>.Instance)
+        new ButtonPressTestService(buttons, link, clock, NullLogger<ButtonPressTestService>.Instance)
 
     { Clock = clock
       Buttons = buttons

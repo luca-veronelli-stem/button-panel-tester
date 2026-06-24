@@ -19,12 +19,13 @@ open Stem.ButtonPanelTester.Tests.Fakes.Can
 /// grid four `Pass` with `allActivePassed = true` (SC-001/SC-002 logic side).
 ///
 /// Harness (the spec-003/004 integration pattern): a real `CanLinkService`
-/// (wrapping `InMemoryCanLink`, driven Connected), a real `PanelDiscoveryService`,
-/// the synchronous `InMemoryButtonStateObserver`, and a `FrozenClock` — so the
-/// observe → score path is exercised deterministically with no PEAK hardware and
-/// no wall-clock sleeps. The run is launched WITHOUT awaiting; synchronous
-/// `Emit`s drive the FSM, and the returned task completes when it reaches a
-/// terminal state.
+/// (wrapping `InMemoryCanLink`, driven Connected), the synchronous
+/// `InMemoryButtonStateObserver`, and a `FrozenClock` — so the observe → score
+/// path is exercised deterministically with no PEAK hardware and no wall-clock
+/// sleeps. Panel presence keys off button-state recency (fix #270), so there is
+/// no discovery service in the button-press path. The run is launched WITHOUT
+/// awaiting; synchronous `Emit`s drive the FSM, and the returned task completes
+/// when it reaches a terminal state.
 
 let private fixedNow = DateTimeOffset(2026, 6, 22, 9, 0, 0, TimeSpan.Zero)
 
@@ -62,23 +63,19 @@ let private pressedFrame (bit: int) : ButtonStateFrame =
 type private Harness =
     { Clock: FrozenClock
       Buttons: InMemoryButtonStateObserver
-      Discovery: PanelDiscoveryService
       Link: ICanLinkService
       Service: ButtonPressTestService }
 
 let private newHarness () : Harness =
     let clock = FrozenClock(fixedNow)
     let link = connectedLink (clock :> IClock)
-    let whoIAm = InMemoryWhoIAmObserver()
-    let discovery = new PanelDiscoveryService(whoIAm, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let buttons = InMemoryButtonStateObserver()
 
     let service =
-        new ButtonPressTestService(buttons, discovery, link, clock, NullLogger<ButtonPressTestService>.Instance)
+        new ButtonPressTestService(buttons, link, clock, NullLogger<ButtonPressTestService>.Instance)
 
     { Clock = clock
       Buttons = buttons
-      Discovery = discovery
       Link = link
       Service = service }
 
