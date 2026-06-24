@@ -498,29 +498,29 @@ The input-side wire format and firmware semantics are proven at the live boundar
 *(Distributes into the phase PRs that produce the audited surface; the final docs tasks ride with the
 Phase F/G child. Listed here for the `/speckit-analyze` coverage pass.)*
 
-- [ ] T038 [P] XML-doc audit of the new public surfaces per COMMENTS / `stem-fp-discipline` §10:
+- [X] T038 [P] XML-doc audit of the new public surfaces per COMMENTS / `stem-fp-discipline` §10:
       `ButtonStateFrame`, `KeyStateBitmap` (+ `PressedBit`), `ButtonSchema`, `ButtonPressTest` (types +
       `step` + `testEnablement`), `IButtonStateObserver`, `ButtonStateReassemblyObserver`,
       `InMemoryButtonStateObserver`, `IButtonPressTestService`/`ButtonPressTestService`,
       `ButtonPressTestLogging`, `ButtonPressTestView` — Lean citations in the house format (module path +
       theorem name + authoring task), contract paths current.
-- [ ] T039 [P] Logging audit per LOGGING / `stem-logging` over the button-press path
+- [X] T039 [P] Logging audit per LOGGING / `stem-logging` over the button-press path
       (`ButtonPressTestService`, `ButtonPressTestLogging`, `ButtonStateReassemblyObserver`): typed
       `ILogger<T>`, template messages with named params (no string interpolation), exception-as-first-arg,
       no `Console.WriteLine` / `Debug.WriteLine` on production paths.
-- [ ] T040 [P] Principle V + FR-015 compliance audit over the button-press path: zero OS-user /
+- [X] T040 [P] Principle V + FR-015 compliance audit over the button-press path: zero OS-user /
       machine-name / SID / MAC fields anywhere (panel UUIDs are device hardware identifiers — plan §V; the
       forensic log carries no operator identity); no result persistence beyond the in-session view — the
       test retains nothing about the panel (FR-015). Expected zero hits.
-- [ ] T041 [P] `cd lean; lake build` — the Phase 4 theorems (`parse_encode_roundtrip` + `encode_length`,
+- [X] T041 [P] `cd lean; lake build` — the Phase 4 theorems (`parse_encode_roundtrip` + `encode_length`,
       `press_edge_iff_high_to_low`, `inactive_bits_ignored`, `canonical_order_total`,
       `test_visits_active_only`, `result_vector_length`, `test_outcome_total`, `pass_requires_press_edge`,
       `skip_never_pass`, `interrupt_excludes_all_passed`, `terminal_absorbs`, `test_enabled_iff`) compile
       with no `sorry`; `#print axioms` on each shows only {`propext`, `Classical.choice`, `Quot.sound`}.
-- [ ] T042 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Button-press test (input side) — prompt a
+- [X] T042 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: "Button-press test (input side) — prompt a
       technician through each active button on a baptized panel, observe the CAN button-state frame, and
       score Pass / Missed / Unexpected / Skipped with a per-button grid; first input-side test (spec-005)."
-- [ ] T043 [P] Update `README.md`: link `specs/005-button-press-test/quickstart.md` and add a
+- [X] T043 [P] Update `README.md`: link `specs/005-button-press-test/quickstart.md` and add a
       one-paragraph mention of the button-press test beside the baptism workflow mention; confirm
       `quickstart.md` §Bench walkthrough is current as the per-case run-sheet.
 
