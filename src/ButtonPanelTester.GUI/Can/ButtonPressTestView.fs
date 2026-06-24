@@ -95,13 +95,16 @@ module ButtonPressTestView =
     /// run's `schema` (`None` until a baptized variant is resolvable), the clock
     /// `now` (for the FR-005 countdown), the transient `unexpected` wrong-active
     /// press bit (FR-008, surfaced without advancing the prompt), and the Run /
-    /// Retry / Skip callbacks. The current prompt renders by decal (FR-004,
-    /// firmware name a secondary diagnostic) with the per-button countdown
-    /// (FR-005); a `Missed`/in-flight button offers Retry (re-arm) and Skip
-    /// (record Skipped + advance) (FR-009); the result grid renders one
-    /// decal+outcome row per active button in canonical order; the aggregate
-    /// all-active-passed indicator (FR-011) shows ONLY on `Completed` when every
-    /// active button scored `Pass`.
+    /// Retry / Skip / Re-run callbacks. When the enablement is `Disabled`, the
+    /// surface renders the guard's explanation and offers no run (FR-001 / SC-008);
+    /// the current prompt renders by decal (FR-004, firmware name a secondary
+    /// diagnostic) with the per-button countdown (FR-005); a `Missed`/in-flight
+    /// button offers Retry (re-arm) and Skip (record Skipped + advance) (FR-009);
+    /// a provisional variant carries a provisional badge (FR-016); the result grid
+    /// renders one decal+outcome row per active button in canonical order; the
+    /// aggregate all-active-passed indicator (FR-011) shows ONLY on `Completed`
+    /// when every active button scored `Pass`; a terminal run offers Re-run, which
+    /// restarts the sequence from a cleared grid (FR-003).
     let view
         (enablement: Enablement)
         (state: ButtonPressTestState)
@@ -111,10 +114,9 @@ module ButtonPressTestView =
         (onRun: unit -> unit)
         (onRetry: unit -> unit)
         (onSkip: unit -> unit)
+        (onRerun: unit -> unit)
         (theme: ThemeVariant)
         : IView =
-        ignore theme
-
         let runButton: IView =
             Button.create [
                 Button.name "RunButtonPressTest"
@@ -123,6 +125,58 @@ module ButtonPressTestView =
                 Button.onClick (fun _ -> onRun ())
             ]
             :> IView
+
+        // Unavailable hint (FR-001 / SC-008): a `Disabled` enablement carries the
+        // unmet conjunct (link not Connected / no baptized panel selected / panel
+        // not observable); render it. The Run control is already disabled, so the
+        // surface offers no run on an unbaptized panel / non-Connected link.
+        let unavailableView: IView list =
+            match enablement with
+            | Disabled explanation ->
+                [ TextBlock.create [
+                      TextBlock.name "ButtonPressUnavailable"
+                      TextBlock.text explanation
+                      TextBlock.textWrapping TextWrapping.Wrap
+                  ]
+                  :> IView ]
+            | Enabled -> []
+
+        // Re-run control (FR-003): offered once a run is terminal
+        // (`Completed`/`Interrupted`) and the test is still `Enabled`; restarts the
+        // last run's panel + schema from a cleared grid (the service re-`start`s).
+        let rerunView: IView list =
+            let terminal =
+                match state with
+                | Completed _
+                | Interrupted _ -> true
+                | ButtonPressTestState.Idle
+                | Prompting _ -> false
+
+            if terminal && enablement = Enabled then
+                [ Button.create [
+                      Button.name "RerunButtonPressTest"
+                      Button.content "Re-run"
+                      Button.onClick (fun _ -> onRerun ())
+                  ]
+                  :> IView ]
+            else
+                []
+
+        // Provisional badge (FR-016): every variant but OPTIMUS-XP carries decal
+        // labels seeded from the legacy enums and unverified at the bench; warn
+        // wherever those provisional labels are shown. The theme-aware tint reuses
+        // the brand selection brush (legible in both themes, #235/F2).
+        let provisionalBadge: IView list =
+            match schema with
+            | Some sch when sch.Provisional ->
+                [ TextBlock.create [
+                      TextBlock.name "ButtonPressProvisional"
+                      TextBlock.text "Provisional variant — decal labels unverified at the bench."
+                      TextBlock.background (Brand.selectionBackground theme)
+                      TextBlock.textWrapping TextWrapping.Wrap
+                  ]
+                  :> IView ]
+            | _ -> []
 
         // Current prompt (FR-004 / FR-005): the prompted button's decal as the
         // primary label, its firmware name as a secondary diagnostic detail, and
@@ -249,7 +303,15 @@ module ButtonPressTestView =
             | Interrupted _ -> []
 
         let children: IView list =
-            [ runButton ] @ promptView @ unexpectedView @ recoveryView @ gridView @ allPassedView
+            [ runButton ]
+            @ unavailableView
+            @ rerunView
+            @ provisionalBadge
+            @ promptView
+            @ unexpectedView
+            @ recoveryView
+            @ gridView
+            @ allPassedView
 
         StackPanel.create [
             StackPanel.name "ButtonPressTestSurface"

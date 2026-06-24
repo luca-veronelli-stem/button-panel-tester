@@ -438,12 +438,12 @@ Headless tests together.
 - [X] T033 [US2] **[EXTEND]** Extend `ButtonPressTestViewTests.fs`: a timed-out button renders Retry/Skip;
       Retry invokes the service re-arm and re-shows the countdown; Skip records Skipped and advances; an
       Unexpected press surfaces without advancing. Lands with T032 (F2 commit). (FR-008/FR-009)
-- [ ] T034 [US3] **[EXTEND]** Extend `ButtonPressTestView.fs` (+ `App.fs`) with: a **Re-run** control
+- [X] T034 [US3] **[EXTEND]** Extend `ButtonPressTestView.fs` (+ `App.fs`) with: a **Re-run** control
       that clears the grid and restarts the sequence (FR-003); variant-adaptive prompts/labels driven by
       the selected panel's `ButtonSchema`, with a **provisional** badge wherever a non-OPTIMUS label is
       shown (FR-016); the **unavailable** state rendering `testEnablement`'s explanation when the panel is
       not baptized or the link is not Connected (FR-001). (FR-001/FR-003/FR-016)
-- [ ] T035 [US3] **[EXTEND]** Extend `ButtonPressTestViewTests.fs`: Re-run clears the prior grid (SC-007);
+- [X] T035 [US3] **[EXTEND]** Extend `ButtonPressTestViewTests.fs`: Re-run clears the prior grid (SC-007);
       a provisional variant renders the provisional badge (FR-016); the enable matrix — the surface is
       unavailable with the explanation when not baptized / link not Connected, and never prompts on an
       unbaptized panel (SC-008). Lands with T034 (F3 commit). (FR-001/FR-003/FR-016; SC-007/SC-008)
