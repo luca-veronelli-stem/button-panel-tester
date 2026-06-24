@@ -465,7 +465,7 @@ ValidationPending discipline). Tracked under the new bench-validation tracking i
 (filed alongside this `tasks.md`; mirrors #237's role for baptism SC-004 — the prior bench tracker #112
 is closed). Bench needs one baptized OPTIMUS-XP panel on the rig.
 
-- [ ] T036 **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/ButtonPressTestHardwareTests.fs`,
+- [X] T036 **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/ButtonPressTestHardwareTests.fs`,
       every case `[<Trait("Category","Hardware")>]` (excluded by the default `Category!=Hardware` CI
       filter) + the shipped env-gated attributes (`Fixtures/HardwareFactAttribute.fs`) — **never** a bare
       `[<Fact(Skip=…)>]` (#142 lesson): `[<HardwareFact>]` (`BPT_HARDWARE=1`) **full OPTIMUS-XP run** —
