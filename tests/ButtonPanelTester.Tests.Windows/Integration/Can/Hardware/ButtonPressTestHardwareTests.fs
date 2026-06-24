@@ -22,15 +22,22 @@ open Stem.ButtonPanelTester.Tests.Windows.Fixtures // HardwareFact / ManualHardw
 /// emits the `VAR_WRITE` button-state frames the parser expects, and the tool scores each prompted button
 /// on the **press** edge with the firmware-pinned polarity. It drives the SAME production chain the
 /// headless integration suite drives, minus nothing on the RX side and minus the TX/baptism transmitter:
-/// read loop -> `PcanCanFrameStream` -> { `WhoIAmReassemblyObserver` (presence), `ButtonStateReassemblyObserver`
-/// (button state) } -> `PanelDiscoveryService` + `ButtonPressTestService` — so a regression anywhere on that
-/// wire path fails here where the `FrozenClock`/`InMemoryButtonStateObserver` suites cannot.
+/// read loop -> `PcanCanFrameStream` -> `ButtonStateReassemblyObserver` -> `ButtonPressTestService` — so a
+/// regression anywhere on that wire path fails here where the `FrozenClock`/`InMemoryButtonStateObserver`
+/// suites cannot.
+///
+/// **Observability is the heartbeat, not WHO_I_AM (fix #270).** A baptized panel is silent on the WHO_I_AM
+/// auto-address broadcast (`AAS_STAND_BY`; `CORRECTIONS.md` §C1), so it never appears in discovery. It
+/// instead heartbeats its button-state `VAR_WRITE` on a directed CAN ID whose machineType (bits 23-16) is the
+/// variant. The precondition is therefore the first `ButtonStateObservation` arriving (whose `Variant`
+/// is OPTIMUS-XP), NOT a discovery row — the original WHO_I_AM precondition timed out on real silicon, the
+/// defect this PR fixes.
 ///
 /// **RX-only (the whole point of spec-005).** Unlike baptism, this chain has NO transmitter: the technician
-/// presses the physical buttons; the tool only observes. `buildButtonPressChain` is therefore
-/// `DiscoveryHardwareTests.buildChain` PLUS the real `ButtonStateReassemblyObserver` and the real
-/// `ButtonPressTestService` (the system under test), both riding the SAME `CanPortShare`/frame stream the
-/// discovery chain taps — one PEAK handle serves the whole RX path, mirroring `CompositionRoot`.
+/// presses the physical buttons; the tool only observes. `buildButtonPressChain` is the real
+/// `PcanCanFrameStream` + `ButtonStateReassemblyObserver` + `ButtonPressTestService` (the system under test),
+/// all riding the SAME `CanPortShare`/frame stream, mirroring `CompositionRoot`. Panel presence keys off
+/// button-state recency (no discovery dependency).
 ///
 /// **Polarity (R2, the #253 done line).** `KeyStateBitmap.PressedBit = 0uy`: on the wire pressed = bit `0`,
 /// so a press is an active bit transitioning `1 -> 0` (`UserMain.c:1369,:978`). The legacy app scored on the
@@ -73,11 +80,17 @@ open Stem.ButtonPanelTester.Tests.Windows.Fixtures // HardwareFact / ManualHardw
 
 // --- budgets (deterministic bounded waits — never an unbounded spin) ---
 
-/// Discovery-row appearance budget: a baptized OPTIMUS-XP panel re-announces WHO_I_AM on the slow periodic
-/// cadence, so 6 s comfortably covers one broadcast cycle plus reassembly (the `DiscoveryHardwareTests`
-/// constant). If no row appears, the panel is not baptized/observable — a rig precondition, surfaced as a
+/// First-heartbeat appearance budget (fix #270): a baptized OPTIMUS-XP panel heartbeats its button-state on
+/// the ~182 ms idle cadence, so the first `ButtonStateObservation` should arrive within ~2 s of the read
+/// loop starting. If none does, the panel is not baptized/heartbeating — a rig precondition, surfaced as a
 /// diagnostic `Assert.Fail`.
-let private discoveryTimeout = TimeSpan.FromSeconds 6.0
+let private heartbeatTimeout = TimeSpan.FromSeconds 2.0
+
+/// Forensic run-correlation key for the bench run (fix #270): a baptized panel is silent on WHO_I_AM, so its
+/// UUID is unavailable in the button-press path; with one panel under test at a time the run scope keys off
+/// this sentinel (mirrors the GUI's `buttonPressRunKey`). The variant — the real identity the heartbeat
+/// carries — drives the schema.
+let private optimusRunKey = PanelUuid(0u, 0u, 0u)
 
 /// Outer bound for the prompted four-button happy-path run: four active buttons, each with a 10 s
 /// (`ButtonPressTest.testBudget`) window, plus operator reading/reaction slack. A button pressed too late
@@ -109,25 +122,24 @@ let private interruptTimeout = TimeSpan.FromSeconds 30.0
 
 // --- helpers ---
 
-/// The uuid of a baptized OPTIMUS-XP row in a discovery snapshot, if any (machineType `0x0A` ->
-/// `Marketing OptimusXp`). On a clean single-panel bench this is the one physical panel under test.
-let private tryOptimusXpUuid (snapshot: PanelsOnBus) : PanelUuid option =
-    snapshot
-    |> Map.toSeq
-    |> Seq.tryPick (fun (uuid, obs) -> if obs.VariantIdentity = Marketing OptimusXp then Some uuid else None)
-
-/// Bounded poll of the LIVE discovery snapshot (`IPanelDiscoveryService.PanelsOnBus`, the pull accessor —
-/// not an accumulated history) for a CURRENTLY-present baptized OPTIMUS-XP row; `None` on timeout, never an
-/// unbounded spin. The pull accessor (rather than a snapshot-collector) is the robust primitive here: a
-/// claimed panel that has gone silent and been pruned must not be mis-reported as present.
-let private waitForOptimusXpUuid (discovery: IPanelDiscoveryService) (timeout: TimeSpan) : PanelUuid option =
+/// Bounded wait for the FIRST button-state `ButtonStateObservation` from the panel under test (fix #270 —
+/// a baptized panel is silent on WHO_I_AM, so its directed-id button-state heartbeat, not a discovery row, is
+/// the presence + variant signal). Subscribes BEFORE the wait so no early heartbeat is missed, captures into
+/// a thread-safe queue (the observer fires on the vendored read thread), and polls for the first one; `None`
+/// on timeout, never an unbounded spin. The caller asserts the observation's `Variant` is OPTIMUS-XP.
+let private waitForFirstButtonStateObservation
+    (observer: IButtonStateObserver)
+    (timeout: TimeSpan)
+    : ButtonStateObservation option =
+    let captured = System.Collections.Concurrent.ConcurrentQueue<ButtonStateObservation>()
+    use _sub = observer.ButtonStateObserved |> Observable.subscribe captured.Enqueue
     let deadline = DateTime.UtcNow + timeout
 
     let rec spin () =
-        match tryOptimusXpUuid discovery.PanelsOnBus with
-        | Some uuid -> Some uuid
-        | None when DateTime.UtcNow >= deadline -> None
-        | None ->
+        match captured.TryDequeue() with
+        | true, observation -> Some observation
+        | false, _ when DateTime.UtcNow >= deadline -> None
+        | false, _ ->
             Thread.Sleep 50
             spin ()
 
@@ -186,15 +198,16 @@ let private waitForPromptIndex (service: IButtonPressTestService) (index: int) (
         timeout
 
 /// Builds the FULL production button-press RX chain over the real PEAK stack at 250 kbps and returns the
-/// lifecycle service, the discovery service, the button-press test service (the SUT), and a single
-/// `IDisposable` that tears everything down in REVERSE construction order. It is
-/// `DiscoveryHardwareTests.buildChain` PLUS the real `ButtonStateReassemblyObserver` (the button-state RX
-/// boundary) and the real `ButtonPressTestService` (RX-only — no transmitter), both riding the SAME
-/// `CanPortShare`/frame stream the discovery chain taps, mirroring `CompositionRoot`. The captured driver /
-/// port may be `None` if a test never opens the link; the cleanup is a no-op in that case.
+/// lifecycle service, the button-state observer (the presence + variant source — fix #270), the
+/// button-press test service (the SUT), and a single `IDisposable` that tears everything down in REVERSE
+/// construction order. It is the real `PcanCanFrameStream` + `ButtonStateReassemblyObserver` (the button-state
+/// RX boundary) + `ButtonPressTestService` (RX-only — no transmitter), all riding the SAME `CanPortShare`/frame
+/// stream, mirroring `CompositionRoot`. No discovery: a baptized panel is silent on WHO_I_AM, so presence
+/// keys off button-state recency. The captured driver / port may be `None` if a test never opens the link;
+/// the cleanup is a no-op in that case.
 let private buildButtonPressChain
     ()
-    : ICanLinkService * IPanelDiscoveryService * IButtonPressTestService * IDisposable =
+    : ICanLinkService * IButtonStateObserver * IButtonPressTestService * IDisposable =
     let mutable createdDriver: PCANManager option = None
     let mutable createdPort: CanPort option = None
 
@@ -209,12 +222,8 @@ let private buildButtonPressChain
     let clock = SystemClock() :> IClock
     let link = PcanCanLink((fun () -> share.GetOrBuild()), NullLogger<PcanCanLink>.Instance)
     let frameStream = new PcanCanFrameStream(share, clock, NullLogger<PcanCanFrameStream>.Instance)
-    let whoIAm = new WhoIAmReassemblyObserver(frameStream, NullLogger<WhoIAmReassemblyObserver>.Instance)
     let buttons = new ButtonStateReassemblyObserver(frameStream, NullLogger<ButtonStateReassemblyObserver>.Instance)
     let svc = CanLinkService(link, clock, NullLogger<CanLinkService>.Instance)
-
-    let discovery =
-        new PanelDiscoveryService(whoIAm, (svc :> ICanLinkService), clock, NullLogger<PanelDiscoveryService>.Instance)
 
     let service =
         new ButtonPressTestService(
@@ -228,8 +237,6 @@ let private buildButtonPressChain
             member _.Dispose() =
                 (service :> IDisposable).Dispose()
                 (buttons :> IDisposable).Dispose()
-                (discovery :> IDisposable).Dispose()
-                (whoIAm :> IDisposable).Dispose()
                 (frameStream :> IDisposable).Dispose()
                 (link :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult()
 
@@ -239,27 +246,29 @@ let private buildButtonPressChain
                 |> Option.iter (fun d ->
                     (d :> IAsyncDisposable).DisposeAsync().AsTask().GetAwaiter().GetResult()) }
 
-    (svc :> ICanLinkService), (discovery :> IPanelDiscoveryService), (service :> IButtonPressTestService), cleanup
+    (svc :> ICanLinkService), (buttons :> IButtonStateObserver), (service :> IButtonPressTestService), cleanup
 
 // --- SC-001/SC-002/SC-006: the prompted four-button OPTIMUS-XP run scores all Pass (unattended-style) ---
 
 [<Trait("Category", "Hardware")>]
 [<HardwareFact>]
 let Run_RealOptimusXpPanel_AllActiveButtonsScorePassOnPressEdge () =
-    let link, discovery, service, cleanup = buildButtonPressChain ()
+    let link, observer, service, cleanup = buildButtonPressChain ()
     use _ = cleanup
 
     // InitializeAsync opens PcanCanLink (-> CanPort.ConnectAsync -> StartReading), so frames flow and
     // discovery coalesces the OPTIMUS-XP row while the link is Connected.
     link.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    match waitForOptimusXpUuid discovery discoveryTimeout with
+    match waitForFirstButtonStateObservation observer heartbeatTimeout with
     | None ->
         Assert.Fail(
             sprintf
-                "no baptized OPTIMUS-XP row on the bus within %.1f s — verify a BAPTIZED OPTIMUS-XP panel (machineType 0x0A) is powered and announcing WHO_I_AM"
-                discoveryTimeout.TotalSeconds)
-    | Some uuid ->
+                "no button-state heartbeat within %.1f s — verify a BAPTIZED OPTIMUS-XP panel (machineType 0x0A) is powered and heartbeating its button-state VAR_WRITE on its directed CAN id"
+                heartbeatTimeout.TotalSeconds)
+    | Some observation ->
+        // Variant comes from the directed CAN id of the heartbeat (fix #270), not a discovery row.
+        Assert.Equal(OptimusXp, observation.Variant)
         let schema = ButtonSchema.forVariant OptimusXp
 
         // SC-006: the prompt order is the canonical decals Light -> Suspension -> Up -> Down.
@@ -268,7 +277,7 @@ let Run_RealOptimusXpPanel_AllActiveButtonsScorePassOnPressEdge () =
             + "Press each promptly (10 s window) and release; each should score Pass within ~1 s of the press (SC-002).")
 
         // Fire-and-forget: the run's Task completes only on a terminal state (here, all four buttons scored).
-        let run = service.RunAsync(uuid, schema, CancellationToken.None)
+        let run = service.RunAsync(optimusRunKey, schema, CancellationToken.None)
 
         match awaitState run fullRunTimeout with
         | Some(ButtonPressTestState.Completed results) ->
@@ -295,18 +304,19 @@ let Run_RealOptimusXpPanel_AllActiveButtonsScorePassOnPressEdge () =
 [<Trait("Category", "Hardware")>]
 [<HardwareFact>]
 let Run_RealOptimusXpPanel_ScoresOnPressEdgeNotRelease () =
-    let link, discovery, service, cleanup = buildButtonPressChain ()
+    let link, observer, service, cleanup = buildButtonPressChain ()
     use _ = cleanup
 
     link.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    match waitForOptimusXpUuid discovery discoveryTimeout with
+    match waitForFirstButtonStateObservation observer heartbeatTimeout with
     | None ->
         Assert.Fail(
             sprintf
-                "no baptized OPTIMUS-XP row on the bus within %.1f s — power a BAPTIZED OPTIMUS-XP panel before the polarity check"
-                discoveryTimeout.TotalSeconds)
-    | Some uuid ->
+                "no button-state heartbeat within %.1f s — power a BAPTIZED OPTIMUS-XP panel that heartbeats its button-state before the polarity check"
+                heartbeatTimeout.TotalSeconds)
+    | Some observation ->
+        Assert.Equal(OptimusXp, observation.Variant)
         let schema = ButtonSchema.forVariant OptimusXp
         let firstDecal = schema.Active.[0].Decal // "Light" (DOWN, bit 1)
 
@@ -318,7 +328,7 @@ let Run_RealOptimusXpPanel_ScoresOnPressEdgeNotRelease () =
                 "POLARITY CHECK (R2): when ready, press and HOLD the first button (%s) — do NOT release it until this test reports Pass. Press within ~8 s. Scoring on the PRESS edge (bit 1 -> 0) scores while held."
                 firstDecal)
 
-        let run = service.RunAsync(uuid, schema, CancellationToken.None)
+        let run = service.RunAsync(optimusRunKey, schema, CancellationToken.None)
 
         let scoredWhileHeld =
             waitUntil
@@ -353,25 +363,26 @@ let Run_RealOptimusXpPanel_ScoresOnPressEdgeNotRelease () =
 [<Trait("Category", "Hardware")>]
 [<ManualHardwareFact>]
 let Run_RealOptimusXpPanel_InteractiveRecoveryAndInterruption () =
-    let link, discovery, service, cleanup = buildButtonPressChain ()
+    let link, observer, service, cleanup = buildButtonPressChain ()
     use _ = cleanup
 
     link.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
 
-    match waitForOptimusXpUuid discovery discoveryTimeout with
+    match waitForFirstButtonStateObservation observer heartbeatTimeout with
     | None ->
         Assert.Fail(
             sprintf
-                "no baptized OPTIMUS-XP row on the bus within %.1f s — power a BAPTIZED OPTIMUS-XP panel that announces WHO_I_AM before this attended leg"
-                discoveryTimeout.TotalSeconds)
-    | Some uuid ->
+                "no button-state heartbeat within %.1f s — power a BAPTIZED OPTIMUS-XP panel that heartbeats its button-state before this attended leg"
+                heartbeatTimeout.TotalSeconds)
+    | Some observation ->
+        Assert.Equal(OptimusXp, observation.Variant)
         let schema = ButtonSchema.forVariant OptimusXp
         let decal i = schema.Active.[i].Decal
 
         Console.WriteLine(
             "Interactive button-press cycle on a baptized OPTIMUS-XP panel. Follow each numbered prompt; do NOT unplug the adapter until step 5 asks you to.")
 
-        let run = service.RunAsync(uuid, schema, CancellationToken.None)
+        let run = service.RunAsync(optimusRunKey, schema, CancellationToken.None)
 
         // 1) SC-003 / FR-007 — let the first button time out -> Missed.
         Console.WriteLine(sprintf "1) Do NOT press anything. Let the first button (%s) time out (~10 s)." (decal 0))
@@ -446,7 +457,7 @@ let Run_RealOptimusXpPanel_InteractiveRecoveryAndInterruption () =
                 "an Interrupted (LinkLost) run reported all-active-passed — SC-005 / interrupt_excludes_all_passed regressed")
         | Some(ButtonPressTestState.Interrupted(InterruptReason.PanelLost, _)) ->
             Assert.Fail(
-                "run ended Interrupted PanelLost, not LinkLost — the panel was pruned (it stopped announcing WHO_I_AM) before the unplug; re-run and unplug the adapter promptly when prompted")
+                "run ended Interrupted PanelLost, not LinkLost — the panel stopped heartbeating its button-state (silence past the panel-lost threshold) before the unplug; re-run and unplug the adapter promptly when prompted")
         | Some other ->
             Assert.Fail(
                 sprintf
