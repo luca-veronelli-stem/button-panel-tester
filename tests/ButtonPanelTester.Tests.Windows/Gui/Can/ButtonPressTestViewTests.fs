@@ -25,6 +25,14 @@ let private fixedNow = DateTimeOffset(2026, 6, 24, 10, 0, 0, TimeSpan.Zero)
 
 let private optimusSchema = ButtonSchema.forVariant OptimusXp
 
+// EDEN-XP is a provisional variant (all-8 legacy labels, FR-016).
+let private edenSchema = ButtonSchema.forVariant EdenXp
+
+let private fixedAdapter: AdapterIdentification =
+    { ChannelName = "PCAN-USB (1)"
+      DeviceId = "0x01"
+      BaudrateBps = 250_000 }
+
 let rec private allTextBlocks (c: Control) : TextBlock list =
     match box c with
     | :? TextBlock as t -> [ t ]
@@ -69,9 +77,12 @@ let private renderFull
     (onRun: unit -> unit)
     (onRetry: unit -> unit)
     (onSkip: unit -> unit)
+    (onRerun: unit -> unit)
     : Control =
     VirtualDom.create (
-        ButtonPressTestView.view enablement state schema now unexpected onRun onRetry onSkip ThemeVariant.Light)
+        ButtonPressTestView.view enablement state schema now unexpected onRun onRetry onSkip onRerun ThemeVariant.Light)
+
+let private noop = fun () -> ()
 
 let private render
     (enablement: Enablement)
@@ -79,7 +90,7 @@ let private render
     (schema: ButtonSchema option)
     (now: DateTimeOffset)
     : Control =
-    renderFull enablement state schema now None (fun () -> ()) (fun () -> ()) (fun () -> ())
+    renderFull enablement state schema now None noop noop noop noop
 
 let private renderWith
     (enablement: Enablement)
@@ -88,7 +99,7 @@ let private renderWith
     (now: DateTimeOffset)
     (onRun: unit -> unit)
     : Control =
-    renderFull enablement state schema now None onRun (fun () -> ()) (fun () -> ())
+    renderFull enablement state schema now None onRun noop noop noop
 
 // (T031-1) the OPTIMUS-XP prompt renders the decal ("Light") with the countdown,
 // the firmware name as a secondary diagnostic detail (FR-004 / FR-005 / SC-006).
@@ -188,7 +199,7 @@ let RetryClick_FiresOnRetry () =
     let onRetry () = calls <- calls + 1
 
     let state = Prompting(0, fixedNow, [| Missed; Pending; Pending; Pending |])
-    let root = renderFull Enabled state (Some optimusSchema) fixedNow None (fun () -> ()) onRetry (fun () -> ())
+    let root = renderFull Enabled state (Some optimusSchema) fixedNow None noop onRetry noop noop
 
     (buttonsNamed "ButtonPressRetry" root |> List.exactlyOne)
         .RaiseEvent(new RoutedEventArgs(Button.ClickEvent))
@@ -204,7 +215,7 @@ let SkipClick_FiresOnSkip () =
     let onSkip () = calls <- calls + 1
 
     let state = Prompting(0, fixedNow.AddSeconds 5.0, Array.create optimusSchema.Active.Length Pending)
-    let root = renderFull Enabled state (Some optimusSchema) fixedNow None (fun () -> ()) (fun () -> ()) onSkip
+    let root = renderFull Enabled state (Some optimusSchema) fixedNow None noop noop onSkip noop
 
     (buttonsNamed "ButtonPressSkip" root |> List.exactlyOne)
         .RaiseEvent(new RoutedEventArgs(Button.ClickEvent))
@@ -216,7 +227,7 @@ let SkipClick_FiresOnSkip () =
 [<AvaloniaFact>]
 let UnexpectedPress_SurfacesWithoutAdvancing () =
     let state = Prompting(0, fixedNow.AddSeconds 9.0, Array.create optimusSchema.Active.Length Pending)
-    let root = renderFull Enabled state (Some optimusSchema) fixedNow (Some 2) (fun () -> ()) (fun () -> ()) (fun () -> ())
+    let root = renderFull Enabled state (Some optimusSchema) fixedNow (Some 2) noop noop noop noop
 
     let notice = byName "ButtonPressUnexpected" root |> List.exactlyOne
     Assert.Contains("Suspension", textOf notice)
@@ -224,3 +235,69 @@ let UnexpectedPress_SurfacesWithoutAdvancing () =
     // The prompt is unchanged — still button 0 ("Light"), not advanced.
     let decal = byName "ButtonPressPromptDecal" root |> List.exactlyOne
     Assert.Contains("Light", textOf decal)
+
+// === F3 (T035): Re-run / provisional badge / unavailable state ================
+
+// (T035-1) a terminal run offers Re-run; clicking it fires the re-run callback
+// (FR-003).
+[<AvaloniaFact>]
+let Rerun_OfferedOnCompletedRun_FiresOnRerun () =
+    let mutable calls = 0
+    let onRerun () = calls <- calls + 1
+
+    let root =
+        renderFull Enabled (Completed [| Pass; Pass; Pass; Pass |]) (Some optimusSchema) fixedNow None noop noop noop onRerun
+
+    let rerun = buttonsNamed "RerunButtonPressTest" root |> List.exactlyOne
+    Assert.True(rerun.IsEnabled)
+
+    rerun.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))
+    Assert.Equal(1, calls)
+
+// (T035-2, SC-007) a re-run starts a fresh sequence — the cleared grid renders
+// as all Pending, with no stale Pass carried over from the prior completed run.
+[<AvaloniaFact>]
+let Rerun_FreshRunRendersClearedGrid () =
+    let fresh = Prompting(0, fixedNow.AddSeconds 10.0, Array.create optimusSchema.Active.Length Pending)
+    let root = render Enabled fresh (Some optimusSchema) fixedNow
+
+    let outcomes = byName "ButtonPressResultOutcome" root |> List.map textOf
+    Assert.Equal(optimusSchema.Active.Length, outcomes.Length)
+    outcomes |> List.iter (fun o -> Assert.Equal(ButtonPressTestView.outcomeLabel Pending, o))
+
+// (T035-3, FR-016) a provisional variant (EDEN-XP) renders the provisional
+// badge; the authoritative OPTIMUS-XP does not.
+[<AvaloniaFact>]
+let ProvisionalVariant_RendersBadge () =
+    let edenRun = Prompting(0, fixedNow.AddSeconds 10.0, Array.create edenSchema.Active.Length Pending)
+    let provisional = render Enabled edenRun (Some edenSchema) fixedNow
+    Assert.Equal(1, (byName "ButtonPressProvisional" provisional).Length)
+
+    let optimusRun = Prompting(0, fixedNow.AddSeconds 10.0, Array.create optimusSchema.Active.Length Pending)
+    let authoritative = render Enabled optimusRun (Some optimusSchema) fixedNow
+    Assert.Empty(byName "ButtonPressProvisional" authoritative)
+
+// (T035-4, SC-008) the surface is unavailable — the guard's explanation renders
+// and the Run control never prompts — when the link is not Connected or the
+// selected panel is not baptized, using the real testEnablement verdicts.
+[<AvaloniaFact>]
+let Unavailable_RendersExplanation_AndNeverPrompts () =
+    let cases =
+        [ ButtonPressTest.testEnablement Initializing false false // link not Connected
+          ButtonPressTest.testEnablement (Connected(fixedAdapter, fixedNow)) false true ] // not baptized
+
+    for enablement in cases do
+        let explanation =
+            match enablement with
+            | Disabled e -> e
+            | Enabled -> failwith "expected Disabled"
+
+        let root = render enablement ButtonPressTestState.Idle None fixedNow
+
+        // The Run control is disabled and the surface never prompts (SC-008).
+        Assert.False((buttonsNamed "RunButtonPressTest" root |> List.exactlyOne).IsEnabled)
+        Assert.Empty(byName "ButtonPressPromptDecal" root)
+
+        // The unmet conjunct renders verbatim.
+        let hint = byName "ButtonPressUnavailable" root |> List.exactlyOne
+        Assert.Equal(explanation, textOf hint)

@@ -507,6 +507,35 @@ type MainWindow(services: IServiceProvider) as this =
     /// no-op when no run is in flight). The advance surfaces via `StateChanged`.
     let onSkipButtonPress () = buttonPressTestService.Skip()
 
+    /// FR-003 Re-run callback (spec-005 Phase F): restarts the last run's panel +
+    /// schema from a cleared grid via `IButtonPressTestService.RerunAsync` —
+    /// fire-and-forget, mirroring `onRunButtonPressTest`. The optimistic fresh
+    /// `start` clears the grid + disables the controls on this UI turn; the
+    /// terminal grid surfaces via the `StateChanged` subscription. A no-op when no
+    /// prior run's schema is known (Re-run is only offered after a run).
+    let onRerunButtonPress () =
+        match lastButtonPressSchema with
+        | None -> ()
+        | Some sch ->
+            lastButtonPressState <- ButtonPressTest.start sch (clock.UtcNow() + ButtonPressTest.testBudget)
+            renderCombined ()
+
+            let _ : Task =
+                task {
+                    try
+                        let! _ = buttonPressTestService.RerunAsync(CancellationToken.None)
+                        ()
+                    with
+                    | :? OperationCanceledException -> ()
+                    | ex ->
+                        mainLogger.LogWarning(
+                            ex,
+                            "ButtonPressTestService.RerunAsync raised; ignored at the UI layer"
+                        )
+                }
+
+            ()
+
     // Re-register: wipe local install state (credential + install.guid
     // sidecar) so the next /register POST is treated server-side as a
     // fresh installation, then re-open the registration dialog.
@@ -662,6 +691,7 @@ type MainWindow(services: IServiceProvider) as this =
                             onRunButtonPressTest
                             onRetryButtonPress
                             onSkipButtonPress
+                            onRerunButtonPress
                             currentTheme
                     ]
                 ]
