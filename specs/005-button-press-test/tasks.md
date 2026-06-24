@@ -420,13 +420,13 @@ nothing.
 controls slice). **F3** = {T034, T035} (US3 re-run / variant / unavailable slice). Each lands impl +
 Headless tests together.
 
-- [ ] T030 [US1] **[NEW]** Add `src/ButtonPanelTester.GUI/Can/ButtonPressTestView.fs` + wire the surface
+- [X] T030 [US1] **[NEW]** Add `src/ButtonPanelTester.GUI/Can/ButtonPressTestView.fs` + wire the surface
       slot in `src/ButtonPanelTester.GUI/App.fs` (subscribe `IButtonPressTestService` state changes
       marshalled onto `Dispatcher.UIThread` — spec-003/004 pattern): render the current prompt by **decal
       label** (FR-004; firmware name as secondary diagnostic detail) with a per-button countdown (FR-005);
       the per-button result grid (decal + outcome) and the aggregate "all active passed" indicator
       (FR-011), positive only when every active button scored `Pass`. (FR-004/005/011)
-- [ ] T031 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Gui/Can/ButtonPressTestViewTests.fs`
+- [X] T031 [US1] **[NEW]** Add `tests/ButtonPanelTester.Tests.Windows/Gui/Can/ButtonPressTestViewTests.fs`
       (`Avalonia.Headless.XUnit`): for an OPTIMUS-XP run the prompt renders the decal ("Light") with the
       countdown; the result grid renders the four active rows in canonical order; the all-active-passed
       indicator is positive only when all four are `Pass`. Lands with T030 (F1 commit). (FR-004/005/011;
