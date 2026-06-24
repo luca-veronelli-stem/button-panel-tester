@@ -15,21 +15,36 @@ $failures = @()
 git diff --check
 if ($LASTEXITCODE -ne 0) { $failures += 'git diff --check' }
 
-# STEM .NET default - uncomment + adjust per repo:
-# dotnet build -c Release
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
-# dotnet test Tests/Tests.csproj --framework net10.0
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test' }
-# dotnet format --verify-no-changes
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet format' }
+# Build the whole solution in Release (src + tests + GUI). This compiles the new
+# Category=Hardware suite too (env-gated; excluded from the test legs below).
+dotnet build Stem.ButtonPanelTester.slnx -c Release
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build (slnx, Release)' }
 
-# Lean formalization (for repos with specs/ Lean projects):
-# lake build
-# if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+# Test legs are per-project (standards dotnet-ci.yml). Cross-platform *.Tests
+# run WITH --framework net10.0; Windows-only *.Tests.Windows run WITHOUT it
+# (NETSDK1005 guard: a net10.0-windows-only project has no net10.0 target).
+# Category!=Hardware excludes the bench suite (it needs a real PEAK adapter +
+# panel; validated at the rig per quickstart, NOT in CI).
 
-# Ticket-specific proof (extend per ticket, same capture pattern):
-# dotnet test Tests/Tests.csproj --filter FullyQualifiedName~<focused-pattern>
-# if ($LASTEXITCODE -ne 0) { $failures += '<focused-pattern>' }
+# Cross-platform leg: Core/Services FsCheck + xUnit + integration. No hardware.
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj --framework net10.0 -c Release --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test ButtonPanelTester.Tests' }
+
+# Windows leg: Infrastructure/GUI/Integration + the hardware suite (excluded by
+# the filter). Hardware excluded, no --framework.
+dotnet test tests/ButtonPanelTester.Tests.Windows/ButtonPanelTester.Tests.Windows.fsproj -c Release --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test ButtonPanelTester.Tests.Windows' }
+
+# Lean formalization (T041): every Phase 4 theorem compiles with no sorry.
+Push-Location lean
+lake build
+if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+Pop-Location
+
+# Phase G focused proof: the full button-press regression still green after the
+# polish/docs edits (the hardware suite itself is bench-validated, not gated).
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj --framework net10.0 -c Release --filter "Category!=Hardware&FullyQualifiedName~ButtonPress"
+if ($LASTEXITCODE -ne 0) { $failures += 'focused: ButtonPress regression' }
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
