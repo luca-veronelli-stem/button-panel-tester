@@ -25,6 +25,36 @@ The panel reports its key state as an unsolicited SP_APP `VAR_WRITE`, emitted on
   command is at bytes 7–8 and the variable address at 9–10 (`PacketDecoder.cs`); the decoder does
   not validate CRC (inherited limitation).
 
+## Directed CAN ID + variant-from-ID match rule (fix #270, Session 2026-06-24)
+
+A baptized panel is **silent on WHO_I_AM** — the firmware enters `AAS_STAND_BY` after `SET_ADDRESS`
+and never re-broadcasts (`CORRECTIONS.md` §C1) — so it never appears in the spec-003 discovery list.
+It instead heartbeats its button-state `VAR_WRITE` on a **directed CAN ID** equal to its SP_Address:
+
+`SP_App_Calculate_ID = network <<< 24 | machineType <<< 16 | (fwType &&& 0x3FF) <<< 6 | board`
+
+so the **machineType byte is bits 23–16** of the CAN ID. The observer's accept rule (and the tool's
+observability signal) is therefore purely the **variant decode of the CAN ID**:
+
+```
+variant = VariantDecoder.decode (MachineTypeByte ((CanId >>> 16) &&& 0xFF))
+accept  = (variant is Marketing _)
+```
+
+| CAN ID | machineType | decode | accepted |
+|---|---|---|---|
+| `0x000A0441` | `0x0A` | `Marketing OptimusXp` | yes |
+| `0x00030141` | `0x03` | `Marketing EdenXp` | yes |
+| `0x000B0481` | `0x0B` | `Marketing R3LXp` | yes |
+| `0x1FFFFFFF` (WHO_I_AM broadcast) | `0xFF` | `Virgin` | **dropped** |
+| `0x00000008` (tool SRID) | `0x00` | `Unknown 0x00` | **dropped** |
+
+Reassembly is **per source CAN ID** (one `PacketReassembler` per id). The accepted observation
+carries the decoded `MarketingVariant`. Ground-truth traces:
+`~/Documents/frames/first-gather/{optimus,eden-xp,r-3l-xp}_baptized.trc` (steady ~182 ms idle
+cadence on the directed id). Mechanised by Lean `machine_type_at_bits_23_16` /
+`non_marketing_ids_rejected` (`Phase4/ButtonStateObservation.lean`, T044).
+
 ## Bitmap semantics (R2 — firmware ground truth)
 
 Bit assignment (`UserMain.c:215–246`):

@@ -29,6 +29,30 @@ module ButtonStateFrame =
 - Validation: command `0x00:0x02` and an address in the button-state set are enforced by the
   observer (R6); `parse` itself rejects only on length, matching the WHO_I_AM precedent.
 
+### 1a. Button-state observation (the emitted envelope — fix #270)
+
+A baptized panel is silent on WHO_I_AM and heartbeats its button-state on a **directed CAN ID** whose
+machineType byte (bits 23–16) is the variant. The observer derives the variant from that id and emits
+it alongside the frame; the consumer keys observability + the prompt schema off this envelope rather
+than discovery (`button-state-wire-format.md` §Directed CAN ID).
+
+```fsharp
+// Core/Can/ButtonStateObservation.fs
+type ButtonStateObservation =
+    { Frame:   ButtonStateFrame
+      Variant: MarketingVariant }                 // decoded from (CanId >>> 16) &&& 0xFF
+
+module ButtonStateObservation =
+    let variantOfDirectedId : uint32 -> VariantIdentity   // VariantDecoder.decode on bits 23-16
+```
+
+- Lean: `Phase4/ButtonStateObservation.lean` — `machine_type_at_bits_23_16` (machineType =
+  `(id >>> 16) &&& 0xFF`), `non_marketing_ids_rejected` (broadcast `0x1FFFFFFF` → Virgin, SRID
+  `0x00000008` → Unknown are non-marketing → rejected). FsCheck:
+  `Property/Can/ButtonStateObservationProperties.fs`.
+- Accept rule: a frame is observed **iff** `variantOfDirectedId CanId` is `Marketing _`. Reassembly is
+  per source CAN ID.
+
 ## 2. Key-state press-edge detector (R2 — the polarity-bearing type)
 
 Pure. Converts two consecutive masked bitmaps into the set of buttons whose bit transitioned
@@ -163,15 +187,33 @@ val testEnablement :
 Priority-ordered (link → selected-baptized → observable), mirroring `baptizeEnablement`. Lean
 `Phase4/Enablement.lean` — `test_enabled_iff`; FsCheck `TestEnablementGuards`.
 
+> **`observable` / `selectedBaptized` interpretation (fix #270).** The predicate is unchanged (it is
+> parametric over the two booleans, and `test_enabled_iff` still holds), but their *source* shifts
+> from discovery to the button-state heartbeat: `observable` = a button-state frame was seen within
+> `observableWindow`; `selectedBaptized` = that heartbeat carried a known `Marketing` variant (the
+> observer only emits Marketing ones), auto-targeting the single heartbeating panel — no UUID
+> selection.
+
+### 6a. Recency thresholds (fix #270 — `Core/Can/ButtonPressTest.fs`)
+
+Code-config `TimeSpan` constants (not UI), provisional bench defaults from the ~182 ms idle refresh
+cadence — to be confirmed on the rig alongside the press-edge polarity:
+
+| Constant | Default | Role |
+|---|---|---|
+| `observableWindow` | 2 s | a button-state frame within this window ⇒ the panel is observable (the `observable` enablement conjunct) |
+| `panelLostThreshold` | 3 s | no button-state frame for longer than this **during a run** ⇒ `Interrupted PanelLost` (the recency replacement for the discovery-prune presence signal) |
+
 ## 7. Observation port (R5 — Infrastructure boundary)
 
 ```fsharp
 type IButtonStateObserver =                  // Core/Can/Ports.fs (mirror IWhoIAmObserver)
-    abstract member ButtonStateObserved : IObservable<ButtonStateFrame>
+    abstract member ButtonStateObserved : IObservable<ButtonStateObservation>   // frame + variant (§1a)
 ```
 
 Production adapter `ButtonStateReassemblyObserver` (`Infrastructure/Can`); virtual fake
-`InMemoryButtonStateObserver` (`Tests/Fakes/Can`).
+`InMemoryButtonStateObserver` (`Tests/Fakes/Can`). Accepts a frame iff its directed CAN ID decodes to
+a `Marketing` variant (§1a); reassembles per source CAN ID.
 
 ## Entity → spec mapping
 
