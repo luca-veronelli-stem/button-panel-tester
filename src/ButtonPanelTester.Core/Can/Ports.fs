@@ -96,16 +96,20 @@ type IWhoIAmObserver =
     /// subscribe at composition time (late subscribers do not replay).
     abstract member WhoIAmObserved: IObservable<WhoIAmFrame>
 
-/// Decoded SP_APP VAR_WRITE button-state reports from the panel under test, per
-/// `specs/005-button-press-test/contracts/button-state-observer-port.md`. Emits one
-/// `ButtonStateFrame` per reassembled + command-matched + address-matched + parsed VAR_WRITE;
-/// the virgin sentinel 0x80FE and non-button addresses are dropped (silent non-events).
-/// Edge detection is the consumer's job — the observer is stateless w.r.t. press/release.
-/// Receive-only.
+/// Decoded SP_APP VAR_WRITE button-state heartbeats from the panel under test, per
+/// `specs/005-button-press-test/contracts/button-state-observer-port.md` (fix #270). Emits one
+/// `ButtonStateObservation` per reassembled + command-matched + address-matched + parsed VAR_WRITE
+/// arriving on a **directed CAN ID whose machineType (bits 23-16) decodes to a known Marketing
+/// variant** — that variant rides in the observation. The broadcast id 0x1FFFFFFF (-> Virgin), the
+/// tool SRID 0x00000008 (-> Unknown), the virgin sentinel address 0x80FE, and non-button addresses
+/// are dropped (silent non-events). A directed button-state frame IS the evidence that a baptized
+/// panel of that variant is present — the consumer keys observability off frame recency, not
+/// WHO_I_AM discovery. Edge detection is the consumer's job — the observer is stateless w.r.t.
+/// press/release. Receive-only.
 type IButtonStateObserver =
-    /// Hot observable of decoded button-state frames. Fires on the vendored read thread;
-    /// late subscribers do not replay.
-    abstract member ButtonStateObserved: IObservable<ButtonStateFrame>
+    /// Hot observable of decoded button-state observations (frame + variant-from-CAN-ID). Fires on
+    /// the vendored read thread; late subscribers do not replay.
+    abstract member ButtonStateObserved: IObservable<ButtonStateObservation>
 
 /// Receive port for the SET_ADDRESS application ACK the slave's protocol dispatcher returns to
 /// the tool. The dispatcher (`SP_App_ProcessDataRx`, `SP_Application.c:347-360`) ORs `0x80` into

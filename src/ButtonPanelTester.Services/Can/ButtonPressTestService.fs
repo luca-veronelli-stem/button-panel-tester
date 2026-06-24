@@ -272,7 +272,9 @@ type ButtonPressTestService
     /// frame observed while no run is active updates the baseline but emits
     /// nothing the FSM acts on (`apply` absorbs it). The edge set is computed
     /// UNDER the lock; each `PressEdge` is applied OUTSIDE it.
-    let onFrame (frame: ButtonStateFrame) =
+    let onFrame (observation: ButtonStateObservation) =
+        let frame = observation.Frame
+
         let edges =
             lock stateLock (fun () ->
                 match schema, prior with
