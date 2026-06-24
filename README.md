@@ -19,6 +19,8 @@ A third **Panels-on-bus list** passively discovers the panels currently on the b
 
 A **Baptize / Reset-to-virgin** workflow turns the Panels-on-bus list from read-only into the tool's first CAN-transmit feature: when exactly one virgin panel is announcing, the operator claims it as one of four BoardVariants (EDEN-XP, OPTIMUS-XP, R-3L XP, EDEN-BS8) via the three-step auto-address master sequence, or resets a claimed panel back to virgin. Success is reported only on **confirmed adoption** — the panel acknowledges the address assignment and goes silent on the broadcast — never on bare write-completion; a claim that does not take is reported as such and guides the operator into the Reset → re-baptize recovery. Baptize and Reset are disabled with an explanation unless exactly one panel is on the bus, and the tool keeps no memory of panels it baptized. See [`specs/004-baptism-workflow/quickstart.md`](specs/004-baptism-workflow/quickstart.md) for the operator and bench walkthrough.
 
+A **button-press test** closes the input-side loop: for a baptized panel the operator runs a guided, single-attempt session that prompts each active button by its decal label (OPTIMUS-XP authoritative; the other three variants provisional), watches the panel's CAN `VAR_WRITE` button-state frames, and scores each prompt **Pass / Missed / Unexpected / Skipped** against a per-button 10 s countdown, with a per-button result grid and an "all active passed" aggregate. The technician presses the physical buttons; the tool only observes (receive-only) and decides nothing — every outcome comes from a Lean-formalized session FSM. Retry and Skip recover a missed or wrong press without restarting, Re-run clears the grid, and a link or panel drop surfaces as a distinct interruption that never reports all-passed. The test is unavailable, with an explanation, unless a baptized panel is selected on a Connected link. See [`specs/005-button-press-test/quickstart.md`](specs/005-button-press-test/quickstart.md) for the operator and bench walkthrough.
+
 ## Quick Start
 
 ```powershell
@@ -50,6 +52,7 @@ eng/                             build / release scripts
 - CAN-link lifecycle walkthrough: [`specs/002-can-link-lifecycle/quickstart.md`](./specs/002-can-link-lifecycle/quickstart.md).
 - Passive panel discovery walkthrough: [`specs/003-panel-discovery/quickstart.md`](./specs/003-panel-discovery/quickstart.md).
 - Baptism (claim / reset-to-virgin) walkthrough: [`specs/004-baptism-workflow/quickstart.md`](./specs/004-baptism-workflow/quickstart.md).
+- Button-press test (input side) walkthrough: [`specs/005-button-press-test/quickstart.md`](./specs/005-button-press-test/quickstart.md).
 - Roadmap: [`docs/ROADMAP.md`](./docs/ROADMAP.md) — shipped state, next spec, provisional order, v1.0 definition.
 - Standards followed: [`docs/Standards/`](./docs/Standards/) — pinned to `v1.17.1`.
 - Changelog: [`CHANGELOG.md`](./CHANGELOG.md).

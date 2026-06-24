@@ -4,6 +4,10 @@ All notable changes to ButtonPanelTester follow [Semantic Versioning](https://se
 
 ## [Unreleased]
 
+### Added
+
+- **Button-press test (input side)** ([spec 005](specs/005-button-press-test/spec.md)) — the tool's **first input-side test**: prompt a technician through each active button on a baptized panel, observe the CAN `VAR_WRITE` button-state frame, and score each prompt **Pass / Missed / Unexpected / Skipped** with a per-button grid and an "all active passed" aggregate. The session is a pure, Lean-formalized FSM (Phase 4, no `sorry`) driven **receive-only** over the existing CAN observation seam: a per-variant button schema (OPTIMUS-XP authoritative, the other three provisional), a per-button 10 s countdown, press-edge detection (pressed = bit `0`; a press is the `1 → 0` edge, firmware-pinned), Retry / Skip / Re-run recovery, and link-loss / panel-loss surfaced as distinct interruptions that never report all-passed. The test is unavailable, with an explanation, unless a baptized panel is selected on a Connected link. CI greens without hardware; the live OPTIMUS-XP bench run is the done gate ([#255](https://github.com/luca-veronelli-stem/button-panel-tester/issues/255), per-phase children A–G; bench validation tracked at [#253](https://github.com/luca-veronelli-stem/button-panel-tester/issues/253)).
+
 ## [0.4.0] - 2026-06-19
 
 Ships spec 004 — the **baptism workflow** (the tool's first CAN-transmit feature: claim a virgin panel as one of four BoardVariants, or reset a claimed panel to virgin, via the three-step auto-address master sequence) — plus the v0.4.0 ride-along fixes: configurable log levels, a quieter WHO_I_AM reassembly trace, a claim-write race hardening, and dark-theme selection contrast.
