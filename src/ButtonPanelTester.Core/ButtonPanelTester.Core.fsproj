@@ -15,6 +15,7 @@
         <Compile Include="Can/Pruning.fs" />
         <Compile Include="Can/Baptism.fs" />
         <Compile Include="Can/ButtonStateFrame.fs" />
+        <Compile Include="Can/ButtonStateObservation.fs" />
         <Compile Include="Can/KeyStateBitmap.fs" />
         <Compile Include="Can/ButtonSchema.fs" />
         <Compile Include="Can/ButtonPressTest.fs" />

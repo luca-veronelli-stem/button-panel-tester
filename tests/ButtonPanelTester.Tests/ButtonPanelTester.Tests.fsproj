@@ -33,6 +33,7 @@
         <Compile Include="Property/Can/BaptismSequenceProperties.fs" />
         <Compile Include="Property/Can/EnablementProperties.fs" />
         <Compile Include="Property/Can/ButtonStateFrameProperties.fs" />
+        <Compile Include="Property/Can/ButtonStateObservationProperties.fs" />
         <Compile Include="Property/Can/KeyStateBitmapProperties.fs" />
         <Compile Include="Property/Can/ButtonSchemaProperties.fs" />
         <Compile Include="Property/Can/ButtonPressTestProperties.fs" />
