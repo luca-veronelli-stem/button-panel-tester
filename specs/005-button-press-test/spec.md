@@ -20,6 +20,12 @@ The tool's first **input-side** test. Earlier features brought the panel to life
 - **Protocol metadata stays the hardcoded tester-side stopgap** for this slice (extended with the button-state variable identifiers the decoder needs). The CORRECTIONS.md §C5 fetch migration (fetch command/variable metadata from the server) is deferred to its own standalone ticket.
 - **Technician UI strings are English** (per the project's English-by-default policy), despite the legacy app having prompted in Italian.
 
+### Session 2026-06-24
+
+- **Observability = the button-state heartbeat, not WHO_I_AM discovery.** A baptized panel is **silent on the WHO_I_AM auto-address broadcast** — the firmware enters `AAS_STAND_BY` after `SET_ADDRESS` and never re-broadcasts WHO_I_AM (`CORRECTIONS.md` §C1) — so it never appears in the spec-003 Panels-on-bus discovery list. The tool instead recognises a baptized panel by its **button-state heartbeat**: the SP_APP `VAR_WRITE` (cmd `0x0002`, addr `0x80NN`, bitmap `TxTasti`) it transmits on change plus a periodic refresh (`research.md` R1). A button-state frame arriving therefore **is** the evidence that a baptized panel of that variant is present and observable. (Bench-confirmed 2026-06-24; corrects the original premise that the panel is selected from the discovery list — that premise does not hold for baptized panels.)
+- **Variant comes from the directed CAN ID, not discovery.** The heartbeat arrives on a **directed CAN ID** whose machineType byte (bits 23–16) identifies the variant — OPTIMUS `0x000A0441`, Eden-XP `0x00030141`, R-3L `0x000B0481`. `(CanId >>> 16) &&& 0xFF` decoded by the variant decoder yields the marketing variant; the broadcast id (`0x1FFFFFFF` → `0xFF`/virgin) and the tool's own SRID (`0x00000008` → `0x00`) decode to non-marketing values and are rejected. One panel under test at a time (spec-003 bench convention), so the test **auto-targets the single baptized panel currently heartbeating** — there is no panel-selection step and no UUID/address disambiguation.
+- **"Panel lost" = button-state silence past a configurable threshold.** Observability and panel-loss key off frame recency: a button-state frame within the *observable window* ⇒ observable; no button-state frame for longer than the *panel-lost threshold* during a run ⇒ panel-lost. Both are code-configurable constants (provisional defaults: observable window 2 s, panel-lost 3 s, from the bench-measured ~182 ms idle refresh), **confirmed on the rig** alongside the press-edge polarity. (The earlier ~12 s figure was a *different* periodic message — CAN id `0x00000008` — not the button-state heartbeat.)
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Verify every active button on a baptized panel (Priority: P1)
@@ -32,7 +38,7 @@ A supplier technician has a panel on the bench that the tool has already baptize
 
 **Acceptance Scenarios**:
 
-1. **Given** a panel baptized as OPTIMUS-XP is selected and the CAN link is Connected, **When** the technician starts the test, **Then** the tool prompts for the first active button by its decal name ("Light") with a visible per-button countdown.
+1. **Given** a panel baptized as OPTIMUS-XP is observable on the bus (its button-state heartbeat is arriving) and the CAN link is Connected, **When** the technician starts the test, **Then** the tool prompts for the first active button by its decal name ("Light") with a visible per-button countdown.
 2. **Given** the tool is prompting for "Light", **When** the technician presses the Light button on the panel, **Then** within the timeout the button is scored Pass and the prompt advances to the next active button.
 3. **Given** the OPTIMUS-XP panel is under test, **When** the test runs, **Then** the active buttons are prompted in canonical firmware order filtered to the variant's active mask: Light (DOWN) → Suspension (P1) → Up (P3) → Down (MEM); inactive positions (UP, P2, STOP, LIGHT) are never prompted.
 4. **Given** all four active OPTIMUS-XP buttons have been pressed and scored Pass, **When** the sequence completes, **Then** the tool shows a per-button result grid (decal label + Pass) and a positive "all active passed" indicator.
@@ -68,14 +74,14 @@ After a run, the technician re-runs the test in place (e.g., after re-seating a 
 
 1. **Given** a completed test with a result grid shown, **When** the technician re-runs the test, **Then** all prior per-button results are cleared and the sequence starts fresh.
 2. **Given** a panel baptized as a full-set variant (e.g., Eden-XP), **When** the test runs, **Then** the prompted buttons and labels match that variant's schema (all eight buttons), with the labels surfaced as provisional/unverified.
-3. **Given** no panel is selected, or the selected panel is not baptized, **When** the technician opens the test, **Then** the test is unavailable with an explanation that a baptized panel must be selected.
+3. **Given** no baptized panel is heartbeating on the bus, **When** the technician opens the test, **Then** the test is unavailable with an explanation that a baptized, observable panel is required.
 
 ---
 
 ### Edge Cases
 
 - **Link drops mid-test** (USB unplug or bus silence): the test halts with a distinct "link lost" outcome; no false Pass or Missed is recorded for the in-flight button, and "all active passed" is never reported.
-- **Panel disappears from the bus mid-test** (stops being observable): the test halts with a distinct "panel lost" outcome.
+- **Panel stops heartbeating mid-test** (button-state silence past the panel-lost threshold): the test halts with a distinct "panel lost" outcome.
 - **Button held down** (long press): the press registers once on the transition into pressed; holding does not produce repeated Pass results.
 - **Bouncing / repeated presses within one prompt window**: the first matching transition scores Pass; further transitions for that button in the same window are ignored for scoring.
 - **A bit reported for an inactive position** (outside the variant's active mask): never treated as a prompted-button result; ignored or surfaced as diagnostic only.
@@ -98,7 +104,7 @@ The test communicates through three complementary surfaces:
 
 **Test lifecycle & enablement**
 
-- **FR-001**: The system MUST offer the button-press test only for a panel that is currently baptized (claimed) as a known variant and observable on the bus while the CAN link is Connected; otherwise the test MUST be unavailable with an explanation of what is missing.
+- **FR-001**: The system MUST offer the button-press test only while the CAN link is Connected and a baptized panel of a known variant is **observable on the bus** — defined as its button-state heartbeat (SP_APP `VAR_WRITE` button-state frames) arriving within the observable window; the panel's variant is taken from the directed CAN ID's machineType byte. A baptized panel does **not** appear in the WHO_I_AM passive-discovery list (it is silent on WHO_I_AM after baptism — `CORRECTIONS.md` §C1), so observability and variant key off the button-state heartbeat, not the Panels-on-bus list. With one panel under test at a time, the test auto-targets the single heartbeating baptized panel. Otherwise the test MUST be unavailable with an explanation of what is missing (link not Connected / no baptized panel heartbeating).
 - **FR-002**: The system MUST let the technician start the test for the selected baptized panel and MUST present the panel's active buttons one at a time, in canonical firmware order filtered to that variant's active-button mask.
 - **FR-003**: The system MUST allow the test to be re-run end-to-end without leaving the test view, clearing all prior per-button results on re-run.
 
@@ -122,7 +128,7 @@ The test communicates through three complementary surfaces:
 
 **Robustness**
 
-- **FR-013**: If the CAN link leaves Connected, or the panel under test stops being observable on the bus during a run, the system MUST halt the test with a distinct interruption outcome (e.g., link-lost / panel-lost) rather than silently recording Missed, and MUST NOT report "all active passed".
+- **FR-013**: If the CAN link leaves Connected, or the panel under test stops emitting its button-state heartbeat for longer than the panel-lost threshold during a run, the system MUST halt the test with a distinct interruption outcome (link-lost / panel-lost) rather than silently recording Missed, and MUST NOT report "all active passed".
 - **FR-014**: The system MUST treat button reports for positions outside the selected variant's active mask as not part of the test (ignored or surfaced as diagnostic), never as a prompted-button result.
 - **FR-015**: The system MUST retain nothing about the panel after the test beyond the in-session result view (no persistence in this slice).
 
@@ -145,10 +151,10 @@ The test communicates through three complementary surfaces:
 - **SC-002**: When a prompted button is pressed, it is scored Pass within about one second of the press — perceived as immediate — verifiable by comparing a bus capture of the press against the on-screen result. (US1 / FR-006)
 - **SC-003**: A prompted button that is not pressed is scored Missed within the configured window (default 10 seconds) of the prompt starting, within about one second of the window elapsing. (US2 / FR-007)
 - **SC-004**: Pressing a button other than the prompted one never scores the prompted button and never advances the sequence, and the wrong press is visible in the forensic log. (US2 / FR-008)
-- **SC-005**: A test interrupted by link loss or by the panel disappearing from the bus never reports "all active passed" and surfaces a distinct interruption outcome within a small handful of seconds. (Edge cases / FR-013)
+- **SC-005**: A test interrupted by link loss surfaces a distinct link-lost outcome within a small handful of seconds; a test interrupted by the panel ceasing to heartbeat surfaces a distinct panel-lost outcome within the panel-lost window (the configurable threshold, provisional default ~3 s). Neither ever reports "all active passed". (Edge cases / FR-013)
 - **SC-006**: The prompted label for every OPTIMUS-XP active button matches the physical panel decal (Light, Suspension, Up, Down), verifiable by a technician reading the panel. (FR-004; the §C3 correction)
 - **SC-007**: Re-running the test clears all prior results and starts a fresh sequence, with no residual Pass/Missed from the previous run. (US3 / FR-003)
-- **SC-008**: The test is unavailable, with an explanation, whenever the selected panel is not baptized or the link is not Connected — it never prompts for buttons on an unbaptized panel. (FR-001)
+- **SC-008**: The test is unavailable, with an explanation, whenever no baptized panel is heartbeating on the bus or the link is not Connected — it never prompts for buttons absent an observable baptized panel. (FR-001)
 
 ## Assumptions
 
@@ -163,7 +169,7 @@ The test communicates through three complementary surfaces:
 ## Dependencies
 
 - **Baptism** (spec-004, shipped v0.4.0): a panel must be claimed before it emits button-state reports. Expressed as the behavioural capability "the selected panel is baptized and observable," not a specific upstream requirement number.
-- **Passive panel discovery** (spec-003, shipped v0.3.0): the panel under test is chosen from the Panels-on-bus list and must remain observable during the test.
+- **Passive panel discovery** (spec-003, shipped v0.3.0): used to find and baptize **virgin** panels; a **baptized** panel is not in the WHO_I_AM Panels-on-bus list, so the button-press test identifies its panel by the button-state heartbeat (directed CAN ID), not the discovery list. The button-press path does not depend on the discovery service.
 - **CAN link lifecycle** (spec-002, shipped v0.2.0): the test runs only while the link is Connected.
 - A **PEAK PCAN-USB driver** installed on the test workstation.
 - **Panel firmware button-state behaviour**, audited and recorded in `docs/Context/bpt-rollout/CORRECTIONS.md` §C3 (bit assignment) and the panel firmware repository.

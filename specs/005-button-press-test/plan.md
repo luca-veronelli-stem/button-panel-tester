@@ -252,3 +252,19 @@ tree was clean at plan start, so it was a no-op.
   gate) — it **does not fit one bisect-safe PR**; implementation decomposes into ordered
   resolve-ticket child PRs (one per phase), filed after `/speckit-tasks` along with the
   bench-validation tracking issue.
+
+### Amendment 2026-06-24 (fix #270) — observability re-keyed to the button-state heartbeat
+
+Bench validation (#253) invalidated the **R5 observation assumption** that the button-state RX seam can
+be keyed the way WHO_I_AM discovery is. A baptized panel is silent on WHO_I_AM (`CORRECTIONS.md` §C1)
+and heartbeats its button-state on a **directed CAN ID** (machineType at bits 23–16), so: (1) the
+Phase C `ButtonStateReassemblyObserver` must accept directed SP_APP IDs (match-any-non-broadcast +
+variant-from-ID) instead of broadcast `0x1FFFFFFF` only — **Phase C is back in scope**; (2) the
+observation envelope carries the variant; (3) the Phase E service + Phase F GUI key observability /
+panel-loss / variant off **button-state recency** (configurable thresholds, bench-confirmed) and the
+service **drops `IPanelDiscoveryService`** from the button-press path (auto-target the single
+heartbeating panel, one-at-a-time); (4) Phase G drops the WHO_I_AM precondition. The architecture
+otherwise stands (FSM, schema, detector, enablement DU unchanged; `test_enabled_iff` is parametric over
+the `observable` boolean — its *interpretation* shifts, the theorem holds). Authority: spec.md
+§Clarifications (Session 2026-06-24) + tasks.md §Phase I (T044–T049). Constitution Check still PASS
+(no new bypass; the inline command/address hardcode R6 stays, now matching directed IDs).
