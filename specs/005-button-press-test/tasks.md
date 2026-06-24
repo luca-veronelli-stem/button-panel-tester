@@ -431,11 +431,11 @@ Headless tests together.
       countdown; the result grid renders the four active rows in canonical order; the all-active-passed
       indicator is positive only when all four are `Pass`. Lands with T030 (F1 commit). (FR-004/005/011;
       SC-006)
-- [ ] T032 [US2] **[EXTEND]** Extend `ButtonPressTestView.fs` (+ `App.fs` Msg/update) with the
+- [X] T032 [US2] **[EXTEND]** Extend `ButtonPressTestView.fs` (+ `App.fs` Msg/update) with the
       recovery controls: per-button **Retry** (re-arm) and **Skip** (record Skipped + advance) offered on
       a `Missed`/in-flight button; surface an observed `Unexpected` press transiently (operator status /
       log echo) without advancing the prompt. (FR-008/FR-009)
-- [ ] T033 [US2] **[EXTEND]** Extend `ButtonPressTestViewTests.fs`: a timed-out button renders Retry/Skip;
+- [X] T033 [US2] **[EXTEND]** Extend `ButtonPressTestViewTests.fs`: a timed-out button renders Retry/Skip;
       Retry invokes the service re-arm and re-shows the countdown; Skip records Skipped and advances; an
       Unexpected press surfaces without advancing. Lands with T032 (F2 commit). (FR-008/FR-009)
 - [ ] T034 [US3] **[EXTEND]** Extend `ButtonPressTestView.fs` (+ `App.fs`) with: a **Re-run** control

@@ -496,6 +496,17 @@ type MainWindow(services: IServiceProvider) as this =
 
             ()
 
+    /// FR-009 Retry callback (spec-005 Phase F): re-arms the current button with
+    /// a fresh countdown via `IButtonPressTestService.Retry` (synchronous, a
+    /// no-op when no run is in flight). The re-armed `Prompting` state surfaces
+    /// via the `StateChanged` subscription, which repaints the countdown.
+    let onRetryButtonPress () = buttonPressTestService.Retry()
+
+    /// FR-009 Skip callback (spec-005 Phase F): records the current button
+    /// `Skipped` and advances via `IButtonPressTestService.Skip` (synchronous, a
+    /// no-op when no run is in flight). The advance surfaces via `StateChanged`.
+    let onSkipButtonPress () = buttonPressTestService.Skip()
+
     // Re-register: wipe local install state (credential + install.guid
     // sidecar) so the next /register POST is treated server-side as a
     // fresh installation, then re-open the registration dialog.
@@ -640,7 +651,17 @@ type MainWindow(services: IServiceProvider) as this =
                             lastButtonPressState
                             buttonPressSchema
                             (clock.UtcNow())
+                            // The transient Unexpected-press notice (FR-008) has
+                            // no signal on the locked IButtonPressTestService
+                            // surface (RecordUnexpected leaves the FSM state
+                            // unchanged, so StateChanged never fires for it); the
+                            // view capability is proven by the Headless suite,
+                            // and surfacing it in-app needs an UnexpectedObserved
+                            // service event (out of Phase F scope).
+                            None
                             onRunButtonPressTest
+                            onRetryButtonPress
+                            onSkipButtonPress
                             currentTheme
                     ]
                 ]
