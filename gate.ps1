@@ -15,43 +15,35 @@ $failures = @()
 git diff --check
 if ($LASTEXITCODE -ne 0) { $failures += 'git diff --check' }
 
-# STEM .NET default - uncomment + adjust per repo:
-# dotnet build -c Release
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
-#
-# Test legs are per-project, mirroring the standards dotnet-ci.yml (#82).
-# Never pass --framework net10.0 at solution scope: it overrides each
-# project's TFM, so a net10.0-windows-only test project fails NETSDK1005
-# (its build has no net10.0 target to load). Run cross-platform test
-# projects WITH --framework net10.0 and Windows-only ones WITHOUT it (they
-# use their own net10.0-windows TFM). The <App>.Tests.<Platform> naming is
-# load-bearing here (standards TESTING.md).
-#
-# # Cross-platform leg: *.Tests projects, minus *.Tests.Windows / *.Tests.Linux.
-# foreach ($p in Get-ChildItem tests -Recurse -File -Include '*.Tests*.csproj','*.Tests*.fsproj' |
-#         Where-Object { $_.Name -notmatch '\.Tests\.(Windows|Linux)\.' }) {
-#     dotnet test $p.FullName --framework net10.0 -c Release
-#     if ($LASTEXITCODE -ne 0) { $failures += "dotnet test $($p.Name)" }
-# }
-#
-# # Windows-only leg: *.Tests.Windows projects, no --framework (NETSDK1005 guard).
-# # No matches (no Windows-only tests) -> loop never runs, same as before.
-# foreach ($p in Get-ChildItem tests -Recurse -File -Include '*.Tests*.csproj','*.Tests*.fsproj' |
-#         Where-Object { $_.Name -match '\.Tests\.Windows\.' }) {
-#     dotnet test $p.FullName -c Release
-#     if ($LASTEXITCODE -ne 0) { $failures += "dotnet test $($p.Name)" }
-# }
-#
-# dotnet format --verify-no-changes
-# if ($LASTEXITCODE -ne 0) { $failures += 'dotnet format' }
+# Build the whole solution in Release.
+dotnet build Stem.ButtonPanelTester.slnx -c Release
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet build' }
 
-# Lean formalization (for repos with specs/ Lean projects):
-# lake build
-# if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+# Test legs are per-project, mirroring the standards dotnet-ci.yml. Run the
+# cross-platform project WITH --framework net10.0 and the Windows-only project
+# WITHOUT it (it builds net10.0-windows; --framework net10.0 at that scope
+# trips NETSDK1005). Hardware-tagged tests are excluded from both legs.
 
-# Ticket-specific proof (extend per ticket, same capture pattern):
-# dotnet test Tests/Tests.csproj --filter FullyQualifiedName~<focused-pattern>
-# if ($LASTEXITCODE -ne 0) { $failures += '<focused-pattern>' }
+# Cross-platform leg.
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj --framework net10.0 -c Release --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test (cross-platform)' }
+
+# Windows-only leg (no --framework; NETSDK1005 guard).
+dotnet test tests/ButtonPanelTester.Tests.Windows/ButtonPanelTester.Tests.Windows.fsproj -c Release --filter "Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'dotnet test (windows)' }
+
+# Lean formalization. lake build is NOT in CI, so this gate is the only Lean
+# check on the branch.
+Push-Location lean
+lake build
+if ($LASTEXITCODE -ne 0) { $failures += 'lake build' }
+Pop-Location
+
+# Ticket-specific proof: the button-press observability regression. Fast
+# focused signal over the spec-005 button-press suite (extend the filter to
+# the new observability tests as they land).
+dotnet test tests/ButtonPanelTester.Tests/ButtonPanelTester.Tests.fsproj --framework net10.0 -c Release --filter "FullyQualifiedName~ButtonPress&Category!=Hardware"
+if ($LASTEXITCODE -ne 0) { $failures += 'button-press regression' }
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host "FAIL: $_" }
