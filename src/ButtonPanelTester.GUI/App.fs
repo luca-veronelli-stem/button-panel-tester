@@ -149,6 +149,7 @@ type MainWindow(services: IServiceProvider) as this =
     let canLinkService = services.GetRequiredService<ICanLinkService>()
     let panelDiscovery = services.GetRequiredService<IPanelDiscoveryService>()
     let baptismService = services.GetRequiredService<IBaptismService>()
+    let buttonPressTestService = services.GetRequiredService<IButtonPressTestService>()
     let credentialStore = services.GetRequiredService<ICredentialStore>()
     let registrationClient = services.GetRequiredService<IRegistrationClient>()
     let descriptorProvider =
@@ -226,6 +227,19 @@ type MainWindow(services: IServiceProvider) as this =
     /// the confirmation seam and rendered by `BaptismView.view` into the honest
     /// success / failure line.
     let mutable lastResetOutcome: ResetOutcome option = None
+
+    /// Latest `IButtonPressTestService.StateChanged` FSM state (spec-005 Phase F).
+    /// Starts `Idle` (QUALIFIED — `ButtonPressTestState.Idle` collides with
+    /// `BaptismState.Idle`); the `StateChanged` subscription advances it (prompt /
+    /// score / terminal) and re-renders so the button-press surface tracks the
+    /// prompt + result grid (FR-004/005/011).
+    let mutable lastButtonPressState: ButtonPressTestState = ButtonPressTestState.Idle
+
+    /// The `ButtonSchema` of the in-flight / last button-press run (spec-005
+    /// Phase F). Set at Run-press time from the selected baptized panel's variant
+    /// so `ButtonPressTestView.view` renders the result grid against the schema
+    /// the run was actually started with (FR-004/016).
+    let mutable lastButtonPressSchema: ButtonSchema option = None
 
     // Active Avalonia theme. Initial value read once at construction
     // from `Application.Current.ActualThemeVariant`; every render
@@ -437,6 +451,51 @@ type MainWindow(services: IServiceProvider) as this =
 
         ()
 
+    /// Run-button callback wired into `ButtonPressTestView.view` (spec-005 Phase F,
+    /// FR-002/004/005). Resolves the selected baptized panel's variant → its
+    /// `ButtonSchema`, then starts ONE modal run via `IButtonPressTestService.RunAsync`
+    /// — fire-and-forget, mirroring `onBaptize`: the prompt / score / terminal grid
+    /// surface via the `StateChanged` subscription, so the task body only swallows
+    /// cancellation and logs any other fault. A no-op when no resolvable baptized
+    /// panel is selected (the Run control is disabled in that case, SC-008).
+    let onRunButtonPressTest () =
+        let resolved =
+            selectedPanel
+            |> Option.bind (fun u -> Map.tryFind u lastPanelsOnBus)
+            |> Option.bind (fun o ->
+                match o.VariantIdentity with
+                | Marketing v -> Some(o.Uuid, ButtonSchema.forVariant v)
+                | Virgin
+                | Unknown _ -> None)
+
+        match resolved with
+        | None -> ()
+        | Some(uuid, sch) ->
+            lastButtonPressSchema <- Some sch
+
+            // Enter the running state synchronously on THIS UI turn so the Run
+            // control disables the instant it is pressed (modal) — mirrors the
+            // baptize re-entrancy close (`fst Baptism.start`). The service's own
+            // StateChanged(Prompting 0) is an idempotent repaint.
+            lastButtonPressState <- ButtonPressTest.start sch (clock.UtcNow() + ButtonPressTest.testBudget)
+            renderCombined ()
+
+            let _ : Task =
+                task {
+                    try
+                        let! _ = buttonPressTestService.RunAsync(uuid, sch, CancellationToken.None)
+                        ()
+                    with
+                    | :? OperationCanceledException -> ()
+                    | ex ->
+                        mainLogger.LogWarning(
+                            ex,
+                            "ButtonPressTestService.RunAsync raised; ignored at the UI layer"
+                        )
+                }
+
+            ()
+
     // Re-register: wipe local install state (credential + install.guid
     // sidecar) so the next /register POST is treated server-side as a
     // fresh installation, then re-open the registration dialog.
@@ -517,6 +576,45 @@ type MainWindow(services: IServiceProvider) as this =
             let resetEnablement =
                 Baptism.resetEnablement lastCanState (Map.count lastPanelsOnBus)
 
+            // Button-press test surface (spec-005 Phase F, FR-001): the
+            // enablement verdict is computed in Core from the live link + the
+            // selected panel's baptized status + its observability on the bus. A
+            // selection is always present in `lastPanelsOnBus` (stale selections
+            // are pruned on `PanelsOnBusChanged`), so `observable` is "selected",
+            // and "baptized" is "the selected panel announces a known Marketing
+            // variant" (Virgin / Unknown are not baptized). The schema feeding the
+            // decal prompts (FR-004) comes from that variant; during a run it is
+            // the schema the run was started with (`lastButtonPressSchema`).
+            let testObservation =
+                selectedPanel |> Option.bind (fun u -> Map.tryFind u lastPanelsOnBus)
+
+            let testSelectedBaptized =
+                match testObservation with
+                | Some o ->
+                    match o.VariantIdentity with
+                    | Marketing _ -> true
+                    | Virgin
+                    | Unknown _ -> false
+                | None -> false
+
+            let testObservable = Option.isSome testObservation
+
+            let buttonPressEnablement =
+                ButtonPressTest.testEnablement lastCanState testSelectedBaptized testObservable
+
+            let buttonPressSchema =
+                match lastButtonPressState with
+                | ButtonPressTestState.Idle ->
+                    testObservation
+                    |> Option.bind (fun o ->
+                        match o.VariantIdentity with
+                        | Marketing v -> Some(ButtonSchema.forVariant v)
+                        | Virgin
+                        | Unknown _ -> None)
+                | Prompting _
+                | ButtonPressTestState.Completed _
+                | Interrupted _ -> lastButtonPressSchema
+
             let combinedView : IView =
                 StackPanel.create [
                     StackPanel.orientation Orientation.Vertical
@@ -536,6 +634,13 @@ type MainWindow(services: IServiceProvider) as this =
                             onSelectVariant
                             onBaptize
                             onReset
+                            currentTheme
+                        ButtonPressTestView.view
+                            buttonPressEnablement
+                            lastButtonPressState
+                            buttonPressSchema
+                            (clock.UtcNow())
+                            onRunButtonPressTest
                             currentTheme
                     ]
                 ]
@@ -610,6 +715,36 @@ type MainWindow(services: IServiceProvider) as this =
                 Dispatcher.UIThread.Post(fun () ->
                     lastBaptismWarning <- Some uuid
                     renderCombined ()))
+
+        // Button-press StateChanged → re-render on the UI thread (spec-005 Phase
+        // F). The service's subject fires from whatever thread drove the
+        // transition (a button-state / link / discovery callback, or the deadline
+        // timer); marshal back to the UI thread the same way as the baptism
+        // StateChanged so the button-press surface repaints its prompt + result
+        // grid safely (FR-004/005/011).
+        let _ : IDisposable =
+            buttonPressTestService.StateChanged
+            |> Observable.subscribe (fun st ->
+                Dispatcher.UIThread.Post(fun () ->
+                    lastButtonPressState <- st
+                    renderCombined ()))
+
+        // Live per-button countdown (FR-005): the pure view renders the remaining
+        // whole seconds from the `Prompting` deadline against the `now` the host
+        // threads in, but `StateChanged` only fires on an actual transition — not
+        // every second. A 1 Hz UI-thread tick re-renders while a run is
+        // `Prompting` so the countdown visibly decrements; a guarded no-op in
+        // every other state.
+        let countdownTimer = DispatcherTimer(Interval = TimeSpan.FromSeconds 1.0)
+
+        countdownTimer.Tick.Add(fun _ ->
+            match lastButtonPressState with
+            | Prompting _ -> renderCombined ()
+            | ButtonPressTestState.Idle
+            | ButtonPressTestState.Completed _
+            | Interrupted _ -> ())
+
+        countdownTimer.Start()
 
         ()
 
