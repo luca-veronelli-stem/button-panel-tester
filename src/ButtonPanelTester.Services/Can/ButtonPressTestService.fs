@@ -45,13 +45,21 @@ module private ButtonPressTestObservable =
                             |> List.filter (fun o -> not (obj.ReferenceEquals(o, observer)))))
                 :> IDisposable
 
-/// Production adapter for `IButtonPressTestService` (spec-005 Phase E, R8).
-/// Drives the pure button-press-test FSM (`ButtonPressTest.step`, Core) over
-/// the consumed RX observables — `IButtonStateObserver` (button-state frames),
-/// `IPanelDiscoveryService` (presence), `ICanLinkService` (connectivity) — and
-/// an `IClock`-armed per-button deadline, per `data-model.md` §4. RX-only: no
-/// transmitter, the technician presses the physical buttons. Modal
-/// single-attempt, no auto-retry (Retry/Skip/Re-run are technician-driven).
+/// Production adapter for `IButtonPressTestService` (spec-005 Phase E, R8;
+/// observability re-keyed to the button-state heartbeat in fix #270). Drives the
+/// pure button-press-test FSM (`ButtonPressTest.step`, Core) over the consumed RX
+/// observables — `IButtonStateObserver` (button-state observations) and
+/// `ICanLinkService` (connectivity) — and an `IClock`-armed per-button deadline,
+/// per `data-model.md` §4. RX-only: no transmitter, the technician presses the
+/// physical buttons. Modal single-attempt, no auto-retry (Retry/Skip/Re-run are
+/// technician-driven).
+///
+/// Panel presence is keyed off **button-state-frame recency**, NOT
+/// `IPanelDiscoveryService`: a baptized panel is silent on WHO_I_AM
+/// (`CORRECTIONS.md` §C1) and never appears in discovery, so the service drops
+/// that dependency and instead halts the run in `Interrupted PanelLost` when no
+/// button-state frame has arrived for `ButtonPressTest.panelLostThreshold` (the
+/// per-tick recency check below feeds the FSM's `PanelPresence false`).
 ///
 /// The mutable run state (`state`, `schema`, `selected`, `running`, `prior`,
 /// `tcs`) lives under a private lock that is NEVER held across an await: the
@@ -74,7 +82,6 @@ module private ButtonPressTestObservable =
 type ButtonPressTestService
     (
         buttons: IButtonStateObserver,
-        discovery: IPanelDiscoveryService,
         link: ICanLinkService,
         clock: IClock,
         logger: ILogger<ButtonPressTestService>
@@ -99,6 +106,14 @@ type ButtonPressTestService
     /// no absolute byte is ever read as press-state — only `1 → 0` transitions
     /// between consecutive frames score.
     let mutable prior: KeyStateBitmap option = None
+
+    /// Recency clock for the button-state heartbeat (fix #270): the instant the
+    /// last button-state frame was observed. Seeded at run start (`startRun`) and
+    /// refreshed on every observed frame; `runTick` halts the run in
+    /// `Interrupted PanelLost` once `now - lastFrameAt` exceeds
+    /// `ButtonPressTest.panelLostThreshold` — the recency replacement for the old
+    /// discovery-prune presence signal.
+    let mutable lastFrameAt: DateTimeOffset option = None
 
     let mutable tcs: TaskCompletionSource<ButtonPressTestState> = Unchecked.defaultof<_>
 
@@ -277,6 +292,11 @@ type ButtonPressTestService
 
         let edges =
             lock stateLock (fun () ->
+                // Recency: a button-state heartbeat just arrived, so the panel is
+                // present and observable (fix #270 — the panel-loss signal is the
+                // ABSENCE of this, checked per deadline tick, not discovery pruning).
+                lastFrameAt <- Some(clock.UtcNow())
+
                 match schema, prior with
                 | Some sch, Some priorBitmap ->
                     let e = KeyStateBitmap.pressEdges sch.ActiveMask priorBitmap frame.Bitmap
@@ -295,20 +315,6 @@ type ButtonPressTestService
     let _buttonsSubscription: IDisposable =
         buttons.ButtonStateObserved |> Observable.subscribe onFrame
 
-    /// Discovery presence ingest: a snapshot that no longer contains the
-    /// selected panel feeds `PanelPresence false` (the FSM halts in
-    /// `Interrupted PanelLost`); a snapshot that still contains it self-loops.
-    let onPanels (snapshot: PanelsOnBus) =
-        match lock stateLock (fun () -> selected) with
-        | Some uuid -> apply (TestEvent.PanelPresence(Map.containsKey uuid snapshot))
-        | None -> ()
-
-    /// Held so the presence subscription outlives the ctor; detached in
-    /// `Dispose`. Feeds discovery snapshots so a pruned-away selected panel
-    /// halts the run in `Interrupted PanelLost` (FR-013).
-    let _discoverySubscription: IDisposable =
-        discovery.PanelsOnBusChanged |> Observable.subscribe onPanels
-
     /// Link-state ingest: the link leaving `Connected` feeds `LinkChanged false`
     /// (the FSM halts in `Interrupted LinkLost`, FR-013); a `Connected`
     /// transition self-loops.
@@ -326,10 +332,27 @@ type ButtonPressTestService
     let _linkSubscription: IDisposable =
         link.LinkStateChanged |> Observable.subscribe onLink
 
-    /// One deadline tick: feed `Tick now` into the FSM so the per-button 10 s
-    /// deadline is reached. A tick while no run is active is a no-op. Both the
-    /// 250 ms timer and `RunDeadlineTick` run this body.
-    let runTick () = apply (TestEvent.Tick(clock.UtcNow()))
+    /// One deadline tick: first the button-state recency guard (fix #270) — if a
+    /// run is active and no button-state frame has arrived for longer than
+    /// `ButtonPressTest.panelLostThreshold`, feed `PanelPresence false` so the
+    /// FSM halts in `Interrupted PanelLost`; otherwise feed `Tick now` so the
+    /// per-button 10 s deadline is reached. A tick while no run is active is a
+    /// no-op. Both the 250 ms timer and `RunDeadlineTick` run this body. The
+    /// recency read is taken under the lock; `apply` runs outside it.
+    let runTick () =
+        let now = clock.UtcNow()
+
+        let panelLost =
+            lock stateLock (fun () ->
+                running
+                && (match lastFrameAt with
+                    | Some seenAt -> now - seenAt > ButtonPressTest.panelLostThreshold
+                    | None -> false))
+
+        if panelLost then
+            apply (TestEvent.PanelPresence false)
+        else
+            apply (TestEvent.Tick now)
 
     /// 250 ms deadline timer (mirrors `BaptismService`'s deadline timer). Each
     /// tick feeds `Tick now` so the 10 s per-button deadline is reached without
@@ -354,6 +377,7 @@ type ButtonPressTestService
             schema <- Some sch
             selected <- Some panel
             prior <- None // re-seed the press-edge baseline from the first frame of this run
+            lastFrameAt <- Some(clock.UtcNow()) // seed heartbeat recency at run start (fix #270)
 
             let startState = ButtonPressTest.start sch (clock.UtcNow() + ButtonPressTest.testBudget)
             state <- startState
@@ -436,5 +460,4 @@ type ButtonPressTestService
         member _.Dispose() =
             deadlineTimer.Dispose()
             _buttonsSubscription.Dispose()
-            _discoverySubscription.Dispose()
             _linkSubscription.Dispose()

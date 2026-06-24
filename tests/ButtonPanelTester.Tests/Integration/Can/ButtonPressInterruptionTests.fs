@@ -11,8 +11,9 @@ open Stem.ButtonPanelTester.Tests.Fakes
 open Stem.ButtonPanelTester.Tests.Fakes.Can
 
 /// Integration tests for the interruption + inactive-bit transitions (spec-005
-/// Phase E, T027): the link leaving `Connected` mid-prompt → `Interrupted
-/// LinkLost`, never all-passed; the selected panel disappearing from discovery
+/// Phase E, T027; observability re-keyed in fix #270): the link leaving
+/// `Connected` mid-prompt → `Interrupted LinkLost`, never all-passed; the panel
+/// falling silent (no button-state heartbeat for longer than `panelLostThreshold`)
 /// mid-prompt → `Interrupted PanelLost`; and a press for an INACTIVE position
 /// (outside the variant mask) ignored, never a prompted-button result (FR-013/
 /// FR-014; SC-005). Driven synchronously over the fakes + `FrozenClock`.
@@ -49,14 +50,6 @@ let private optimus = ButtonSchema.forVariant OptimusXp
 
 let private selectedUuid = PanelUuid(0x177Cu, 0x126Du, 0x7308u)
 
-/// A decoded WHO_I_AM for the selected panel — emitted to make discovery
-/// observe it (so a later prune drops it). The machine-type byte is OPTIMUS-XP's
-/// `0x0A`; discovery keys by UUID, so the exact value is immaterial here.
-let private whoIAmFor (uuid: PanelUuid) : WhoIAmFrame =
-    { MachineType = MachineTypeByte 0x0Auy
-      FwType = FwType 0x000Fus
-      Uuid = uuid }
-
 let private pressedFrame (bit: int) : ButtonStateFrame =
     { Address = VariableAddress 0x8000us
       Bitmap = KeyStateBitmap(0xFFuy &&& ~~~(1uy <<< bit)) }
@@ -68,25 +61,19 @@ let private idle: ButtonStateFrame =
 type private Harness =
     { Clock: FrozenClock
       Buttons: InMemoryButtonStateObserver
-      WhoIAm: InMemoryWhoIAmObserver
-      Discovery: PanelDiscoveryService
       Link: ICanLinkService
       Service: ButtonPressTestService }
 
 let private newHarness (linkFactory: IClock -> ICanLinkService) : Harness =
     let clock = FrozenClock(fixedNow)
     let link = linkFactory (clock :> IClock)
-    let whoIAm = InMemoryWhoIAmObserver()
-    let discovery = new PanelDiscoveryService(whoIAm, link, clock, NullLogger<PanelDiscoveryService>.Instance)
     let buttons = InMemoryButtonStateObserver()
 
     let service =
-        new ButtonPressTestService(buttons, discovery, link, clock, NullLogger<ButtonPressTestService>.Instance)
+        new ButtonPressTestService(buttons, link, clock, NullLogger<ButtonPressTestService>.Instance)
 
     { Clock = clock
       Buttons = buttons
-      WhoIAm = whoIAm
-      Discovery = discovery
       Link = link
       Service = service }
 
@@ -105,20 +92,20 @@ let ButtonPressInterruption_LinkLeavesConnected_InterruptedLinkLost () =
     | Interrupted(InterruptReason.LinkLost, partial) -> Assert.False(ButtonPressTest.allActivePassed partial)
     | s -> failwithf "expected Interrupted LinkLost, got %A" s
 
-// --- the selected panel disappearing from discovery mid-prompt → Interrupted PanelLost ---
+// --- the panel falling silent (no heartbeat) mid-prompt → Interrupted PanelLost ---
 
 [<Fact>]
-let ButtonPressInterruption_SelectedPanelDisappears_InterruptedPanelLost () =
+let ButtonPressInterruption_PanelStopsHeartbeating_InterruptedPanelLost () =
     let h = newHarness connectedLink
-
-    // Make the selected panel observable on the bus, then start the run.
-    h.WhoIAm.Emit(whoIAmFor selectedUuid)
     let _task = h.Service.RunAsync(selectedUuid, optimus, CancellationToken.None)
 
-    // The panel falls silent past the 15 s discovery TTL and is pruned: the
-    // change feed no longer contains it → `Interrupted PanelLost` (FR-013).
-    h.Clock.SetTo(fixedNow + TimeSpan.FromSeconds 16.0)
-    h.Discovery.RunPruneTick()
+    // The panel is heartbeating (one observed frame), then falls silent: no
+    // button-state frame for longer than `panelLostThreshold` (3 s) during the
+    // run, so the next deadline tick halts in `Interrupted PanelLost` (FR-013 —
+    // recency, not discovery pruning; fix #270).
+    h.Buttons.Emit idle
+    h.Clock.SetTo(fixedNow + TimeSpan.FromSeconds 4.0)
+    h.Service.RunDeadlineTick()
 
     match h.Service.CurrentState with
     | Interrupted(InterruptReason.PanelLost, partial) -> Assert.False(ButtonPressTest.allActivePassed partial)
