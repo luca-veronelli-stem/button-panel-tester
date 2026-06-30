@@ -680,13 +680,13 @@ observer rework — one vertical commit: port + observer + fake + tests + minima
 **I3** = {T046} (service presence/observability re-key + discovery drop). **I4** = {T047} (GUI). **I5** =
 {T048} (hardware E2E). **I6** = {T049} (contracts/data-model/CHANGELOG docs).
 
-- [ ] T044 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonStateObservation.lean`: model the
+- [x] T044 **[NEW]** Add `lean/Stem/ButtonPanelTester/Phase4/ButtonStateObservation.lean`: model the
       directed-CAN-ID → machineType extraction + variant decode; prove `machine_type_at_bits_23_16`
       (machineType = `(id >>> 16) &&& 0xFF`) and `non_marketing_ids_rejected` (broadcast `0x1FFFFFFF`
       → `0xFF` and the tool SRID `0x00000008` → `0x00` decode to non-marketing → not accepted). Extend
       the `Phase4.lean` umbrella; `lake build` green, `sorry`-free, standard axioms only.
       (Constitution I; FR-001)
-- [ ] T045 **[NEW/EXTEND]** The observation-carries-variant + directed-ID observer vertical, ONE commit:
+- [x] T045 **[NEW/EXTEND]** The observation-carries-variant + directed-ID observer vertical, ONE commit:
       (a) add `src/ButtonPanelTester.Core/Can/ButtonStateObservation.fs` — `ButtonStateObservation =
       { Frame: ButtonStateFrame; Variant: MarketingVariant }` + `variantOfDirectedId : uint32 ->
       VariantIdentity` reusing `PanelObservation.VariantDecoder.decode` on `(CanId >>> 16) &&& 0xFF`;
@@ -699,7 +699,7 @@ observer rework — one vertical commit: port + observer + fake + tests + minima
       Windows tests (drive directed-ID frames, assert variant; broadcast/SRID rejected) + a FsCheck
       property mirroring T044. (e) minimal `ButtonPressTestService` subscription adaptation so it still
       compiles (`.Frame.Bitmap`). Mandatory triple on the new wire fact. (FR-001; Constitution I/II/III)
-- [ ] T046 **[EXTEND]** Re-key `src/ButtonPanelTester.Services/Can/ButtonPressTestService.fs`: presence
+- [x] T046 **[EXTEND]** Re-key `src/ButtonPanelTester.Services/Can/ButtonPressTestService.fs`: presence
       guard + observability off **button-state recency** (track last-frame time via `IClock`; no frame
       for `panelLostThreshold` during a run → `Halt PanelLost`; a frame within `observableWindow` →
       observable), **drop the `IPanelDiscoveryService` ctor dependency** from the button-press path, take
@@ -708,17 +708,17 @@ observer rework — one vertical commit: port + observer + fake + tests + minima
       Rework the integration tests that drove PanelLost from discovery pruning
       (`ButtonPressInterruptionTests`, `ButtonPressRerunTests`, `ButtonPressTestE2ETests`) to the recency
       model + variant-from-stream, `FrozenClock`-driven. (FR-001/FR-013; SC-005/SC-008)
-- [ ] T047 **[EXTEND]** Re-key `src/ButtonPanelTester.GUI/App.fs` (~lines 627–656): compute
+- [x] T047 **[EXTEND]** Re-key `src/ButtonPanelTester.GUI/App.fs` (~lines 627–656): compute
       `testObservable` / `testSelectedBaptized` / variant from the button-state observation stream
       (recency + the observation's `Variant`), not `lastPanelsOnBus`; auto-target the single heartbeating
       panel (no UUID selection). Update `ButtonPressTestView` enablement wiring as needed and the Headless
       tests (`Gui/Can/ButtonPressTestViewTests.fs`) for the stream-driven enable matrix. (FR-001; SC-008)
-- [ ] T048 **[EXTEND]** Rework `tests/.../Hardware/ButtonPressTestHardwareTests.fs`: drop the
+- [x] T048 **[EXTEND]** Rework `tests/.../Hardware/ButtonPressTestHardwareTests.fs`: drop the
       `waitForOptimusXpUuid` WHO_I_AM precondition; wait up to ~2 s for the first button-state
       observation and assert its variant is OPTIMUS-XP; then run the existing button-press cases. Update
       the #253 bench checklist hooks (observability = heartbeat arrival; thresholds confirmed on the rig).
       (SC-001..006; FR-001/FR-013)
-- [ ] T049 **[EXTEND]** Update `specs/005-button-press-test/contracts/button-state-observer-port.md` and
+- [x] T049 **[EXTEND]** Update `specs/005-button-press-test/contracts/button-state-observer-port.md` and
       `button-state-wire-format.md` for the directed-ID match rule + the `ButtonStateObservation`
       envelope; update `data-model.md` (observation + thresholds); add a `CHANGELOG.md` `[Unreleased]`
       line ("Re-key button-press observability to the button-state heartbeat (directed CAN ID), not

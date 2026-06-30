@@ -257,7 +257,7 @@ let Run_RealOptimusXpPanel_AllActiveButtonsScorePassOnPressEdge () =
     use _ = cleanup
 
     // InitializeAsync opens PcanCanLink (-> CanPort.ConnectAsync -> StartReading), so frames flow and
-    // discovery coalesces the OPTIMUS-XP row while the link is Connected.
+    // the baptized panel's button-state heartbeat arrives on its directed CAN id while Connected (fix #270).
     link.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
 
     match waitForFirstButtonStateObservation observer heartbeatTimeout with
@@ -290,7 +290,7 @@ let Run_RealOptimusXpPanel_AllActiveButtonsScorePassOnPressEdge () =
         | Some(ButtonPressTestState.Interrupted(reason, _)) ->
             Assert.Fail(
                 sprintf
-                    "run interrupted (%A) before completing — for LinkLost verify the adapter stayed plugged; for PanelLost verify the OPTIMUS-XP panel kept announcing WHO_I_AM (a claimed panel that goes silent is pruned from discovery)"
+                    "run interrupted (%A) before completing — for LinkLost verify the adapter stayed plugged; for PanelLost verify the OPTIMUS-XP panel kept heartbeating its button-state (silence past the ~3 s panel-lost threshold halts the run)"
                     reason)
         | Some other -> Assert.Fail(sprintf "run resolved to a non-terminal state %A (a service bug)" other)
         | None ->
