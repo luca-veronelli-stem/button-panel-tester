@@ -69,7 +69,7 @@
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <PackageVersion Include="InTheHand.Net.Bluetooth" Version="4.2.21" />
     <!-- Pinned to match stem-device-manager (vendored protocol stack, spec-002). -->
-    <PackageVersion Include="Peak.PCANBasic.NET" Version="5.0.1.1131" />
+    <PackageVersion Include="Peak.PCANBasic.NET" Version="5.1.0.1194" />
 
     <!-- Transitive pins (security advisories — track in GitHub issues) -->
     <PackageVersion Include="Tmds.DBus.Protocol" Version="0.21.3" />
