@@ -26,4 +26,4 @@ permissions:
 
 jobs:
   ci:
-    uses: luca-veronelli-stem/standards/.github/workflows/dotnet-ci.yml@v1.17.1
+    uses: luca-veronelli-stem/standards/.github/workflows/dotnet-ci.yml@v1.33.0
