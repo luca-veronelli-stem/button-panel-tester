@@ -728,3 +728,51 @@ observer rework — one vertical commit: port + observer + fake + tests + minima
 variant from the CAN ID, and the service/GUI/test key observability + panel-loss off heartbeat recency
 with bench-tunable thresholds — no dependency on WHO_I_AM discovery. Re-run the #253 bench to validate
 (the Done line).
+
+---
+
+## Phase J — dual-rate heartbeat correction (child I, #293)
+
+Second corrective phase, from the 2026-07-20 firmware + trace re-read (no bench run). Phase I re-keyed
+observability onto the button-state heartbeat correctly, but calibrated its recency thresholds against
+the post-boot *ramp* cadence rather than the idle steady state. See `spec.md` §Clarifications Session
+2026-07-20, `research.md` R1 (dual-rate table), `data-model.md` §6a/§6b.
+
+Two vertical slices, each one bisect-safe commit. They are **independent** (disjoint files) and may be
+implemented in either order or in parallel.
+
+- [ ] T050 **[EXTEND]** Retune the recency thresholds in
+      `src/ButtonPanelTester.Core/Can/ButtonPressTest.fs`: `observableWindow` 2 s → **15 s**,
+      `panelLostThreshold` 3 s → **20 s**. Both must exceed `TEMPO_CAN_LENTO` ≈ 12.5 s, the cadence of a
+      cold never-touched panel. Rewrite both XML docs to cite `UserMain.c:1013–1020` and the measured
+      186.7 ms / 12.5 s rates, and drop the stale "derived from the same ~182 ms refresh" /
+      "to be confirmed on the rig" wording (the rates are now firmware-derived, not bench-provisional).
+      **RED**: extend `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressInterruptionTests.fs`
+      with a case driving the heartbeat at the **slow** cadence (frames 12.5 s apart on `FrozenClock`)
+      and asserting the run stays live — fails at 3 s, passes at 20 s. **GREEN**: the constant change
+      plus any threshold-dependent assertions in `ButtonPressRerunTests` / `ButtonPressTestE2ETests` /
+      `Gui/Can/ButtonPressTestViewTests.fs` updated to the new values. RED and GREEN fold into the one
+      commit: the new case is written and observed failing first, then the constants change.
+      (FR-001/FR-013; SC-005/SC-008)
+- [ ] T051 **[EXTEND]** Score unarmed positions on the release transition in
+      `src/ButtonPanelTester.Core/Can/KeyStateBitmap.fs`. A never-touched panel does not transmit a
+      button's first press at all (`UserMain.c:1369` clears an already-clear bit ⇒ the `:973` change gate
+      never fires), so an **unarmed** position — one never yet observed with bit value `1` — scores on
+      its `0 → 1` release transition, which is unambiguous proof of a completed press; an **armed**
+      position scores on the normal `1 → 0` press edge, unchanged. Arming is per position and monotonic;
+      `PressedBit` stays `0uy`. Thread the armed set through the detector's call sites in
+      `src/ButtonPanelTester.Services/Can/ButtonPressTestService.fs` alongside `prior`.
+      **Mandatory triple**: Lean theorem in `lean/Stem/ButtonPanelTester/Phase4/KeyStateBitmap.lean`
+      (armed positions keep the existing press-edge semantics; an unarmed position scores exactly once,
+      on its first release; arming is monotonic), an FsCheck property mirroring it in the Core test
+      project, and an XML doc citing the theorem. **RED**: a cold-boot sequence
+      (`0x00 → press (no frame) → release`) currently yields no score for the prompted button; the new
+      test asserts it does. **GREEN**: the arming rule. Folded into one commit, RED observed first.
+      (FR-006/FR-014; SC-001/SC-002)
+- [ ] T052 **[DOCS]** `CHANGELOG.md` `[Unreleased]` entry for the dual-rate correction (thresholds
+      recalibrated above `TEMPO_CAN_LENTO`; first-press-after-power-up now scored). Orchestrator-owned;
+      not a worker slice.
+
+**Checkpoint J**: a cold, never-touched baptized panel stays continuously observable at its ≈ 12.5 s
+heartbeat, a run started against it is not killed by `PanelLost`, and the first press of every button
+scores. Then re-run the #253 bench — still the Done line.

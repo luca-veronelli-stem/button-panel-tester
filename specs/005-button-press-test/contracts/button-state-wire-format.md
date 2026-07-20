@@ -4,8 +4,19 @@
 **Status**: living (consumers decode against this shape)
 
 The panel reports its key state as an unsolicited SP_APP `VAR_WRITE`, emitted on change
-(`TxTasti ≠ TxTastiOld`, `UserMain.c:973`) plus a slow periodic refresh, and **only after baptism**
+(`TxTasti ≠ TxTastiOld`, `UserMain.c:973`) plus a periodic refresh, and **only after baptism**
 (transmit gate `UserMain.c:990–993`).
+
+**The refresh is dual-rate** (corrected 2026-07-20, #293 — see `research.md` R1 for the derivation):
+≈ **188 ms** while the latched bitmap is non-zero (`TEMPO_CAN_VELOCE`), ≈ **12.5 s** while it is zero
+(`TEMPO_CAN_LENTO`), selected per send at `UserMain.c:1013–1020`. Since `TxTasti` is zero-init and its
+bits latch on *release*, a **cold, never-touched panel heartbeats at ≈ 12.5 s**; it switches to
+≈ 188 ms permanently after the first press+release. Recency thresholds must therefore exceed 12.5 s
+(`data-model.md` §6a).
+
+**A never-touched panel does not transmit the first press of a button at all**: clearing an
+already-clear bit leaves `TxTasti` unchanged, so the change gate never fires. The release does
+transmit. Consumers score an unarmed position on that release transition (`data-model.md` §6b).
 
 ## App-layer payload (5 bytes, `UserMain.c:429–449`)
 
@@ -51,8 +62,9 @@ accept  = (variant is Marketing _)
 
 Reassembly is **per source CAN ID** (one `PacketReassembler` per id). The accepted observation
 carries the decoded `MarketingVariant`. Ground-truth traces:
-`~/Documents/frames/first-gather/{optimus,eden-xp,r-3l-xp}_baptized.trc` (steady ~182 ms idle
-cadence on the directed id). Mechanised by Lean `machine_type_at_bits_23_16` /
+`~/Documents/frames/first-gather/{optimus,eden-xp,r-3l-xp}_baptized.trc` — 12 identical-payload
+repetitions at 186.7 ms on the directed id, which is the **post-boot fast ramp**, not the idle
+steady state (#293). Mechanised by Lean `machine_type_at_bits_23_16` /
 `non_marketing_ids_rejected` (`Phase4/ButtonStateObservation.lean`, T044).
 
 ## Bitmap semantics (R2 — firmware ground truth)

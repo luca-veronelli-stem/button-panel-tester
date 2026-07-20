@@ -196,13 +196,53 @@ Priority-ordered (link → selected-baptized → observable), mirroring `baptize
 
 ### 6a. Recency thresholds (fix #270 — `Core/Can/ButtonPressTest.fs`)
 
-Code-config `TimeSpan` constants (not UI), provisional bench defaults from the ~182 ms idle refresh
-cadence — to be confirmed on the rig alongside the press-edge polarity:
+Code-config `TimeSpan` constants (not UI). **Recalibrated 2026-07-20 (#293)** against the dual-rate
+heartbeat: they must exceed `TEMPO_CAN_LENTO` ≈ **12.5 s**, the cadence of a cold, never-touched
+panel (`research.md` R1). The superseded 2 s / 3 s defaults were derived from the ~182 ms *ramp*
+cadence and left the GUI enabled ~16 % of the time and every run halting in `Interrupted PanelLost`
+within 3 s.
 
 | Constant | Default | Role |
 |---|---|---|
-| `observableWindow` | 2 s | a button-state frame within this window ⇒ the panel is observable (the `observable` enablement conjunct) |
-| `panelLostThreshold` | 3 s | no button-state frame for longer than this **during a run** ⇒ `Interrupted PanelLost` (the recency replacement for the discovery-prune presence signal) |
+| `observableWindow` | 15 s | a button-state frame within this window ⇒ the panel is observable (the `observable` enablement conjunct). ≈ 1.2 × `TEMPO_CAN_LENTO`, so a slow-branch panel stays continuously observable |
+| `panelLostThreshold` | 20 s | no button-state frame for longer than this **during a run** ⇒ `Interrupted PanelLost` (the recency replacement for the discovery-prune presence signal). ≈ 1.6 × `TEMPO_CAN_LENTO` |
+
+Both sit above the slow branch on purpose: the tool cannot tell which branch a panel is in without
+tracking bitmap history, and mis-sizing them against the fast branch is exactly the #270 defect.
+SC-005's adapter-unplug case is unaffected — that path is `LinkLost` (link state, immediate), not
+`PanelLost` — so only *panel-power-loss* detection slows to ≈ 20 s, which is acceptable for a bench
+tool. A panel switches to the ≈ 188 ms fast branch permanently after the first press+release, so
+these thresholds only govern the pre-first-press window in practice.
+
+### 6b. Press-edge arming (#293 — `Core/Can/KeyStateBitmap.fs`)
+
+`PressedBit = 0uy` is firmware-correct (R2), so a cold panel's `TxTasti = 0` baseline reads **every**
+bit as pressed. The firmware consequence is sharper than a detector-tuning problem:
+
+> **On a never-touched panel the first press of a button is never transmitted at all.**
+> `keyPress_Evt` clears the bit (`TxTasti &= ~keysMask`, `UserMain.c:1369`), but the bit is already
+> `0`, so `TxTasti` does not change and the `TxTasti ≠ TxTastiOld` gate (`:973`) never fires. The
+> release then *sets* the bit (`:1375`), which does transmit.
+
+No tool-side edge rule can recover an event the panel never sent. The position is therefore scored
+on the evidence that *is* on the wire: for an **unarmed** position a `0 → 1` (release) transition is
+unambiguous proof of a completed press — a button cannot be released without having been pressed.
+
+| Predicate | Meaning |
+|---|---|
+| `armed i` | position `i` has been observed with bit value `1` in some earlier bitmap |
+| `scored i` | `active i ∧ (if armed i then priorReleased i ∧ nextPressed i else priorPressed i ∧ nextReleased i)` |
+
+So an unarmed position scores on its first release edge and becomes armed; an armed position scores
+on the normal press edge (`1 → 0`) exactly as today. Arming is per position and monotonic. This never
+reads an absolute byte as press state — both branches are transitions — and it leaves the
+steady-state behaviour (every button after its first cycle, and every button on a warm panel)
+completely unchanged.
+
+**Rejected alternative:** "suppress edges until armed". It is a no-op — from a `0x00` baseline no bit
+can reach `1 → 0` without first passing through `0 → 1`, so there are no spurious press edges to
+suppress, and the first press stays unscored. It would add a Lean theorem and an FsCheck property
+for a predicate that changes no behaviour.
 
 ## 7. Observation port (R5 — Infrastructure boundary)
 

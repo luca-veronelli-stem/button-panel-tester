@@ -29,7 +29,50 @@ board-1 panel (the single-panel bench case), `0x8073` for an EDEN/BS8 second key
 gated on the panel being addressed (`UserMain.c:990–993`: `MotherBoardAddress ≠ 0xFFFFFFFF ∧
 IDMachineType ≠ 0xFF ∧ IDBoardNumber ≠ 0xFF`) — i.e. only **after baptism** (spec-004), which the
 spec already assumes. The panel transmits when `TxTasti ≠ TxTastiOld` (`UserMain.c:973`) plus a
-slow periodic refresh — so the tool sees both edges and a steady-state heartbeat.
+periodic refresh — so the tool sees both edges and a steady-state heartbeat.
+
+**Refresh cadence is DUAL-RATE** (corrected 2026-07-20, issue #293 — the earlier "slow periodic
+refresh" was left unquantified and was then mis-calibrated as a flat ~182 ms). The period is chosen
+per transmission from the *latched* bitmap (`UserMain.c:1013–1020`):
+
+| Condition after each send | Constant | Wall-clock |
+|---|---|---|
+| `TxTastiOld ≠ 0` | `TEMPO_CAN_VELOCE` = 150 (`:120`) | **≈ 188 ms** |
+| `TxTastiOld = 0`, ramp done (`attesaCanLento > 10`) | `TEMPO_CAN_LENTO` = 10000 (`:125`) | **≈ 12.5 s** |
+| `TxTastiOld = 0`, ramp | — | 11 fast frames first |
+
+One tick = one `User_Callback` = **1.25 ms** (4 kHz ISR, `UserMain.h:127–129`
+`PERIOD_VALUE_GA = 4000` / `PRESCALER_VALUE_GA = GPTCTL_PS_DIV4`, divided by the prescaler-5 reload at
+`UserMain.c:950–957`; the inline "il callback rimane a 1 ms" comment at `:954` is stale). So
+151 × 1.25 ms = 188.75 ms, against a measured 186.7 ms.
+
+`TxTasti` is a zero-init global (`UserMain.c:200`) and its bits **latch**: press clears
+(`&= ~keysMask`, `:1369`), release sets (`|= keysMask`, `:1375`). Consequences:
+
+- A **cold, never-touched** baptized panel sits at `TxTasti = 0` ⇒ first frame ≈ 12.5 s after boot,
+  then ≈ 12 frames at ≈ 188 ms, then **≈ 12.5 s forever**.
+- After **any** button has been pressed *and released* once, its bit stays 1 ⇒ `TxTastiOld ≠ 0` ⇒
+  **≈ 188 ms forever**. This is normal steady state for a panel in service.
+- A fast cadence therefore does **not** imply a button is held; an all-keys-held panel looks *slower*.
+
+Ground-truth traces `~/Documents/frames/first-gather/{optimus,eden-xp,r-3l-xp}_baptized.trc` are
+exactly the post-boot ramp: 12 identical-payload repetitions at 186.7 ms on each of three panels,
+then the capture ends. Reassembled OPTIMUS packet —
+`00 | 00 0A 01 01 | 00 05 | 00 02 | 80 00 | 00 | 7B 88` = `cryptFlag`/`senderId`/`lPack = 5`/
+`cmd = 0x0002`/`addr = 0x8000`/`bitmap = 0x00`/`CRC16` — confirms the transport shape above and, via
+`var_low = 0x00` (not the `0x80FE` virgin sentinel), that the panels were genuinely baptized.
+
+**Sibling cross-check:** `firmwares/slim-tastiera-app/STEM/UserMain.c:946` carries the explicit
+`//Invio tasti periodico sul can` comment over the identical prescaler/send block, and the OPTIMUS
+master (`firmwares/stm32h7-optimus-xp-app/STEM/UserMain.c:1485–1497`) resets a `TIMEOUT_KEYBOARD`
+= 11000 ms watchdog on every received frame — a master architected around a periodic keep-alive.
+
+> **Trap.** The transmit gate gives `MotherBoardAddress ≠ 0xFFFFFFFF`, and that field is written
+> **only** by `AA_Slave_WhoAreYouReceived()` when the master sets the ResetAddress flag
+> (`AutoAddressSlave.c:238–241`); `AA_Slave_SetAddressReceived()` (`:263–292`) never touches it. A
+> panel baptized without `reset=1` is **totally silent** on button-state. This makes
+> `CORRECTIONS.md` §C2 load-bearing for spec-005, not just spec-004. Tracked in #293 as a
+> follow-up, not fixed there.
 
 **Packetization** (vendored stack, per spec-003's
 [who-i-am-wire-format.md](../003-panel-discovery/contracts/who-i-am-wire-format.md)): transport
