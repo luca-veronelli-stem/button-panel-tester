@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   release:
-    uses: luca-veronelli-stem/standards/.github/workflows/release-archetype-a.yml@v1.17.1
+    uses: luca-veronelli-stem/standards/.github/workflows/release-archetype-a.yml@v1.33.0
     with:
       app: ButtonPanelTester
       repo: button-panel-tester
