@@ -73,9 +73,11 @@ module private ButtonPressTestObservable =
 /// subscriptions and the 250 ms deadline timer fire as no-ops while no run is
 /// active.
 ///
-/// `pressEdges` (R2) sits between the observer and the FSM: the baseline frame
-/// is seeded from the FIRST frame of each run; each later frame's active-masked
-/// `1 → 0` transitions become `PressEdge` events. The deadline is armed by the
+/// `scoredPositions` (R2 + §6b arming, #293) sits between the observer and the
+/// FSM: the baseline frame is seeded from the FIRST frame of each run (and arms
+/// the positions it carries released); each later frame's active-masked scored
+/// transitions — `1 → 0` press edges for armed positions, the `0 → 1` release
+/// for unarmed ones — become `PressEdge` events. The deadline is armed by the
 /// service (`clock.UtcNow() + ButtonPressTest.testBudget`) and stepped
 /// deterministically in tests through `RunDeadlineTick` against a `FrozenClock`
 /// (the `BaptismService` precedent — no wall-clock sleeps).
@@ -103,9 +105,17 @@ type ButtonPressTestService
 
     /// Press-edge baseline (R2): the previous observed frame's bitmap. `None`
     /// at the start of each run (re-seeded from the first frame of the run);
-    /// no absolute byte is ever read as press-state — only `1 → 0` transitions
-    /// between consecutive frames score.
+    /// no absolute byte is ever read as press-state — only transitions
+    /// between consecutive frames score (`1 → 0` armed, `0 → 1` unarmed, §6b).
     let mutable prior: KeyStateBitmap option = None
+
+    /// Press-edge arming state (#293, `data-model.md` §6b): the OR-fold
+    /// (`KeyStateBitmap.arm`) of EVERY bitmap observed this run, the baseline
+    /// seed frame included. Reset to `0uy` at run start; each frame is folded
+    /// in AFTER it is scored, so an unarmed position scores its first `0 → 1`
+    /// release transition exactly once (Lean `no_double_score_after_arming`,
+    /// T051 — the proof assumes this every-frame score-then-arm order).
+    let mutable armed: byte = 0uy
 
     /// Recency clock for the button-state heartbeat (fix #270): the instant the
     /// last button-state frame was observed. Seeded at run start (`startRun`) and
@@ -281,12 +291,15 @@ type ButtonPressTestService
         | None -> ()
 
     /// Button-state ingest. Converts consecutive observed frames into
-    /// `PressEdge` events (R2): the FIRST frame of a run seeds the `prior`
-    /// baseline (no edges); each later frame's active-masked `1 → 0`
-    /// transitions (`KeyStateBitmap.pressEdges`) feed in as `PressEdge bit`. A
-    /// frame observed while no run is active updates the baseline but emits
-    /// nothing the FSM acts on (`apply` absorbs it). The edge set is computed
-    /// UNDER the lock; each `PressEdge` is applied OUTSIDE it.
+    /// `PressEdge` events (R2 + §6b arming, #293): the FIRST frame of a run
+    /// seeds the `prior` baseline and the armed fold (no edges); each later
+    /// frame's active-masked scored transitions
+    /// (`KeyStateBitmap.scoredPositions` — `1 → 0` when armed, `0 → 1` when
+    /// unarmed) feed in as `PressEdge bit`, and the frame is folded into
+    /// `armed` AFTER scoring. A frame observed while no run is active updates
+    /// the baseline but emits nothing the FSM acts on (`apply` absorbs it).
+    /// The edge set is computed UNDER the lock; each `PressEdge` is applied
+    /// OUTSIDE it.
     let onFrame (observation: ButtonStateObservation) =
         let frame = observation.Frame
 
@@ -299,11 +312,13 @@ type ButtonPressTestService
 
                 match schema, prior with
                 | Some sch, Some priorBitmap ->
-                    let e = KeyStateBitmap.pressEdges sch.ActiveMask priorBitmap frame.Bitmap
+                    let e = KeyStateBitmap.scoredPositions armed sch.ActiveMask priorBitmap frame.Bitmap
+                    armed <- KeyStateBitmap.arm armed frame.Bitmap // fold AFTER scoring (§6b)
                     prior <- Some frame.Bitmap
                     e
                 | Some _, None ->
                     prior <- Some frame.Bitmap // seed the baseline from the first frame of the run
+                    armed <- KeyStateBitmap.arm armed frame.Bitmap // the seed frame arms too (§6b)
                     Set.empty
                 | None, _ -> Set.empty)
 
@@ -377,6 +392,7 @@ type ButtonPressTestService
             schema <- Some sch
             selected <- Some panel
             prior <- None // re-seed the press-edge baseline from the first frame of this run
+            armed <- 0uy // re-arm from scratch: the run's first frame seeds the fold (§6b)
             lastFrameAt <- Some(clock.UtcNow()) // seed heartbeat recency at run start (fix #270)
 
             let startState = ButtonPressTest.start sch (clock.UtcNow() + ButtonPressTest.testBudget)
