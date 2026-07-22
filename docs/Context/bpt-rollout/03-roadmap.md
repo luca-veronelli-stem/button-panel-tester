@@ -457,7 +457,16 @@ trace data behind that bug reports are actionable.
 
 ### Locked design decisions
 
-- **Heartbeat timeout:** 5 s default. Configurable in code.
+> **Dual-rate constraint (2026-07-20, #293) — re-review before speccing.** A baptized panel's
+> button-state refresh is dual-rate (`UserMain.c:1013–1020`): ~188 ms while its latched bitmap is
+> non-zero, but **~12.5 s (`TEMPO_CAN_LENTO`) when it is zero** — a cold, never-touched panel sits
+> in the slow branch. A 5 s heartbeat timeout with "any frame counts" semantics would suspend a
+> healthy idle session, re-committing the exact defect spec-005 corrected (thresholds now
+> 15 s/20 s — `ButtonPressTest.fs`). Either the timeout clears ~12.5 s or the heartbeat definition
+> excludes cold-idle panels.
+
+- **Heartbeat timeout:** 5 s default. Configurable in code. *(See the dual-rate constraint above —
+  5 s does not clear a cold panel's ~12.5 s refresh.)*
 - **Recovery is automatic, with cap.** Three failed recovery probes
   in a row → session moves to `Aborted` with reason `RecoveryFailed`,
   not stuck in `Suspended` forever.
@@ -480,6 +489,8 @@ trace data behind that bug reports are actionable.
 3. Heartbeat semantics: do we treat any CAN frame as a heartbeat, or
    only specific WHO_I_AM / known telemetry frames? Suggested: any
    frame counts (panels emit telemetry on a timer once active).
+   *(#293 caveat: "on a timer" is dual-rate — a cold-idle panel's
+   timer is ~12.5 s, not sub-second; see the locked-decisions note.)*
 4. After a session aborts via `RecoveryFailed`, should the tool
    automatically save what it has, or ask the technician?
 5. Pre-flight grace period: should we wait N seconds after dictionary
