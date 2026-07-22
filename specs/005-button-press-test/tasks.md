@@ -755,7 +755,7 @@ vertical: FsCheck property + detector + service threading + tests; depends on J2
 (hardware suite recalibration). **J5** = {T054} (docs; orchestrator-owned). Parallelizable: J1, J4,
 and the J2→J3 chain are pairwise independent (disjoint files); J5 last.
 
-- [ ] T050 **[EXTEND]** Retune the recency thresholds in
+- [x] T050 **[EXTEND]** Retune the recency thresholds in
       `src/ButtonPanelTester.Core/Can/ButtonPressTest.fs`: `observableWindow` 2 s → **15 s**,
       `panelLostThreshold` 3 s → **20 s**. Both must exceed `TEMPO_CAN_LENTO` ≈ 12.5 s, the cadence of a
       cold never-touched panel. Rewrite both XML docs to cite `UserMain.c:1013–1020` and the measured
