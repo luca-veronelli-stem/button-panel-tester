@@ -20,7 +20,9 @@ open Stem.ButtonPanelTester.Tests.Windows.Fixtures // HardwareFact / ManualHardw
 /// The companion `DiscoveryHardwareTests` proves the RX discovery path and `BaptismHardwareTests` proves
 /// the claim/reset path on real silicon; this suite proves the third RX path — a baptized OPTIMUS-XP panel
 /// emits the `VAR_WRITE` button-state frames the parser expects, and the tool scores each prompted button
-/// on the **press** edge with the firmware-pinned polarity. It drives the SAME production chain the
+/// on the **press** edge with the firmware-pinned polarity — once the position is ARMED; on a genuinely
+/// cold panel the FIRST press of each button never reaches the wire, so an unarmed position scores on its
+/// release transition instead (`data-model.md` §6b, #293). It drives the SAME production chain the
 /// headless integration suite drives, minus nothing on the RX side and minus the TX/baptism transmitter:
 /// read loop -> `PcanCanFrameStream` -> `ButtonStateReassemblyObserver` -> `ButtonPressTestService` — so a
 /// regression anywhere on that wire path fails here where the `FrozenClock`/`InMemoryButtonStateObserver`
@@ -43,9 +45,11 @@ open Stem.ButtonPanelTester.Tests.Windows.Fixtures // HardwareFact / ManualHardw
 /// so a press is an active bit transitioning `1 -> 0` (`UserMain.c:1369,:978`). The legacy app scored on the
 /// `0 -> 1` RELEASE edge and was field-proven only because a technician always releases. The
 /// `Run_RealOptimusXpPanel_ScoresOnPressEdgeNotRelease` case makes the press-vs-release distinction OBSERVABLE
-/// (press-and-hold; score must fire WHILE held) and asserts the press edge. If a real panel scores on
-/// release, the fix is to flip the single `PressedBit` constant and re-run (quickstart §Polarity confirmation)
-/// — that is Luca's bench action, NOT a redesign.
+/// (press-and-hold; score must fire WHILE held) and asserts the press edge. The press-and-hold check presumes
+/// an ARMED position — on a genuinely cold panel the first press of each button is unarmed and scores on its
+/// RELEASE (`data-model.md` §6b, #293) — so give the button one press+release cycle before the check. If a
+/// real panel scores on release while armed, the fix is to flip the single `PressedBit` constant and re-run
+/// (quickstart §Polarity confirmation) — that is Luca's bench action, NOT a redesign.
 ///
 /// **Gating.** Every case carries `[<Trait("Category", "Hardware")>]`, so the standards CI category filter
 /// (`Category!=Hardware`) excludes the suite at discovery time — it COMPILES in CI (the gate build proves it)
@@ -79,12 +83,20 @@ open Stem.ButtonPanelTester.Tests.Windows.Fixtures // HardwareFact / ManualHardw
 /// that checklist).
 
 // --- budgets (deterministic bounded waits — never an unbounded spin) ---
+// Dual-rate audit (#293): every post-press budget below assumes the ~188 ms fast heartbeat branch, which
+// holds — a panel is in the fast branch forever after its first press+release (UserMain.c:1013-1020). Only
+// heartbeatTimeout (and the deliberately press-free window missTimeout spans) can see the ~12.5 s slow
+// branch of a cold panel.
 
-/// First-heartbeat appearance budget (fix #270): a baptized OPTIMUS-XP panel heartbeats its button-state on
-/// the ~182 ms idle cadence, so the first `ButtonStateObservation` should arrive within ~2 s of the read
-/// loop starting. If none does, the panel is not baptized/heartbeating — a rig precondition, surfaced as a
-/// diagnostic `Assert.Fail`.
-let private heartbeatTimeout = TimeSpan.FromSeconds 2.0
+/// First-heartbeat appearance budget (fix #270, recalibrated in #293): the panel heartbeats its button-state
+/// at TWO rates, selected per send (`UserMain.c:1013-1020`) — ~188 ms while the latched bitmap is non-zero,
+/// ~12.5 s (`TEMPO_CAN_LENTO`) while it is zero — and a cold, never-touched panel sits in the slow branch,
+/// so the FIRST `ButtonStateObservation` can take up to ~12.5 s to arrive (the earlier "~182 ms idle
+/// cadence" reading was the fast branch misread as the idle rate; a 2 s wait failed ~84% of cold-panel
+/// runs). 15 s matches `ButtonPressTest.observableWindow`, above `TEMPO_CAN_LENTO`, so one slow-cadence
+/// heartbeat always lands inside the wait. If none does, the panel is not baptized/heartbeating — a rig
+/// precondition, surfaced as a diagnostic `Assert.Fail`.
+let private heartbeatTimeout = TimeSpan.FromSeconds 15.0
 
 /// Forensic run-correlation key for the bench run (fix #270): a baptized panel is silent on WHO_I_AM, so its
 /// UUID is unavailable in the button-press path; with one panel under test at a time the run scope keys off
@@ -104,7 +116,10 @@ let private fullRunTimeout = TimeSpan.FromSeconds 90.0
 let private pressHoldTimeout = TimeSpan.FromSeconds 15.0
 
 /// Missed-detection budget: the per-button deadline is 10 s and the service's 250 ms tick records `Missed`
-/// just past it on `SystemClock`; 14 s leaves slack for the tick granularity and reassembly.
+/// just past it on `SystemClock`; 14 s leaves slack for the tick granularity and reassembly. Clock-driven,
+/// so the dual-rate heartbeat (#293) does not stretch it — but the press-free window it spans sits in the
+/// ~12.5 s slow branch on a cold panel, which the run survives because
+/// `ButtonPressTest.panelLostThreshold` (20 s) clears `TEMPO_CAN_LENTO`.
 let private missTimeout = TimeSpan.FromSeconds 14.0
 
 /// Per-press scoring budget: the operator presses the prompted button within its 10 s window and the press
@@ -281,7 +296,9 @@ let Run_RealOptimusXpPanel_AllActiveButtonsScorePassOnPressEdge () =
 
         match awaitState run fullRunTimeout with
         | Some(ButtonPressTestState.Completed results) ->
-            // SC-001/SC-006: every active button (Light/Suspension/Up/Down) scored Pass on its press edge.
+            // SC-001/SC-006: every active button (Light/Suspension/Up/Down) scored Pass — on the press edge
+            // once armed; on a cold panel each button's FIRST press is unarmed and scores on its release
+            // instead (data-model.md §6b, #293).
             Assert.True(
                 ButtonPressTest.allActivePassed results,
                 sprintf
@@ -290,7 +307,7 @@ let Run_RealOptimusXpPanel_AllActiveButtonsScorePassOnPressEdge () =
         | Some(ButtonPressTestState.Interrupted(reason, _)) ->
             Assert.Fail(
                 sprintf
-                    "run interrupted (%A) before completing — for LinkLost verify the adapter stayed plugged; for PanelLost verify the OPTIMUS-XP panel kept heartbeating its button-state (silence past the ~3 s panel-lost threshold halts the run)"
+                    "run interrupted (%A) before completing — for LinkLost verify the adapter stayed plugged; for PanelLost verify the OPTIMUS-XP panel kept heartbeating its button-state (silence past the ~20 s panel-lost threshold halts the run)"
                     reason)
         | Some other -> Assert.Fail(sprintf "run resolved to a non-terminal state %A (a service bug)" other)
         | None ->
@@ -322,7 +339,9 @@ let Run_RealOptimusXpPanel_ScoresOnPressEdgeNotRelease () =
 
         // The press-vs-release distinction made OBSERVABLE: press AND HOLD. Scoring on the press edge
         // (PressedBit = 0, the 1 -> 0 transition) scores WHILE the button is still held; scoring on the
-        // release edge would not score until the button is let go.
+        // release edge would not score until the button is let go. ARMED positions only (data-model.md
+        // §6b, #293): on a genuinely cold panel the first press never reaches the wire and scores on its
+        // release, so the button needs one press+release cycle before this check.
         Console.WriteLine(
             sprintf
                 "POLARITY CHECK (R2): when ready, press and HOLD the first button (%s) — do NOT release it until this test reports Pass. Press within ~8 s. Scoring on the PRESS edge (bit 1 -> 0) scores while held."
