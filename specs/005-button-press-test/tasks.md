@@ -583,30 +583,30 @@ implementing task and one test.)*
 
 | Requirement | Implementing task(s) | Test(s) |
 |---|---|---|
-| **FR-001** test offered only for a baptized, observable panel on a Connected link; else unavailable + reason | T021, T022, T034 | T022 (`TestEnablementGuards`), T028, T035 |
+| **FR-001** test offered only for a baptized, observable panel on a Connected link; else unavailable + reason | T021, T022, T034; T046, T047 (I); T050 (J) | T022 (`TestEnablementGuards`), T028, T035; T046/T047 reworked suites; T050 slow-cadence case |
 | **FR-002** start; present active buttons one at a time in canonical-filtered order | T018, T019, T023 | T020 (`TestVisitsActiveOnly`), T024 |
 | **FR-003** re-run end-to-end, clearing prior results | T019, T023, T034 | T028, T035 (SC-007) |
 | **FR-004** decal label primary; firmware name secondary | T011, T030 | T012, T031 (SC-006) |
 | **FR-005** per-button countdown, default 10 s | T023, T030 | T025, T031 |
-| **FR-006** Pass on first press-edge within window | T008, T018, T019, T023 | T009 (`PressEdgeDetectsHighToLow`), T020 (`PassRequiresPressEdge`), T024 |
+| **FR-006** Pass on first scoring transition within window (armed → press edge; unarmed → first release, #293) | T008, T018, T019, T023; T051, T052 (J) | T009 (`PressEdgeDetectsHighToLow`), T020 (`PassRequiresPressEdge`), T024; T052 cold-boot case + FsCheck |
 | **FR-007** Missed on timeout | T018, T019, T023 | T020, T025 (SC-003) |
 | **FR-008** Unexpected logged-not-counted, no advance | T019, T023, T032 | T026, T033 (SC-004) |
 | **FR-009** Retry / Skip; Skipped ≠ Pass | T018, T019, T023, T032 | T020 (`SkipNeverPass`), T026, T033 |
 | **FR-010** advance on Pass | T019, T023 | T024, T026 |
 | **FR-011** per-button grid + "all active passed" only when all Pass | T018, T019, T030 | T020 (`ResultVectorLength`), T024, T031 |
 | **FR-012** forensic record per prompt/press/score/timeout/retry/skip | T029 | T029 |
-| **FR-013** link/panel loss → distinct interruption; never all-passed | T018, T019, T023 | T020 (`InterruptExcludesAllPassed`), T027 (SC-005) |
-| **FR-014** inactive-mask bits never a result | T003, T008, T019 | T009 (`InactiveBitsIgnored`), T027 |
+| **FR-013** link/panel loss → distinct interruption; never all-passed | T018, T019, T023; T046 (I); T050 (J) | T020 (`InterruptExcludesAllPassed`), T027 (SC-005); T050 slow-cadence case |
+| **FR-014** inactive-mask bits never a result | T003, T008, T019; T051, T052 (J — arming is active-masked too) | T009 (`InactiveBitsIgnored`), T027; T052 |
 | **FR-015** retain nothing after the test (no persistence) | T023 (volatile state only), T040 | T040 (audit) |
 | **FR-016** per-variant mask + decal labels; provisional flag surfaced | T010, T011, T034 | T012 (`SchemaActiveOnlyInOrder`), T035 |
-| **SC-001** full four-button OPTIMUS run, all Pass, all-active-passed | T019, T023 | T024, T036 |
-| **SC-002** Pass within ~1 s of the press | T023 | T024, T036 |
+| **SC-001** full four-button OPTIMUS run, all Pass, all-active-passed | T019, T023; T052 (J) | T024, T036; T053 (cold-panel precondition) |
+| **SC-002** Pass within ~1 s of the press (unarmed: of the release, #293) | T023; T052 (J) | T024, T036; T052 |
 | **SC-003** Missed within the window of the prompt | T023 | T025, T036 |
 | **SC-004** wrong press never scores/advances; visible in log | T019, T023 | T026, T036 |
-| **SC-005** interruption never reports all-passed; surfaced quickly | T019, T023 | T027, T036 |
+| **SC-005** interruption never reports all-passed; link-loss fast, panel-loss ≤ ~20 s (#293) | T019, T023; T046 (I); T050 (J) | T027, T036; T050 |
 | **SC-006** OPTIMUS decals match the panel (Light/Suspension/Up/Down) | T011, T030 | T012, T031, T036 |
 | **SC-007** re-run clears all prior results | T019, T023, T034 | T028, T035 |
-| **SC-008** unavailable + reason when not baptized / link not Connected | T021, T022, T034 | T022, T028, T035 |
+| **SC-008** unavailable + reason when not baptized / link not Connected | T021, T022, T034; T046, T047 (I); T050 (J) | T022, T028, T035; T050 |
 
 ---
 
@@ -675,6 +675,13 @@ button-press path); observability/panel-loss off button-state frame recency with
 thresholds** (provisional defaults: observable window 2 s, panel-lost 3 s — bench-confirmed like the
 press-edge polarity; the ~12 s in the original note was CAN id `0x00000008`, a different message).
 
+> **Superseded in part by Phase J (#293, 2026-07-20):** the 2 s / 3 s defaults were calibrated
+> against the heartbeat's post-boot fast ramp; the idle steady state of a cold panel is
+> `TEMPO_CAN_LENTO` ≈ 12.5 s, so the thresholds are recalibrated to 15 s / 20 s (firmware-derived,
+> T050). And the "~12 s was a different message" parenthetical is itself corrected: that figure
+> **was** the button-state slow branch, mis-attributed to the tool's SRID. The re-key design
+> (observer, auto-target, recency model) stands.
+
 **Commit grouping (bisect-safe)**: **I1** = {T044} (Lean-only). **I2** = {T045} (observation type +
 observer rework — one vertical commit: port + observer + fake + tests + minimal service adaptation).
 **I3** = {T046} (service presence/observability re-key + discovery drop). **I4** = {T047} (GUI). **I5** =
@@ -735,18 +742,25 @@ with bench-tunable thresholds — no dependency on WHO_I_AM discovery. Re-run th
 
 Second corrective phase, from the 2026-07-20 firmware + trace re-read (no bench run). Phase I re-keyed
 observability onto the button-state heartbeat correctly, but calibrated its recency thresholds against
-the post-boot *ramp* cadence rather than the idle steady state. See `spec.md` §Clarifications Session
-2026-07-20, `research.md` R1 (dual-rate table), `data-model.md` §6a/§6b.
+the post-boot *ramp* cadence rather than the idle steady state, and the cold-panel latch means a
+button's first press is never transmitted at all. See `spec.md` §Clarifications Session 2026-07-20,
+`research.md` R1 (dual-rate table), `data-model.md` §6a/§6b, `plan.md` §Amendment 2026-07-20.
 
-Two vertical slices, each one bisect-safe commit. They are **independent** (disjoint files) and may be
-implemented in either order or in parallel.
+Issue #293's AC-5 (artifact corrections: spec/research/data-model/contract/plan) is already landed in
+this branch's amendment commits — no task backs it by design.
+
+**Commit grouping (bisect-safe)**: **J1** = {T050} (thresholds — one vertical commit: constants +
+tests). **J2** = {T051} (Lean-only, mirrors I1 — always green). **J3** = {T052} (arming rule — F#
+vertical: FsCheck property + detector + service threading + tests; depends on J2). **J4** = {T053}
+(hardware suite recalibration). **J5** = {T054} (docs; orchestrator-owned). Parallelizable: J1, J4,
+and the J2→J3 chain are pairwise independent (disjoint files); J5 last.
 
 - [ ] T050 **[EXTEND]** Retune the recency thresholds in
       `src/ButtonPanelTester.Core/Can/ButtonPressTest.fs`: `observableWindow` 2 s → **15 s**,
       `panelLostThreshold` 3 s → **20 s**. Both must exceed `TEMPO_CAN_LENTO` ≈ 12.5 s, the cadence of a
       cold never-touched panel. Rewrite both XML docs to cite `UserMain.c:1013–1020` and the measured
       186.7 ms / 12.5 s rates, and drop the stale "derived from the same ~182 ms refresh" /
-      "to be confirmed on the rig" wording (the rates are now firmware-derived, not bench-provisional).
+      "to be confirmed on the rig" wording (the rates are firmware-derived, not bench-provisional).
       **RED**: extend `tests/ButtonPanelTester.Tests/Integration/Can/ButtonPressInterruptionTests.fs`
       with a case driving the heartbeat at the **slow** cadence (frames 12.5 s apart on `FrozenClock`)
       and asserting the run stays live — fails at 3 s, passes at 20 s. **GREEN**: the constant change
@@ -754,25 +768,49 @@ implemented in either order or in parallel.
       `Gui/Can/ButtonPressTestViewTests.fs` updated to the new values. RED and GREEN fold into the one
       commit: the new case is written and observed failing first, then the constants change.
       (FR-001/FR-013; SC-005/SC-008)
-- [ ] T051 **[EXTEND]** Score unarmed positions on the release transition in
-      `src/ButtonPanelTester.Core/Can/KeyStateBitmap.fs`. A never-touched panel does not transmit a
-      button's first press at all (`UserMain.c:1369` clears an already-clear bit ⇒ the `:973` change gate
-      never fires), so an **unarmed** position — one never yet observed with bit value `1` — scores on
-      its `0 → 1` release transition, which is unambiguous proof of a completed press; an **armed**
-      position scores on the normal `1 → 0` press edge, unchanged. Arming is per position and monotonic;
-      `PressedBit` stays `0uy`. Thread the armed set through the detector's call sites in
-      `src/ButtonPanelTester.Services/Can/ButtonPressTestService.fs` alongside `prior`.
-      **Mandatory triple**: Lean theorem in `lean/Stem/ButtonPanelTester/Phase4/KeyStateBitmap.lean`
-      (armed positions keep the existing press-edge semantics; an unarmed position scores exactly once,
-      on its first release; arming is monotonic), an FsCheck property mirroring it in the Core test
-      project, and an XML doc citing the theorem. **RED**: a cold-boot sequence
-      (`0x00 → press (no frame) → release`) currently yields no score for the prompted button; the new
-      test asserts it does. **GREEN**: the arming rule. Folded into one commit, RED observed first.
-      (FR-006/FR-014; SC-001/SC-002)
-- [ ] T052 **[DOCS]** `CHANGELOG.md` `[Unreleased]` entry for the dual-rate correction (thresholds
-      recalibrated above `TEMPO_CAN_LENTO`; first-press-after-power-up now scored). Orchestrator-owned;
-      not a worker slice.
+- [ ] T051 **[LEAN]** Extend `lean/Stem/ButtonPanelTester/Phase4/KeyStateBitmap.lean` with the arming
+      model (Lean-only commit, mirrors I1): an `armed` predicate (position observed with bit value `1`
+      in some earlier bitmap) and a `scored` predicate over (armed, prior, next). Theorems:
+      `armed_scores_on_press_edge` (an armed position scores iff `pressEdges` reports it — the existing
+      `press_edge_iff_high_to_low` semantics are preserved), `unarmed_scores_on_first_release` (an
+      unarmed position scores exactly once, on its first `0 → 1` transition, and that transition arms
+      it), `arming_monotonic` (armed never reverts). Update the file header doc: it claims to mechanise
+      data-model §2 verbatim; it now also mechanises §6b. No `sorry`; axioms ⊆ the constitution set.
+      (FR-006/FR-014; SC-001/SC-002; Constitution I)
+- [ ] T052 **[EXTEND]** Implement the arming rule in
+      `src/ButtonPanelTester.Core/Can/KeyStateBitmap.fs` per T051's theorems: `pressEdges` unchanged;
+      add the armed-set threading and a `scoredPositions` (armed → press edge; unarmed → first release,
+      which also arms). Thread the armed state through
+      `src/ButtonPanelTester.Services/Can/ButtonPressTestService.fs` alongside `prior`; `PressedBit`
+      stays `0uy`. XML docs cite the T051 theorems. **RED**: a Core unit test driving the cold-boot
+      sequence (`0x00` baseline → press emits no frame → release frame) currently yields no score for
+      the prompted button; the new test asserts it scores on the release. **GREEN**: the arming rule +
+      an FsCheck property mirroring `unarmed_scores_on_first_release`/`arming_monotonic` (custom
+      `Arbitrary` over bitmap sequences) + existing detector/service tests still green. Folded into one
+      commit, RED observed first. Depends on T051. (FR-006/FR-014; SC-001/SC-002)
+- [ ] T053 **[EXTEND]** Recalibrate the hardware suite for the slow branch:
+      `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/ButtonPressTestHardwareTests.fs`
+      `heartbeatTimeout` 2 s → **15 s** (the shipped wait encodes the misread ~182 ms cadence and fails
+      ~84 % of the time against a cold panel — the very scenario #293 fixes), with the XML doc rewritten
+      to the dual-rate fact (first observation within ≈ 12.5 s + slack) and the diagnostic messages'
+      "verify a baptized panel is heartbeating" wording kept. Review the other budget constants against
+      the dual-rate table (`fullRunTimeout`, `missTimeout`, `pressTimeout` are press-activity-driven —
+      once the first prompt is answered the panel is in the ≈ 188 ms branch — so they stand; state that
+      in the commit body). Update the #253 bench-checklist hooks: observability = heartbeat arrival
+      within 15 s on a cold panel; thresholds are firmware-derived (drop T048's "confirmed on the rig"
+      hook). Compile-checked locally (`Category=Hardware` is CI-excluded); the bench run itself stays
+      #253. (SC-001..006; FR-001/FR-013)
+- [ ] T054 **[DOCS]** Orchestrator-owned docs sweep: (a) `CHANGELOG.md` `[Unreleased]` entry for the
+      dual-rate correction (thresholds recalibrated above `TEMPO_CAN_LENTO`; first press after power-up
+      now scored via the unarmed release rule). (b) `quickstart.md` refresh: drop the stale "Select the
+      baptized panel" step (auto-target since #270), note a cold panel can take ≈ 12.5 s to first
+      surface as observable, and describe first-press scoring on release for a cold panel; the polarity
+      section stands. (c) `docs/Context/bpt-rollout/03-roadmap.md` spec-007 section: annotate the "5 s
+      heartbeat timeout / any frame counts" sketch with the dual-rate constraint so spec-007 doesn't
+      re-commit this defect at session level. (d) Verify the FR/SC matrix rows updated in this
+      amendment commit stay accurate as J1–J4 land.
 
 **Checkpoint J**: a cold, never-touched baptized panel stays continuously observable at its ≈ 12.5 s
-heartbeat, a run started against it is not killed by `PanelLost`, and the first press of every button
-scores. Then re-run the #253 bench — still the Done line.
+heartbeat, a run started against it is not killed by `PanelLost`, the first press of every button
+scores (on its release), and the hardware suite's own preconditions tolerate the slow branch. Then
+re-run the #253 bench — still the Done line.
