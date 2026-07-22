@@ -768,7 +768,7 @@ and the J2→J3 chain are pairwise independent (disjoint files); J5 last.
       `Gui/Can/ButtonPressTestViewTests.fs` updated to the new values. RED and GREEN fold into the one
       commit: the new case is written and observed failing first, then the constants change.
       (FR-001/FR-013; SC-005/SC-008)
-- [ ] T051 **[LEAN]** Extend `lean/Stem/ButtonPanelTester/Phase4/KeyStateBitmap.lean` with the arming
+- [x] T051 **[LEAN]** Extend `lean/Stem/ButtonPanelTester/Phase4/KeyStateBitmap.lean` with the arming
       model (Lean-only commit, mirrors I1): an `armed` predicate (position observed with bit value `1`
       in some earlier bitmap) and a `scored` predicate over (armed, prior, next). Theorems:
       `armed_scores_on_press_edge` (an armed position scores iff `pressEdges` reports it — the existing
