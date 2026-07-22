@@ -800,7 +800,7 @@ and the J2→J3 chain are pairwise independent (disjoint files); J5 last.
       within 15 s on a cold panel; thresholds are firmware-derived (drop T048's "confirmed on the rig"
       hook). Compile-checked locally (`Category=Hardware` is CI-excluded); the bench run itself stays
       #253. (SC-001..006; FR-001/FR-013)
-- [ ] T054 **[DOCS]** Orchestrator-owned docs sweep: (a) `CHANGELOG.md` `[Unreleased]` entry for the
+- [x] T054 **[DOCS]** Orchestrator-owned docs sweep: (a) `CHANGELOG.md` `[Unreleased]` entry for the
       dual-rate correction (thresholds recalibrated above `TEMPO_CAN_LENTO`; first press after power-up
       now scored via the unarmed release rule). (b) `quickstart.md` refresh: drop the stale "Select the
       baptized panel" step (auto-target since #270), note a cold panel can take ≈ 12.5 s to first
