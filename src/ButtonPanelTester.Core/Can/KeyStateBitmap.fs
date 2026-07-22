@@ -51,3 +51,46 @@ module KeyStateBitmap =
             let nextPressed = bitValue nextByte i = PressedBit
             active && not priorPressed && nextPressed)
         |> Set.ofSeq
+
+    /// Arming update (#293, `data-model.md` §6b): fold an observed bitmap
+    /// into the armed state — the bitwise OR of every bitmap observed so far,
+    /// baseline frame included. A position is armed once it has been observed
+    /// released (bit `1`, R2) in some earlier bitmap. The Lean theorem
+    /// `arming_monotonic` in `Phase4/KeyStateBitmap.lean` (T051) mechanises
+    /// that the fold never un-arms a position.
+    let arm (armed: byte) (observed: KeyStateBitmap) : byte =
+        let (KeyStateBitmap observedByte) = observed
+        armed ||| observedByte
+
+    /// The §6b scoring rule (#293) layered above `pressEdges` (unchanged): an
+    /// active position scores on the press edge (`1 → 0`) when armed —
+    /// exactly `pressEdges`, the Lean theorem `armed_scores_on_press_edge` —
+    /// and on the release transition (`0 → 1`) when unarmed, because a cold
+    /// panel's latched bitmap never transmits a position's FIRST press
+    /// (`UserMain.c:1369,:973`) and the release is unambiguous proof of a
+    /// completed press (`unarmed_scores_on_first_release`). Scoring against a
+    /// frame and then folding it (`arm`) arms the position, so the unarmed
+    /// rule fires at most once per position (`no_double_score_after_arming`,
+    /// T051; `data-model.md` §6b). Both branches are transitions — no
+    /// absolute byte is ever read as press-state.
+    let scoredPositions
+        (armed: byte)
+        (activeMask: byte)
+        (prior: KeyStateBitmap)
+        (next: KeyStateBitmap)
+        : Set<int> =
+        let (KeyStateBitmap priorByte) = prior
+        let (KeyStateBitmap nextByte) = next
+
+        seq { 0..7 }
+        |> Seq.filter (fun i ->
+            let active = bitValue activeMask i = 1uy
+            let priorPressed = bitValue priorByte i = PressedBit
+            let nextPressed = bitValue nextByte i = PressedBit
+
+            active
+            && (if bitValue armed i = 1uy then
+                    not priorPressed && nextPressed // the press edge, as pressEdges
+                else
+                    priorPressed && not nextPressed)) // the release transition (0 → 1)
+        |> Set.ofSeq

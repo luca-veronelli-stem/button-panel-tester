@@ -777,7 +777,7 @@ and the J2→J3 chain are pairwise independent (disjoint files); J5 last.
       it), `arming_monotonic` (armed never reverts). Update the file header doc: it claims to mechanise
       data-model §2 verbatim; it now also mechanises §6b. No `sorry`; axioms ⊆ the constitution set.
       (FR-006/FR-014; SC-001/SC-002; Constitution I)
-- [ ] T052 **[EXTEND]** Implement the arming rule in
+- [x] T052 **[EXTEND]** Implement the arming rule in
       `src/ButtonPanelTester.Core/Can/KeyStateBitmap.fs` per T051's theorems: `pressEdges` unchanged;
       add the armed-set threading and a `scoredPositions` (armed → press edge; unarmed → first release,
       which also arms). Thread the armed state through
