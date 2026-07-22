@@ -788,7 +788,7 @@ and the J2→J3 chain are pairwise independent (disjoint files); J5 last.
       an FsCheck property mirroring `unarmed_scores_on_first_release`/`arming_monotonic` (custom
       `Arbitrary` over bitmap sequences) + existing detector/service tests still green. Folded into one
       commit, RED observed first. Depends on T051. (FR-006/FR-014; SC-001/SC-002)
-- [ ] T053 **[EXTEND]** Recalibrate the hardware suite for the slow branch:
+- [x] T053 **[EXTEND]** Recalibrate the hardware suite for the slow branch:
       `tests/ButtonPanelTester.Tests.Windows/Integration/Can/Hardware/ButtonPressTestHardwareTests.fs`
       `heartbeatTimeout` 2 s → **15 s** (the shipped wait encodes the misread ~182 ms cadence and fails
       ~84 % of the time against a cold panel — the very scenario #293 fixes), with the XML doc rewritten
