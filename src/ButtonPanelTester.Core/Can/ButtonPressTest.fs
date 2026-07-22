@@ -193,25 +193,31 @@ module ButtonPressTest =
     /// budgets (`Baptism.announceBudget`), `TimeSpan` not UI.
     let testBudget: TimeSpan = TimeSpan.FromSeconds 10.0
 
-    /// The button-state heartbeat observable window (fix #270): a baptized panel
-    /// is silent on WHO_I_AM and instead heartbeats its button-state `VAR_WRITE`
-    /// on its directed CAN ID, so a button-state frame seen within this window IS
-    /// the evidence the panel is present and observable on the bus (the GUI keys
-    /// `testEnablement`'s `observable` conjunct off it; `data-model.md` §6). A
-    /// provisional bench default of 2 s, comfortably above the ~182 ms idle
-    /// refresh cadence measured on the rig (2026-06-24) — to be confirmed on the
-    /// bench alongside the press-edge polarity, the single point to retune. A
+    /// The button-state heartbeat observable window (fix #270, cadence corrected
+    /// in #293): a baptized panel is silent on WHO_I_AM and instead heartbeats
+    /// its button-state `VAR_WRITE` on its directed CAN ID, so a button-state
+    /// frame seen within this window IS the evidence the panel is present and
+    /// observable on the bus (the GUI keys `testEnablement`'s `observable`
+    /// conjunct off it; `data-model.md` §6/§6a). The firmware heartbeats at TWO
+    /// rates, selected per send (`UserMain.c:1013-1020`): ~188 ms (measured
+    /// 186.7 ms) while the latched bitmap is non-zero, ~12.5 s
+    /// (`TEMPO_CAN_LENTO`) while it is zero — a cold, never-touched panel sits
+    /// in the slow branch. FIRMWARE-DERIVED: 15 s, above `TEMPO_CAN_LENTO`, so
+    /// one slow-cadence heartbeat keeps the panel observable. A
     /// `research`-config constant in CODE, NOT a UI setting.
-    let observableWindow: TimeSpan = TimeSpan.FromSeconds 2.0
+    let observableWindow: TimeSpan = TimeSpan.FromSeconds 15.0
 
     /// The button-state silence threshold that ends a run in `PanelLost` (fix
-    /// #270): if no button-state frame arrives for longer than this WHILE a run
-    /// is in flight, the panel is declared lost (`Interrupted PanelLost`, FR-013)
-    /// — the recency replacement for the old discovery-prune `PanelPresence`
-    /// signal. A provisional bench default of 3 s (above `observableWindow`,
-    /// derived from the same ~182 ms refresh) — to be confirmed on the rig. A
-    /// `research`-config constant in CODE, NOT a UI setting.
-    let panelLostThreshold: TimeSpan = TimeSpan.FromSeconds 3.0
+    /// #270, cadence corrected in #293): if no button-state frame arrives for
+    /// longer than this WHILE a run is in flight, the panel is declared lost
+    /// (`Interrupted PanelLost`, FR-013) — the recency replacement for the old
+    /// discovery-prune `PanelPresence` signal. FIRMWARE-DERIVED: 20 s, above
+    /// both `observableWindow` and the ~12.5 s slow heartbeat branch
+    /// (`TEMPO_CAN_LENTO`, `UserMain.c:1013-1020`; the fast branch runs at
+    /// ~188 ms, measured 186.7 ms), so a run on a cold panel survives the slow
+    /// cadence and only genuine silence halts it. A `research`-config constant
+    /// in CODE, NOT a UI setting.
+    let panelLostThreshold: TimeSpan = TimeSpan.FromSeconds 20.0
 
     /// Explanation a `Disabled` button-press-test guard carries when a panel
     /// is selected but NOT baptized — or no panel is selected at all (the

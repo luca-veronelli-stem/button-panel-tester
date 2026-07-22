@@ -100,16 +100,40 @@ let ButtonPressInterruption_PanelStopsHeartbeating_InterruptedPanelLost () =
     let _task = h.Service.RunAsync(selectedUuid, optimus, CancellationToken.None)
 
     // The panel is heartbeating (one observed frame), then falls silent: no
-    // button-state frame for longer than `panelLostThreshold` (3 s) during the
-    // run, so the next deadline tick halts in `Interrupted PanelLost` (FR-013 —
-    // recency, not discovery pruning; fix #270).
+    // button-state frame for longer than `panelLostThreshold` (20 s — above the
+    // ~12.5 s slow heartbeat branch, #293) during the run, so the next deadline
+    // tick halts in `Interrupted PanelLost` (FR-013 — recency, not discovery
+    // pruning; fix #270).
     h.Buttons.Emit idle
-    h.Clock.SetTo(fixedNow + TimeSpan.FromSeconds 4.0)
+    h.Clock.SetTo(fixedNow + TimeSpan.FromSeconds 21.0)
     h.Service.RunDeadlineTick()
 
     match h.Service.CurrentState with
     | Interrupted(InterruptReason.PanelLost, partial) -> Assert.False(ButtonPressTest.allActivePassed partial)
     | s -> failwithf "expected Interrupted PanelLost, got %A" s
+
+// --- the slow-cadence heartbeat (~12.5 s, cold panel) must NOT read as PanelLost ---
+
+[<Fact>]
+let ButtonPressInterruption_PanelHeartbeatsAtSlowCadence_RunStaysLive () =
+    let h = newHarness connectedLink
+    let _task = h.Service.RunAsync(selectedUuid, optimus, CancellationToken.None)
+
+    // A cold panel heartbeats its all-idle button state on the SLOW branch
+    // (~12.5 s, TEMPO_CAN_LENTO — UserMain.c:1013-1020; #293): consecutive
+    // button-state frames arrive 12.5 s apart, each gap crossed by a deadline
+    // tick. The slow cadence is normal firmware behavior, not a lost panel, so
+    // the run must stay live — never `Interrupted PanelLost`.
+    h.Buttons.Emit idle
+
+    for _ in 1..3 do
+        h.Clock.Advance(TimeSpan.FromSeconds 12.5)
+        h.Service.RunDeadlineTick()
+        h.Buttons.Emit idle
+
+    match h.Service.CurrentState with
+    | Prompting _ -> () // still live (button 0 may be Missed on its 10 s budget — that is fine)
+    | s -> failwithf "expected the run to stay live in Prompting, got %A" s
 
 // --- a press for an INACTIVE position (outside the variant mask) is ignored ---
 
