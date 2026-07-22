@@ -59,6 +59,10 @@ Pure. Converts two consecutive masked bitmaps into the set of buttons whose bit 
 **into pressed** (`1 → 0`, since pressed = `0` on the wire). The pressed-bit value is a single
 named constant so a bench surprise is a one-line flip.
 
+> **Amended by §6b (#293):** `pressEdges` itself is unchanged, but it is no longer the whole scoring
+> rule — an **unarmed** position (never yet observed released) scores on its `0 → 1` release
+> transition instead, because the firmware never transmits a cold panel's first press. See §6b.
+
 ```fsharp
 [<Literal>]
 let PressedBit = 0uy        // firmware: press clears the bit (UserMain.c:1369,:978)

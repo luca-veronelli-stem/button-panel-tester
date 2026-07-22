@@ -77,7 +77,10 @@ Bit assignment (`UserMain.c:215–246`):
 (`UserMain.c:978`); press clears the bit (`:1369`), release sets it (`:1375`). The no-buttons-pressed
 steady state is all-active-bits-`1`.
 
-- A **press** is the transition of an active button's bit `1 → 0` (FR-006).
+- A **press** is the transition of an active button's bit `1 → 0` (FR-006). **Unarmed exception
+  (#293, `data-model.md` §6b):** a cold panel never transmits a position's first press (clearing an
+  already-clear bit fires no change gate), so a position never yet seen released scores on its
+  `0 → 1` release transition instead.
 - The baseline MUST be taken from the **first observed frame** — `TxTasti` is zero-initialised at
   boot (`UserMain.c:200`) and only reaches the all-`1` idle state after the key-scan fires
   `RELEASED` for untouched keys, so an absolute byte is never a reliable press-state.

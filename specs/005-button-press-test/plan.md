@@ -268,3 +268,33 @@ otherwise stands (FSM, schema, detector, enablement DU unchanged; `test_enabled_
 the `observable` boolean — its *interpretation* shifts, the theorem holds). Authority: spec.md
 §Clarifications (Session 2026-06-24) + tasks.md §Phase I (T044–T049). Constitution Check still PASS
 (no new bypass; the inline command/address hardcode R6 stays, now matching directed IDs).
+
+### Amendment 2026-07-20 (fix #293) — dual-rate heartbeat: thresholds recalibrated, unarmed scoring
+
+A firmware + trace re-read (no bench run) showed the Phase I recency thresholds were calibrated
+against the heartbeat's **post-boot fast ramp**, not its idle steady state. The refresh is
+**dual-rate** (`UserMain.c:1013–1020`): ≈ 188 ms while the latched bitmap is non-zero, ≈ **12.5 s**
+(`TEMPO_CAN_LENTO`) while it is zero — and since `TxTasti` is zero-init with bits latching on
+release, a cold never-touched panel sits in the slow branch. Consequences for this plan:
+
+1. **Thresholds** — `observableWindow` / `panelLostThreshold` go 2 s / 3 s → **15 s / 20 s** (above
+   `TEMPO_CAN_LENTO`), now **firmware-derived, not bench-provisional**; the 2026-06-24 amendment's
+   "(configurable thresholds, bench-confirmed)" phrasing is superseded. §Performance Goals'
+   "interruption surfaced within a small handful of seconds" now holds for **link-loss only**;
+   panel-power-loss detection takes up to ≈ 20 s by design (SC-005 amended accordingly).
+2. **Unarmed scoring** — a cold panel **never transmits a position's first press** (clearing an
+   already-clear bit fires no change gate, `UserMain.c:1369`/`:973`), so §Constraints'
+   "detection = press-edge" gains an exception: an **unarmed** position (never yet observed
+   released) scores on its `0 → 1` release transition; armed positions keep the press edge.
+   `pressEdges` is unchanged; a `scored`/armed predicate layers above it (`data-model.md` §6b).
+   FR-006/SC-002 amended; polarity (`PressedBit = 0uy`) confirmed correct, untouched.
+3. **Hardware suite** — `ButtonPressTestHardwareTests.fs` waited `heartbeatTimeout = 2 s` for the
+   first observation, encoding the same misread cadence; raised above `TEMPO_CAN_LENTO` alongside
+   the #253 checklist hooks.
+4. **Constitution Check** — still PASS. The arming rule ships with the mandatory triple (Lean
+   theorem in `Phase4/KeyStateBitmap.lean` + FsCheck property + XML doc citation), Lean-first as a
+   separate Lean-only commit per Principle I (tasks.md §Phase J). `test_enabled_iff` stays
+   parametric over `observable`; no new stopgap, no new boundary.
+
+Authority: spec.md §Clarifications (Session 2026-07-20), research.md R1 (dual-rate derivation),
+data-model.md §6a/§6b, tasks.md §Phase J (T050–T054). Tracked as corrective child **#293** (PR #294).

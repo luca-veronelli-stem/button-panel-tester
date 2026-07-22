@@ -92,7 +92,7 @@ After a run, the technician re-runs the test in place (e.g., after re-seating a 
 
 - **Link drops mid-test** (USB unplug or bus silence): the test halts with a distinct "link lost" outcome; no false Pass or Missed is recorded for the in-flight button, and "all active passed" is never reported.
 - **Panel stops heartbeating mid-test** (button-state silence past the panel-lost threshold): the test halts with a distinct "panel lost" outcome.
-- **Button held down** (long press): the press registers once on the transition into pressed; holding does not produce repeated Pass results.
+- **Button held down** (long press): the press registers once on its scoring transition (FR-006); holding does not produce repeated Pass results. For an unarmed position the scoring transition is the release, so a held first press on a cold panel scores when the operator lets go — not while holding.
 - **Bouncing / repeated presses within one prompt window**: the first matching transition scores Pass; further transitions for that button in the same window are ignored for scoring.
 - **A bit reported for an inactive position** (outside the variant's active mask): never treated as a prompted-button result; ignored or surfaced as diagnostic only.
 - **Two buttons pressed near-simultaneously**: only the prompted button scores; the other counts as Unexpected.
@@ -125,7 +125,7 @@ The test communicates through three complementary surfaces:
 
 **Scoring**
 
-- **FR-006**: While a button is prompted, the system MUST observe the panel's button-state reports and score that button **Pass** on the first report indicating the button transitioned into the pressed state within the timeout window.
+- **FR-006**: While a button is prompted, the system MUST observe the panel's button-state reports and score that button **Pass** on the first report carrying its scoring transition within the timeout window. For an **armed** position (previously observed released) the scoring transition is the press edge (`released → pressed`); for an **unarmed** position (never yet observed released — the cold-panel case, where the firmware never transmits the first press) it is the first release transition (`pressed → released`), which is unambiguous proof of a completed press. *(Amended 2026-07-20, #293 — see §Clarifications Session 2026-07-20 and `data-model.md` §6b; the original text scored only the press edge.)*
 - **FR-007**: The system MUST score a prompted button **Missed** when no matching pressed-transition is observed within the timeout window.
 - **FR-008**: A press of any button other than the currently-prompted one MUST be recorded as **Unexpected** — logged but not counted as the prompted button's result — and MUST NOT advance the sequence.
 - **FR-009**: The system MUST offer per-button **Retry** (re-arm the same button with a fresh countdown) and **Skip** (record **Skipped** and advance) controls; a Skipped button MUST NOT count as Pass.
@@ -158,10 +158,10 @@ The test communicates through three complementary surfaces:
 ### Measurable Outcomes
 
 - **SC-001**: On a baptized OPTIMUS-XP panel, a technician can complete a full four-button test (pressing each active button when prompted) and see all four scored Pass with a positive "all active passed" indicator, in a single uninterrupted run. (US1)
-- **SC-002**: When a prompted button is pressed, it is scored Pass within about one second of the press — perceived as immediate — verifiable by comparing a bus capture of the press against the on-screen result. (US1 / FR-006)
+- **SC-002**: When a prompted **armed** button is pressed, it is scored Pass within about one second of the press — perceived as immediate — verifiable by comparing a bus capture of the press against the on-screen result. For an **unarmed** button (first cycle on a cold panel) the press itself never reaches the wire, so the Pass correlates with the release frame instead: scored within about one second of the *release*, verifiable against the release frame in the capture. (US1 / FR-006; amended 2026-07-20, #293)
 - **SC-003**: A prompted button that is not pressed is scored Missed within the configured window (default 10 seconds) of the prompt starting, within about one second of the window elapsing. (US2 / FR-007)
 - **SC-004**: Pressing a button other than the prompted one never scores the prompted button and never advances the sequence, and the wrong press is visible in the forensic log. (US2 / FR-008)
-- **SC-005**: A test interrupted by link loss surfaces a distinct link-lost outcome within a small handful of seconds; a test interrupted by the panel ceasing to heartbeat surfaces a distinct panel-lost outcome within the panel-lost window (the configurable threshold, provisional default ~3 s). Neither ever reports "all active passed". (Edge cases / FR-013)
+- **SC-005**: A test interrupted by link loss surfaces a distinct link-lost outcome within a small handful of seconds; a test interrupted by the panel ceasing to heartbeat surfaces a distinct panel-lost outcome within the panel-lost window (the configurable threshold, default ~20 s — firmware-derived, above the ~12.5 s `TEMPO_CAN_LENTO` slow branch; recalibrated 2026-07-20, #293). Neither ever reports "all active passed". (Edge cases / FR-013)
 - **SC-006**: The prompted label for every OPTIMUS-XP active button matches the physical panel decal (Light, Suspension, Up, Down), verifiable by a technician reading the panel. (FR-004; the §C3 correction)
 - **SC-007**: Re-running the test clears all prior results and starts a fresh sequence, with no residual Pass/Missed from the previous run. (US3 / FR-003)
 - **SC-008**: The test is unavailable, with an explanation, whenever no baptized panel is heartbeating on the bus or the link is not Connected — it never prompts for buttons absent an observable baptized panel. (FR-001)
