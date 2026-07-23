@@ -23,8 +23,8 @@ backed by a production adapter and a virtual adapter (Constitution III).
 
 ```fsharp
 /// Decoded SP_APP VAR_WRITE button-state heartbeats from the panel under test, each carrying the
-/// MarketingVariant decoded from its directed CAN ID. Hot observable; late subscribers do not
-/// replay. See button-state-wire-format.md.
+/// MarketingVariant decoded from its packet senderId (#296). Hot observable; late subscribers do
+/// not replay. See button-state-wire-format.md.
 type IButtonStateObserver =
     abstract member ButtonStateObserved : IObservable<ButtonStateObservation>
 ```
@@ -51,7 +51,7 @@ type ButtonStateObservation =
 
 | Adapter | Project | Role |
 |---|---|---|
-| `ButtonStateReassemblyObserver` | `Infrastructure/Can` (`net10.0-windows`) | subscribes `ICanFrameStream.RawFramesReceived`, accepts a frame iff its CAN ID decodes to a `Marketing` variant, reassembles per source CAN ID, filters command `0x00:0x02` + button-state address set, calls `ButtonStateFrame.parse`, republishes a `ButtonStateObservation` (frame + variant) |
+| `ButtonStateReassemblyObserver` | `Infrastructure/Can` (`net10.0-windows`) | subscribes `ICanFrameStream.RawFramesReceived`, reassembles per source CAN ID (no arbitration-ID pre-filter, #296), filters completed packets on command `0x00:0x02` + button-state address set + **senderId machineType decoding `Marketing`**, calls `ButtonStateFrame.parse`, republishes a `ButtonStateObservation` (frame + senderId-derived variant) |
 | `InMemoryButtonStateObserver` | `Tests/Fakes/Can` (`net10.0`) | `EmitObservation(obs)` (and a frame convenience) pushes synchronously to subscribers — deterministic test driver (mirror `InMemoryWhoIAmObserver`) |
 
 ## Consumed surfaces (not modified)
@@ -60,7 +60,7 @@ type ButtonStateObservation =
 |---|---|---|
 | `ICanFrameStream.RawFramesReceived` | spec-002/003 | raw frame input |
 | `PacketReassembler` | vendored (#111) | SP_APP reassembly (reused, not modified) |
-| `VariantDecoder.decode` / `MarketingVariant` | spec-003 | the CAN-ID machineType → variant decode the accept rule keys on (fix #270) |
+| `VariantDecoder.decode` / `MarketingVariant` | spec-003 | the machineType → variant decode the accept rule keys on — applied to the packet **senderId** (fix #296; was the CAN ID in #270) |
 | `ICanLinkService` / `CanLinkState` | spec-002 | Connected gate + link-lost interruption |
 | `IClock` | spec-002 | per-button timeout deadline; **button-state-frame recency** (observability + panel-loss, fix #270) |
 

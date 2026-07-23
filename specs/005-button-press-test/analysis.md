@@ -38,3 +38,37 @@ own precedent (I1 Lean-only) says it does not, so it was treated as CRITICAL and
   FR-006/FR-014/SC-001/SC-002 → T051/T052.
 - Constitution: PASS (mandatory triple on the arming rule, Lean-first as a separate commit, no new
   stopgap, `test_enabled_iff` parametric and unaffected).
+
+---
+
+# Cross-artifact analysis — amendment round 3 (#296 / Phase K), 2026-07-23
+
+`speckit-analyze` run (read-only subagent) on the Phase K amendment (destination addressing /
+variant-from-senderId, commit af199b9), cross-checked with the shipped code seams, the Lean module,
+issue #296 ACs, the constitution, and the evidence trace (`bench-logs/pcan/test1.trc` — verified:
+all frames on `0x00000008`, senderId bytes `00 0A 01 01`, 186.9 ms ramp then 12.38 s).
+
+**Verdict as returned: loop back for the amendment sweep (H1–H4 + M1) before implementation; the
+K1/K2 design itself sound and implementable.** All findings dispositioned in the same round:
+
+| ID | Sev | Finding | Disposition |
+|---|---|---|---|
+| H1 | HIGH | FR-001's normative text still keyed the variant to the directed CAN ID | **Fixed** — FR-001 amended inline (senderId bits 23–16 + destination note), FR-006 precedent |
+| H2 | HIGH | data-model §1a accept bullet + §7 still said "iff `variantOfDirectedId CanId`" | **Fixed** — both re-keyed to the (cmd, addr, senderId) rule |
+| H3 | HIGH | observer-port contradicted itself in three places (port doc, adapter table, consumed-surfaces) | **Fixed** — all three re-keyed |
+| H4 | HIGH | FR/SC matrix rows FR-001/SC-008 lacked T055/T056 | **Fixed** — rows extended |
+| M1 | MED | T056(b) "senderId already parsed by the packet decoder" — wrong seam (the observer hand-indexes; senderId = reassembled bytes 1–4 BE) | **Fixed** — task text re-worded to the real seam |
+| M2 | MED | Phase I blockquote's "the re-key design stands" now false for the accept rule | **Fixed** — extended with the Phase K supersession |
+| M3 | MED | T055 silent on the old `accepted` def's fate; `arbitration_id_irrelevant` vacuous unless the model carries the arb id | **Fixed** — T055 re-worded (re-document `accepted`; model packet incl. arb id) |
+| M4 | MED | Hardware suite's runtime `Assert.Fail` diagnostics (:282/:333/:394) still say "on its directed CAN id" — misleads the operator | **Fixed** — folded into T057 (string-only) |
+| M5 | MED | Stale directed-id docs in Ports.fs / ButtonPressTest.fs / App.fs / the fake, covered by no task | **Fixed** — Ports.fs → T056(a); the rest → T057 |
+| M6 | MED | Unreleased #270 CHANGELOG entry asserts dropping `0x00000008` | **Fixed** — T057 amends it |
+| L1 | LOW | New helper name unpinned | **Fixed** — `variantOfSenderId` pinned in data-model §1a |
+| L2 | LOW | research R5 pre-#270 envelope drift | **Fixed** — folded into T057 |
+| L3 | LOW | Phase K preamble lacked the AC-5 landed-in-amendment note | **Fixed** — note added |
+| L4 | LOW | Reassembler map now allocates per id seen | **Fixed** — commit-body note required by T056 |
+| L5 | LOW | "Fakes drive destination-addressed streams" overpromise (fake is post-reassembly) | **Fixed** — clarified doc-only |
+
+Constitution: PASS (0 CRITICAL). Coverage: 100 % with the matrix now current. The RED premise of
+T056 was verified real by the analyzer: the shipped observer drops arbitration ID `0x00000008` at
+`onFrame` before reassembly.
