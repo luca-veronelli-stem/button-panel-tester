@@ -488,9 +488,10 @@ type MainWindow(services: IServiceProvider) as this =
         ()
 
     /// Run-button callback wired into `ButtonPressTestView.view` (spec-005 Phase F,
-    /// FR-002/004/005; observability re-keyed in fix #270). Auto-targets the single
-    /// heartbeating panel: its `MarketingVariant` (decoded from the directed-id
-    /// heartbeat, `lastButtonStateVariant`) resolves its `ButtonSchema`, then starts
+    /// FR-002/004/005; observability re-keyed in #270, accept rule re-keyed to the
+    /// packet senderId in #296). Auto-targets the single heartbeating panel: its
+    /// `MarketingVariant` (decoded from the heartbeat packet's senderId,
+    /// `lastButtonStateVariant`) resolves its `ButtonSchema`, then starts
     /// ONE modal run via `IButtonPressTestService.RunAsync` — fire-and-forget,
     /// mirroring `onBaptize`: the prompt / score / terminal grid surface via the
     /// `StateChanged` subscription, so the task body only swallows cancellation and
@@ -664,9 +665,10 @@ type MainWindow(services: IServiceProvider) as this =
             // run it is the schema the run was started with (`lastButtonPressSchema`).
             let testObservable = buttonStateObservable ()
 
-            // The directed-id heartbeat only ever decodes to a Marketing variant
-            // (the observer drops broadcast / virgin / SRID), so an observable
-            // heartbeat carrying a variant IS a baptized panel.
+            // A heartbeat's senderId only ever decodes to a Marketing variant
+            // (the observer drops WHO_I_AM on its command, the virgin sentinel on
+            // its address, and non-marketing senders on the senderId — #296), so
+            // an observable heartbeat carrying a variant IS a baptized panel.
             let testSelectedBaptized = testObservable && Option.isSome lastButtonStateVariant
 
             let buttonPressEnablement =
@@ -813,10 +815,11 @@ type MainWindow(services: IServiceProvider) as this =
                     renderCombined ()))
 
         // Button-state heartbeat → track recency + variant on the UI thread
-        // (spec-005 Phase F, fix #270). The observer fires from the vendored read
+        // (spec-005 Phase F, #270/#296). The observer fires from the vendored read
         // thread (or a synchronous test caller); marshal to the UI thread like the
-        // other CAN subscriptions. A directed-id heartbeat IS the presence +
-        // variant signal — the re-key replacement for discovery. Repaint only on a
+        // other CAN subscriptions. A button-state heartbeat (variant from its
+        // packet senderId, #296) IS the presence + variant signal — the re-key
+        // replacement for discovery. Repaint only on a
         // VISIBLE change (the panel newly observable, or its variant changing) so a
         // steady ~5 Hz heartbeat does not rebuild the surface every frame; the
         // observable->stale decay is handled by the 1 Hz tick below.

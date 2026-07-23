@@ -874,7 +874,7 @@ orchestrator-owned). Strictly serial: K1 → K2 → K3.
       asserts one OptimusXp observation — observed failing first. **GREEN**: the re-key + full
       observer suite + `./gate.ps1`. Folded into one commit, RED first. Depends on T055.
       (FR-001; SC-008)
-- [ ] T057 **[DOCS]** Orchestrator-owned docs sweep: CHANGELOG `[Unreleased]` — add the #296
+- [x] T057 **[DOCS]** Orchestrator-owned docs sweep: CHANGELOG `[Unreleased]` — add the #296
       entry AND amend the still-unreleased #270 entry, which asserts dropping `0x00000008`, the
       very id the tool now listens on; quickstart bench-walkthrough note (the heartbeat arrives on
       the tool SRID `0x00000008` — what to expect in PCAN-View); hardware-suite directed-id

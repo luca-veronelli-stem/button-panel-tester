@@ -36,10 +36,13 @@ Prerequisite: one PEAK PCAN-USB adapter and one **OPTIMUS-XP** panel, already ba
 and observable on the bus.
 
 1. Open the button-press test — the tool **auto-targets the single heartbeating panel** (no
-   selection step since #270); it becomes available once a button-state heartbeat arrives. On a
-   **cold, never-touched panel the first heartbeat can take up to ~12.5 s** (the firmware's slow
-   branch, #293) — wait for it rather than suspecting the rig. The test stays unavailable, with an
-   explanation, if the link is not Connected or no baptized panel heartbeats (FR-001).
+   selection step since #270); it becomes available once a button-state heartbeat arrives. The
+   heartbeat is **addressed to the tool** (#296): in PCAN-View (250 kBit/s) it appears on CAN ID
+   `00000008` — the tool's own SRID, not the panel's address, which rides inside the packet as the
+   senderId. On a **cold, never-touched panel the first heartbeat can take up to ~12.5 s** (the
+   firmware's slow branch, #293) — wait for it rather than suspecting the rig. The test stays
+   unavailable, with an explanation, if the link is not Connected or no baptized panel heartbeats
+   (FR-001).
 2. Run the sequence. The tool prompts by decal, in order: **Light → Suspension → Up → Down**.
 3. Press each prompted button; confirm each scores **Pass** within ~1 s (SC-002) and the prompt
    advances; at the end the grid shows four Pass and a positive "all active passed" (SC-001). On a

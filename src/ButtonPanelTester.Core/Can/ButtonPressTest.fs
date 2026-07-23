@@ -194,9 +194,11 @@ module ButtonPressTest =
     let testBudget: TimeSpan = TimeSpan.FromSeconds 10.0
 
     /// The button-state heartbeat observable window (fix #270, cadence corrected
-    /// in #293): a baptized panel is silent on WHO_I_AM and instead heartbeats
-    /// its button-state `VAR_WRITE` on its directed CAN ID, so a button-state
-    /// frame seen within this window IS the evidence the panel is present and
+    /// in #293, addressing corrected in #296): a baptized panel is silent on
+    /// WHO_I_AM and instead heartbeats its button-state `VAR_WRITE` addressed to
+    /// the master that baptized it (the tool's own SRID for a tool-baptized
+    /// panel; the panel's identity rides in the packet senderId), so a
+    /// button-state frame seen within this window IS the evidence the panel is present and
     /// observable on the bus (the GUI keys `testEnablement`'s `observable`
     /// conjunct off it; `data-model.md` §6/§6a). The firmware heartbeats at TWO
     /// rates, selected per send (`UserMain.c:1013-1020`): ~188 ms (measured
