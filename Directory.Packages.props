@@ -54,7 +54,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
 
     <!-- F# runtime (must be explicit under CPM so consumers can flow it transitively) -->
-    <PackageVersion Include="FSharp.Core" Version="10.1.301" />
+    <PackageVersion Include="FSharp.Core" Version="10.1.302" />
     <PackageVersion Include="FSharp.SystemTextJson" Version="1.4.36" />
 
     <!-- Testing -->
