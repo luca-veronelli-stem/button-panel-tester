@@ -5,14 +5,16 @@ open System.Collections.Concurrent
 open Stem.ButtonPanelTester.Core.Can
 
 /// Test fake for `IButtonStateObserver`: pushes one decoded `ButtonStateObservation`
-/// (frame + variant-from-CAN-ID) synchronously to every current subscriber on the calling thread.
+/// (frame + variant-from-senderId) synchronously to every current subscriber on the calling thread.
 /// Stands in for the windows-only `ButtonStateReassemblyObserver` so the net10.0 service E2E
-/// (Phase E / I3) can drive the post-reassembly feed deterministically. No hardware, no reassembly.
+/// (Phase E / I3) can drive the post-reassembly feed deterministically. No hardware, no reassembly:
+/// this surface is POST-reassembly, so no CAN ids exist here — neither the destination arbitration
+/// id nor the packet senderId the real observer's accept rule keys on (#296).
 type InMemoryButtonStateObserver() =
     let observers = ConcurrentBag<IObserver<ButtonStateObservation>>()
 
-    /// Emit a full observation — the variant rides with the frame, as it does off a real directed
-    /// CAN ID. Use this when the test asserts on the observed variant (the fix-#270 path).
+    /// Emit a full observation — the variant rides with the frame, as it does off a real packet's
+    /// senderId. Use this when the test asserts on the observed variant (the fix-#296 path).
     member _.EmitObservation(observation: ButtonStateObservation) =
         for observer in observers do observer.OnNext observation
 

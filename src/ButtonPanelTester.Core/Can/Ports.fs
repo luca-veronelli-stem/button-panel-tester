@@ -97,18 +97,23 @@ type IWhoIAmObserver =
     abstract member WhoIAmObserved: IObservable<WhoIAmFrame>
 
 /// Decoded SP_APP VAR_WRITE button-state heartbeats from the panel under test, per
-/// `specs/005-button-press-test/contracts/button-state-observer-port.md` (fix #270). Emits one
-/// `ButtonStateObservation` per reassembled + command-matched + address-matched + parsed VAR_WRITE
-/// arriving on a **directed CAN ID whose machineType (bits 23-16) decodes to a known Marketing
-/// variant** — that variant rides in the observation. The broadcast id 0x1FFFFFFF (-> Virgin), the
-/// tool SRID 0x00000008 (-> Unknown), the virgin sentinel address 0x80FE, and non-button addresses
-/// are dropped (silent non-events). A directed button-state frame IS the evidence that a baptized
-/// panel of that variant is present — the consumer keys observability off frame recency, not
-/// WHO_I_AM discovery. Edge detection is the consumer's job — the observer is stateless w.r.t.
-/// press/release. Receive-only.
+/// `specs/005-button-press-test/contracts/button-state-observer-port.md` and its wire-format
+/// section "Destination addressing + variant-from-senderId match rule" (fix #296, superseding the
+/// #270 arbitration-ID rule). A baptized panel heartbeats **addressed to the master that baptized
+/// it** — the CAN arbitration ID is the DESTINATION, so a panel this tool baptized heartbeats on
+/// the tool's own SRID 0x00000008 and the tool listens there. Emits one `ButtonStateObservation`
+/// per reassembled + command-matched + address-matched + parsed VAR_WRITE whose packet **senderId**
+/// (bytes 1-4, big-endian — the panel's own address) has a machineType byte (bits 23-16) decoding
+/// to a known Marketing variant; that variant rides in the observation. There is no
+/// arbitration-ID filter: WHO_I_AM broadcasts drop on the command 0x0024, the virgin sentinel
+/// address 0x80FE and non-button addresses drop on the address, non-marketing senders drop on the
+/// senderId (all silent non-events). Such a heartbeat IS the evidence that a baptized panel of that
+/// variant is present — the consumer keys observability off frame recency, not WHO_I_AM discovery.
+/// Edge detection is the consumer's job — the observer is stateless w.r.t. press/release.
+/// Receive-only.
 type IButtonStateObserver =
-    /// Hot observable of decoded button-state observations (frame + variant-from-CAN-ID). Fires on
-    /// the vendored read thread; late subscribers do not replay.
+    /// Hot observable of decoded button-state observations (frame + variant-from-senderId). Fires
+    /// on the vendored read thread; late subscribers do not replay.
     abstract member ButtonStateObserved: IObservable<ButtonStateObservation>
 
 /// Receive port for the SET_ADDRESS application ACK the slave's protocol dispatcher returns to
