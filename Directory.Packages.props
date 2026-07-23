@@ -20,10 +20,10 @@
     <PackageVersion Include="SkiaSharp" Version="3.119.0" />
 
     <!-- Avalonia + FuncUI (archetype A — desktop GUI) -->
-    <PackageVersion Include="Avalonia" Version="11.3.17" />
-    <PackageVersion Include="Avalonia.Desktop" Version="11.3.17" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.17" />
-    <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.17" />
+    <PackageVersion Include="Avalonia" Version="11.3.18" />
+    <PackageVersion Include="Avalonia.Desktop" Version="11.3.18" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="11.3.18" />
+    <PackageVersion Include="Avalonia.Diagnostics" Version="11.3.18" />
     <PackageVersion Include="Avalonia.FuncUI" Version="1.6.0" />
     <!-- Svg.Controls.Skia.Avalonia is the actively-maintained replacement
          for the deprecated Avalonia.Svg.Skia (same author, same Skia-backed
@@ -62,7 +62,7 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
     <PackageVersion Include="FsCheck.Xunit" Version="3.3.3" />
-    <PackageVersion Include="Avalonia.Headless.XUnit" Version="11.3.17" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="11.3.18" />
 
     <!-- Driver-only (Windows TFM, see PORTABILITY Pattern A) -->
     <PackageVersion Include="System.IO.Ports" Version="10.0.7" />
