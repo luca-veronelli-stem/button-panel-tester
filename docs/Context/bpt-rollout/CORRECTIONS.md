@@ -117,6 +117,14 @@ if ((Boot_IsOngoing() == false) &&
 - Spec-004's button-press test is downstream of spec-003 — physical
   presses on a `reset=1`-only panel produce no CAN traffic.
 
+**Tool-side verification (2026-07-23, #295):** the shipped baptism always
+sends `WHO_ARE_YOU` with `reset=1` (`Core/Can/WhoAreYouFrame.fs:18` — "This
+feature always sends `Reset = true`", encoded at `:70`), and the first panel
+baptized by this tool stored its `MotherBoardAddress` and heartbeated
+button-state on the tool SRID — live-confirmed at the #253 bench. §C2 is
+satisfied by this tool; the silent-panel failure mode remains possible only
+for panels addressed by some other master without `reset=1`.
+
 ---
 
 ## C3. OPTIMUS-XP active button set is `{DOWN, P1, P3, MEM}`, not `{DOWN, P2, MEM, LIGHT}`

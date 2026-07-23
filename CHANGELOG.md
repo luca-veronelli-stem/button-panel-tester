@@ -2,7 +2,9 @@
 
 All notable changes to ButtonPanelTester follow [Semantic Versioning](https://semver.org/) and are recorded here in [Keep a Changelog](https://keepachangelog.com/) format.
 
-## [Unreleased]
+## [0.5.0] - 2026-07-23
+
+Ships spec 005 — the **button-press test** (input side), the tool's first input-side test: a guided per-button session on a baptized panel, scored off the CAN button-state heartbeat — plus the three bench-driven corrections that made it observable on real silicon (#270 heartbeat re-key, #293 dual-rate thresholds + press-edge arming, #296 senderId accept rule). Bench-validated end-to-end on a tool-baptized OPTIMUS-XP ([#253](https://github.com/luca-veronelli-stem/button-panel-tester/issues/253)); the other three variants stay provisional (FR-016). Also records the §C2 baptism `reset=1` verification ([#295](https://github.com/luca-veronelli-stem/button-panel-tester/issues/295)).
 
 ### Added
 
