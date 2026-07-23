@@ -29,21 +29,25 @@ module ButtonStateFrame =
 - Validation: command `0x00:0x02` and an address in the button-state set are enforced by the
   observer (R6); `parse` itself rejects only on length, matching the WHO_I_AM precedent.
 
-### 1a. Button-state observation (the emitted envelope — fix #270)
+### 1a. Button-state observation (the emitted envelope — fix #270, variant source re-keyed by #296)
 
-A baptized panel is silent on WHO_I_AM and heartbeats its button-state on a **directed CAN ID** whose
-machineType byte (bits 23–16) is the variant. The observer derives the variant from that id and emits
-it alongside the frame; the consumer keys observability + the prompt schema off this envelope rather
-than discovery (`button-state-wire-format.md` §Directed CAN ID).
+A baptized panel is silent on WHO_I_AM and heartbeats its button-state **addressed to the master
+that baptized it** — the arbitration ID is the destination (`0x00000008` when this tool did the
+baptizing), and the panel's own address is the packet **senderId**, whose machineType byte
+(bits 23–16) is the variant. The observer derives the variant from the **senderId** and emits it
+alongside the frame; the consumer keys observability + the prompt schema off this envelope rather
+than discovery (`button-state-wire-format.md` §Destination addressing, #296).
 
 ```fsharp
 // Core/Can/ButtonStateObservation.fs
 type ButtonStateObservation =
     { Frame:   ButtonStateFrame
-      Variant: MarketingVariant }                 // decoded from (CanId >>> 16) &&& 0xFF
+      Variant: MarketingVariant }                 // decoded from (SenderId >>> 16) &&& 0xFF (#296)
 
 module ButtonStateObservation =
     let variantOfDirectedId : uint32 -> VariantIdentity   // VariantDecoder.decode on bits 23-16
+    // #296: the SAME bits-23-16 extraction, now applied to the packet senderId word instead of
+    // the arbitration id (the T044 Lean extraction lemma is word-agnostic and carries over).
 ```
 
 - Lean: `Phase4/ButtonStateObservation.lean` — `machine_type_at_bits_23_16` (machineType =

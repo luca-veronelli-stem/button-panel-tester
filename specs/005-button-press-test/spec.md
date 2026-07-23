@@ -23,7 +23,7 @@ The tool's first **input-side** test. Earlier features brought the panel to life
 ### Session 2026-06-24
 
 - **Observability = the button-state heartbeat, not WHO_I_AM discovery.** A baptized panel is **silent on the WHO_I_AM auto-address broadcast** — the firmware enters `AAS_STAND_BY` after `SET_ADDRESS` and never re-broadcasts WHO_I_AM (`CORRECTIONS.md` §C1) — so it never appears in the spec-003 Panels-on-bus discovery list. The tool instead recognises a baptized panel by its **button-state heartbeat**: the SP_APP `VAR_WRITE` (cmd `0x0002`, addr `0x80NN`, bitmap `TxTasti`) it transmits on change plus a periodic refresh (`research.md` R1). A button-state frame arriving therefore **is** the evidence that a baptized panel of that variant is present and observable. (Bench-confirmed 2026-06-24; corrects the original premise that the panel is selected from the discovery list — that premise does not hold for baptized panels.)
-- **Variant comes from the directed CAN ID, not discovery.** The heartbeat arrives on a **directed CAN ID** whose machineType byte (bits 23–16) identifies the variant — OPTIMUS `0x000A0441`, Eden-XP `0x00030141`, R-3L `0x000B0481`. `(CanId >>> 16) &&& 0xFF` decoded by the variant decoder yields the marketing variant; the broadcast id (`0x1FFFFFFF` → `0xFF`/virgin) and the tool's own SRID (`0x00000008` → `0x00`) decode to non-marketing values and are rejected. One panel under test at a time (spec-003 bench convention), so the test **auto-targets the single baptized panel currently heartbeating** — there is no panel-selection step and no UUID/address disambiguation.
+- **Variant comes from the directed CAN ID, not discovery.** The heartbeat arrives on a **directed CAN ID** whose machineType byte (bits 23–16) identifies the variant — OPTIMUS `0x000A0441`, Eden-XP `0x00030141`, R-3L `0x000B0481`. `(CanId >>> 16) &&& 0xFF` decoded by the variant decoder yields the marketing variant; the broadcast id (`0x1FFFFFFF` → `0xFF`/virgin) and the tool's own SRID (`0x00000008` → `0x00`) decode to non-marketing values and are rejected. One panel under test at a time (spec-003 bench convention), so the test **auto-targets the single baptized panel currently heartbeating** — there is no panel-selection step and no UUID/address disambiguation. — **superseded by Session 2026-07-23 (#296): the arbitration ID is the destination (the baptizing master's address); the variant comes from the payload senderId. Auto-targeting and one-panel-at-a-time stand.**
 - **"Panel lost" = button-state silence past a configurable threshold.** Observability and panel-loss key off frame recency: a button-state frame within the *observable window* ⇒ observable; no button-state frame for longer than the *panel-lost threshold* during a run ⇒ panel-lost. Both are code-configurable constants (provisional defaults: observable window 2 s, panel-lost 3 s, from the bench-measured ~182 ms idle refresh), **confirmed on the rig** alongside the press-edge polarity. (The earlier ~12 s figure was a *different* periodic message — CAN id `0x00000008` — not the button-state heartbeat.) — **superseded by Session 2026-07-20 below: the 2 s / 3 s defaults were calibrated against a misread cadence.**
 
 ### Session 2026-07-20
@@ -35,6 +35,29 @@ Firmware + trace re-read (no bench run). Corrects the cadence premise the Sessio
 - **Recency thresholds must exceed `TEMPO_CAN_LENTO`.** The 2 s / 3 s defaults leave the GUI enabled ~16 % of the time and halt any run in `Interrupted PanelLost` within 3 s once the panel settles into the slow branch. FR-013 and SC-005 are unchanged in *meaning*; only the constants are recalibrated. SC-005's adapter-unplug case is unaffected — that path is `LinkLost`, which stays fast — so only panel-power-loss detection slows.
 - **On a never-touched panel the first press of a button is not transmitted at all.** With `PressedBit = 0uy` (firmware-correct — see R2) a cold panel's `0x00` baseline reads every bit as pressed; the first press clears an already-clear bit (`UserMain.c:1369`), so `TxTasti` does not change and the transmit gate (`:973`) never fires. The release *does* transmit (`:1375`). No tool-side edge rule can recover an event that never reached the wire, so scoring keys off what is observable: for an **unarmed** position (never yet seen released) a `0 → 1` release transition is unambiguous proof of a completed press and scores it, arming the position; an **armed** position scores on the normal `1 → 0` press edge as before. Steady-state behaviour is unchanged. Without this, a freshly powered panel scores `Missed` on the first press of every button (SC-001/SC-002).
 - **Polarity is NOT changed.** `PressedBit = 0uy` stays. The `0x00` idle bitmap is the boot latch state, not evidence of inversion.
+
+### Session 2026-07-23
+
+Bench sanity capture (`bench-logs/pcan/test1.trc`) taken preparing the #253 run, on the first panel
+ever baptized by this tool and then observed. Corrects the #270 premise about *where* the heartbeat
+arrives; see issue #296.
+
+- **The heartbeat's CAN arbitration ID is the DESTINATION, not the panel's address.** The firmware
+  addresses the button-state `VAR_WRITE` to the master that baptized the panel
+  (`UserMain.c:997` `app.srid = MotherBoardAddress`, written from the baptizing master's srid,
+  `AutoAddressSlave.c:238-241`). A tool-baptized panel therefore heartbeats on the tool's own SRID
+  `0x00000008` — the very ID the #270 observer explicitly dropped. The June captures behind #270
+  were machine-baptized panels, whose master coincidentally shares the machineType byte with its
+  keyboard; variant-from-arbitration-ID worked on them by coincidence.
+- **Observability and the variant key off the payload senderId.** The panel's own SP address rides
+  in the reassembled packet's senderId; its machineType byte (bits 23–16) is the variant. The
+  observer accepts a completed packet iff cmd `0x0002` + known variable address + senderId
+  machineType decodes to a Marketing variant — no arbitration-ID pre-filter. FR-001's "observable"
+  evidence is unchanged in meaning (a button-state frame within the observable window); only the
+  frame-acceptance rule moves from arbitration ID to senderId.
+- **Everything else stands**: dual-rate thresholds and press-edge arming (#293), auto-targeting,
+  panel-lost semantics, scoring. The FR-001 clarification of Session 2026-06-24 ("variant comes
+  from the directed CAN ID") is **superseded** by this entry.
 
 ## User Scenarios & Testing *(mandatory)*
 

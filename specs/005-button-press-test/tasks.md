@@ -814,3 +814,56 @@ and the J2→J3 chain are pairwise independent (disjoint files); J5 last.
 heartbeat, a run started against it is not killed by `PanelLost`, the first press of every button
 scores (on its release), and the hardware suite's own preconditions tolerate the slow branch. Then
 re-run the #253 bench — still the Done line.
+
+---
+
+## Phase K — destination addressing: variant from the senderId (child J, #296)
+
+Third corrective phase, from the 2026-07-23 bench sanity capture (`bench-logs/pcan/test1.trc`): a
+tool-baptized panel heartbeats on the tool's own SRID `0x00000008` (the arbitration ID is the
+DESTINATION — the baptizing master's stored address), so the #270 arbitration-ID accept rule drops
+every frame. The variant lives in the packet **senderId** (bits 23–16). See `spec.md`
+§Clarifications Session 2026-07-23, `research.md` R1 destination-addressing addendum, both #296
+contract sections, `plan.md` §Amendment 2026-07-23.
+
+**Commit grouping (bisect-safe)**: **K1** = {T055} (Lean-only, mirrors I1/J2 — always green).
+**K2** = {T056} (observer re-key — one vertical commit: Core envelope helper + Infrastructure
+observer + fake + FsCheck + observer tests; depends on K1). **K3** = {T057} (docs;
+orchestrator-owned). Strictly serial: K1 → K2 → K3.
+
+- [ ] T055 **[LEAN]** Extend `lean/Stem/ButtonPanelTester/Phase4/ButtonStateObservation.lean`
+      (Lean-only commit): model the completed-packet accept rule over (cmd, addr, senderId) —
+      `accept ↔ cmd = 0x0002 ∧ addr ∈ recognised ∧ (senderId >>> 16) &&& 0xFF decodes Marketing`.
+      Theorems: `variant_from_sender_id` (the bits-23-16 extraction applied to the senderId word —
+      reuse/instantiate the T044 `machine_type_at_bits_23_16` lemma), `who_i_am_rejected_on_cmd`
+      (cmd `0x0024` never accepted regardless of senderId), `virgin_sentinel_rejected` (`0x80FE`
+      never accepted), `arbitration_id_irrelevant` (acceptance is independent of the arbitration
+      id — the destination does not appear in the rule). Header doc: mechanises wire-format
+      §Destination addressing (#296). No `sorry`; axioms ⊆ the constitution set.
+      (FR-001; Constitution I)
+- [ ] T056 **[EXTEND]** Re-key the observer per T055: (a)
+      `src/ButtonPanelTester.Core/Can/ButtonStateObservation.fs` — add the senderId-based variant
+      helper (the same bits-23-16 extraction, applied to the senderId word); XML docs cite the T055
+      theorems + wire-format #296. (b)
+      `src/ButtonPanelTester.Infrastructure/Can/ButtonStateReassemblyObserver.fs` — remove the
+      arbitration-ID variant gate; reassemble per source arbitration ID as today; on a completed
+      packet accept iff cmd `0x0002` + recognised addr + senderId machineType decodes Marketing
+      (the senderId is already parsed by the packet decoder); emit the observation with the
+      senderId-derived variant. (c) `tests/.../Fakes/Can/InMemoryButtonStateObserver.fs` + the
+      observer Windows tests: drive a destination-addressed stream — arb. ID `0x00000008`,
+      senderId `0x000A0101` (the test1.trc shape) → accepted as OptimusXp; machine-destination
+      stream (arb. `0x000A0441`, same senderId) → accepted; WHO_I_AM broadcast → rejected on cmd;
+      `0x80FE` → rejected on addr. (d) FsCheck property mirroring `variant_from_sender_id` +
+      `arbitration_id_irrelevant` (generate arbitrary arbitration ids; acceptance/variant must not
+      change). **RED**: the test1.trc-shaped stream currently yields zero observations; new test
+      asserts one OptimusXp observation — observed failing first. **GREEN**: the re-key + full
+      observer suite + `./gate.ps1`. Folded into one commit, RED first. Depends on T055.
+      (FR-001; SC-008)
+- [ ] T057 **[DOCS]** Orchestrator-owned docs sweep: CHANGELOG `[Unreleased]` entry (#296);
+      quickstart bench-walkthrough note (the heartbeat arrives on the tool SRID `0x00000008` —
+      what to expect in PCAN-View); hardware-suite doc comments mentioning the expected arrival id
+      (comment-only); memory + #253 body already updated orchestrator-side.
+
+**Checkpoint K**: a panel baptized by THIS tool is observed — the GUI enables off its heartbeat on
+`0x00000008` and the hardware suite's first-observation wait passes on the rig. Then re-run the
+#253 bench — still the Done line.

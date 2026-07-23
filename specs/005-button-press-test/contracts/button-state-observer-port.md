@@ -7,14 +7,17 @@ A new RX observation seam over the existing CAN boundary (`ICanFrameStream`), mi
 `IWhoIAmObserver`. No new external boundary — the port is consumed by `ButtonPressTestService` and
 backed by a production adapter and a virtual adapter (Constitution III).
 
-> **Re-keyed to the directed-id heartbeat (fix #270, Session 2026-06-24).** A baptized panel is
-> silent on WHO_I_AM (`AAS_STAND_BY`; `CORRECTIONS.md` §C1) and heartbeats its button-state on a
-> **directed CAN ID** whose machineType byte (bits 23-16) identifies the variant. The observer
-> therefore accepts a frame **iff its CAN ID decodes to a known `Marketing` variant** (the broadcast
-> id `0x1FFFFFFF` → `0xFF`/Virgin and the tool SRID `0x00000008` → `0x00`/Unknown are dropped for
-> free), and emits a `ButtonStateObservation` carrying that variant alongside the frame. A
-> button-state observation arriving therefore **is** the evidence that a baptized panel of that
-> variant is present — the consumer keys observability off frame recency, not WHO_I_AM discovery.
+> **Re-keyed to the senderId (fix #296, Session 2026-07-23; supersedes the #270 CAN-ID rule).** A
+> baptized panel is silent on WHO_I_AM (`AAS_STAND_BY`; `CORRECTIONS.md` §C1) and heartbeats its
+> button-state **addressed to the master that baptized it** — the arbitration ID is the destination
+> (`0x00000008` for tool-baptized panels), and the panel's own address rides in the packet
+> **senderId**, whose machineType byte (bits 23-16) identifies the variant. The observer therefore
+> accepts a **completed packet** iff cmd `0x0002` + a recognised button-state address + the senderId
+> machineType decodes to a known `Marketing` variant (WHO_I_AM drops on cmd; the virgin sentinel
+> `0x80FE` drops on address; no arbitration-ID pre-filter), and emits a `ButtonStateObservation`
+> carrying that variant alongside the frame. A button-state observation arriving therefore **is**
+> the evidence that a baptized panel of that variant is present — the consumer keys observability
+> off frame recency, not WHO_I_AM discovery.
 
 ## Port (`Core/Can/Ports.fs`)
 
@@ -30,13 +33,13 @@ type IButtonStateObserver =
 /// Core/Can/ButtonStateObservation.fs — the emitted envelope.
 type ButtonStateObservation =
     { Frame: ButtonStateFrame          // the decoded VAR_WRITE (data-model.md §1)
-      Variant: MarketingVariant }      // decoded from (CanId >>> 16) &&& 0xFF (data-model.md §1)
+      Variant: MarketingVariant }      // decoded from (SenderId >>> 16) &&& 0xFF (#296)
 ```
 
-- Emits one `ButtonStateObservation` per accepted VAR_WRITE arriving on a **directed CAN ID whose
-  machineType decodes to a `Marketing` variant**, on a recognised button-state address; the
-  broadcast id (→ Virgin), the tool SRID (→ Unknown), the virgin sentinel address `0x80FE`, and
-  non-button addresses are dropped.
+- Emits one `ButtonStateObservation` per accepted VAR_WRITE **whose packet senderId's machineType
+  decodes to a `Marketing` variant**, on a recognised button-state address (#296); WHO_I_AM packets
+  (cmd `0x0024`), the virgin sentinel address `0x80FE`, and non-button addresses are dropped. The
+  arbitration ID is the destination and is not filtered on.
 - Reassembles **per source CAN ID** (one `PacketReassembler` per id — different panels never share a
   fragment buffer).
 - Hot, fan-out via `SubjectFanOut<ButtonStateObservation>`; thread-safe, callback not held under the

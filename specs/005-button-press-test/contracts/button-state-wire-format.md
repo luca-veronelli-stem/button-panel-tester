@@ -36,36 +36,54 @@ transmit. Consumers score an unarmed position on that release transition (`data-
   command is at bytes 7–8 and the variable address at 9–10 (`PacketDecoder.cs`); the decoder does
   not validate CRC (inherited limitation).
 
-## Directed CAN ID + variant-from-ID match rule (fix #270, Session 2026-06-24)
+## Destination addressing + variant-from-senderId match rule (fix #296, Session 2026-07-23; supersedes the #270 variant-from-CAN-ID rule)
 
 A baptized panel is **silent on WHO_I_AM** — the firmware enters `AAS_STAND_BY` after `SET_ADDRESS`
 and never re-broadcasts (`CORRECTIONS.md` §C1) — so it never appears in the spec-003 discovery list.
-It instead heartbeats its button-state `VAR_WRITE` on a **directed CAN ID** equal to its SP_Address:
+It instead heartbeats its button-state `VAR_WRITE` **addressed to the master that baptized it**: the
+CAN arbitration ID is the **destination** — the stored `MotherBoardAddress`
+(`UserMain.c:997` `app.srid = MotherBoardAddress`; written from the baptizing master's srid,
+`AutoAddressSlave.c:238-241`). For a panel baptized by this tool that destination is the tool's own
+SRID **`0x00000008`**; for a panel baptized on a real machine it is that machine master's address.
+
+The panel's **own** SP address rides inside the transport packet as the **senderId** (bytes 1–4 of
+the reassembled packet):
 
 `SP_App_Calculate_ID = network <<< 24 | machineType <<< 16 | (fwType &&& 0x3FF) <<< 6 | board`
 
-so the **machineType byte is bits 23–16** of the CAN ID. The observer's accept rule (and the tool's
-observability signal) is therefore purely the **variant decode of the CAN ID**:
+so the **panel's machineType byte is bits 23–16 of the senderId**, NOT of the arbitration ID. The
+observer's accept rule (and the tool's observability signal) is therefore the **variant decode of
+the senderId**, applied at completed-packet level:
 
 ```
-variant = VariantDecoder.decode (MachineTypeByte ((CanId >>> 16) &&& 0xFF))
-accept  = (variant is Marketing _)
+accept  = cmd = 0x0002 && addr ∈ {0x8000, 0x803E}
+          && (VariantDecoder.decode (MachineTypeByte ((SenderId >>> 16) &&& 0xFF)) is Marketing _)
+variant = that decode
 ```
 
-| CAN ID | machineType | decode | accepted |
+| Packet | senderId | decode | accepted |
 |---|---|---|---|
-| `0x000A0441` | `0x0A` | `Marketing OptimusXp` | yes |
-| `0x00030141` | `0x03` | `Marketing EdenXp` | yes |
-| `0x000B0481` | `0x0B` | `Marketing R3LXp` | yes |
-| `0x1FFFFFFF` (WHO_I_AM broadcast) | `0xFF` | `Virgin` | **dropped** |
-| `0x00000008` (tool SRID) | `0x00` | `Unknown 0x00` | **dropped** |
+| heartbeat, tool-baptized OPTIMUS (arb. ID `0x00000008`) | `0x000A0101` | `Marketing OptimusXp` | yes |
+| heartbeat, machine-baptized OPTIMUS (arb. ID `0x000A0441`) | `0x000A0101` | `Marketing OptimusXp` | yes |
+| WHO_I_AM broadcast (arb. ID `0x1FFFFFFF`) | virgin | — | **dropped** (cmd `0x0024`) |
+| virgin sentinel `0x80FE` | any | — | **dropped** (addr) |
 
-Reassembly is **per source CAN ID** (one `PacketReassembler` per id). The accepted observation
-carries the decoded `MarketingVariant`. Ground-truth traces:
-`~/Documents/frames/first-gather/{optimus,eden-xp,r-3l-xp}_baptized.trc` — 12 identical-payload
-repetitions at 186.7 ms on the directed id, which is the **post-boot fast ramp**, not the idle
-steady state (#293). Mechanised by Lean `machine_type_at_bits_23_16` /
-`non_marketing_ids_rejected` (`Phase4/ButtonStateObservation.lean`, T044).
+There is **no arbitration-ID pre-filter**: chunk reassembly stays **per source arbitration ID** (one
+`PacketReassembler` per id — chunks carry no senderId, it is only known after reassembly), and every
+id's completed packets are then filtered by the rule above. The tool does not receive its own TX
+frames (no PCAN self-reception), so listening on `0x00000008` observes only the panel.
+
+> **History of this rule.** The #270 design read the June ground-truth traces
+> (`~/Documents/frames/first-gather/*_baptized.trc` — arb. IDs `0x000A0441`/`0x00030141`/
+> `0x000B0481`) as the panel transmitting on *its own* directed ID, and keyed accept + variant off
+> the arbitration ID (explicitly dropping `0x00000008` as "the tool's SRID"). Those panels had been
+> baptized on **real machines**, whose master **coincidentally shares the machineType byte with its
+> keyboard** — the rule worked on those captures and failed on the first tool-baptized panel
+> (`bench-logs/pcan/test1.trc`, 2026-07-23: all heartbeat frames on `0x00000008`, senderId
+> `0x000A0101`). Corollary: the June "~12 s frames on `0x00000008`" were a tool-baptized panel's
+> slow-branch heartbeat all along. Mechanised by the senderId theorems in
+> `Phase4/ButtonStateObservation.lean` (T055; the T044 `machine_type_at_bits_23_16` extraction
+> lemma is unchanged — it now applies to the senderId word).
 
 ## Bitmap semantics (R2 — firmware ground truth)
 
