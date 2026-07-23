@@ -182,8 +182,10 @@ observer that filters and parses, re-publishing via `SubjectFanOut<'T>`. spec-00
 `WhoIAmReassemblyObserver` (filter `0x0024`, `parse`, publish `IObservable<WhoIAmFrame>`) is the
 exact template. `IClock` exists and is consumed (timeouts); `FrozenClock` drives tests.
 
-**Decision**: add `IButtonStateObserver : IObservable<ButtonStateFrame>` to `Core/Can/Ports.fs`
-(mirror `IWhoIAmObserver`), production adapter `ButtonStateReassemblyObserver`
+**Decision**: add `IButtonStateObserver` to `Core/Can/Ports.fs` (mirror `IWhoIAmObserver`) — as
+shipped its observable carries `ButtonStateObservation` (frame + variant, the variant derived from
+the packet senderId since #296; this pre-#270 sketch said bare `IObservable<ButtonStateFrame>`),
+production adapter `ButtonStateReassemblyObserver`
 (`Infrastructure/Can`) over `ICanFrameStream` + a reused `PacketReassembler`, and virtual fake
 `InMemoryButtonStateObserver` (`Tests/Fakes/Can`, mirror `InMemoryWhoIAmObserver`). No new external
 boundary — CAN RX is already a boundary consumed through `ICanFrameStream`; this is a new

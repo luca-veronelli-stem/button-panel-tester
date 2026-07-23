@@ -272,17 +272,18 @@ let Run_RealOptimusXpPanel_AllActiveButtonsScorePassOnPressEdge () =
     use _ = cleanup
 
     // InitializeAsync opens PcanCanLink (-> CanPort.ConnectAsync -> StartReading), so frames flow and
-    // the baptized panel's button-state heartbeat arrives on its directed CAN id while Connected (fix #270).
+    // the baptized panel's button-state heartbeat arrives while Connected — addressed to the tool's
+    // own SRID 0x00000008 for a tool-baptized panel; the accept rule keys on the packet senderId (#296).
     link.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult()
 
     match waitForFirstButtonStateObservation observer heartbeatTimeout with
     | None ->
         Assert.Fail(
             sprintf
-                "no button-state heartbeat within %.1f s — verify a BAPTIZED OPTIMUS-XP panel (machineType 0x0A) is powered and heartbeating its button-state VAR_WRITE on its directed CAN id"
+                "no button-state heartbeat within %.1f s — verify a BAPTIZED OPTIMUS-XP panel (machineType 0x0A) is powered and heartbeating its button-state VAR_WRITE (PCAN-View: the heartbeat is addressed TO the tool, CAN id 00000008 — #296)"
                 heartbeatTimeout.TotalSeconds)
     | Some observation ->
-        // Variant comes from the directed CAN id of the heartbeat (fix #270), not a discovery row.
+        // Variant comes from the heartbeat packet's senderId (fix #296), not a discovery row.
         Assert.Equal(OptimusXp, observation.Variant)
         let schema = ButtonSchema.forVariant OptimusXp
 
@@ -330,7 +331,7 @@ let Run_RealOptimusXpPanel_ScoresOnPressEdgeNotRelease () =
     | None ->
         Assert.Fail(
             sprintf
-                "no button-state heartbeat within %.1f s — power a BAPTIZED OPTIMUS-XP panel that heartbeats its button-state before the polarity check"
+                "no button-state heartbeat within %.1f s — power a BAPTIZED OPTIMUS-XP panel that heartbeats its button-state (PCAN-View: CAN id 00000008, addressed to the tool — #296) before the polarity check"
                 heartbeatTimeout.TotalSeconds)
     | Some observation ->
         Assert.Equal(OptimusXp, observation.Variant)
@@ -391,7 +392,7 @@ let Run_RealOptimusXpPanel_InteractiveRecoveryAndInterruption () =
     | None ->
         Assert.Fail(
             sprintf
-                "no button-state heartbeat within %.1f s — power a BAPTIZED OPTIMUS-XP panel that heartbeats its button-state before this attended leg"
+                "no button-state heartbeat within %.1f s — power a BAPTIZED OPTIMUS-XP panel that heartbeats its button-state (PCAN-View: CAN id 00000008, addressed to the tool — #296) before this attended leg"
                 heartbeatTimeout.TotalSeconds)
     | Some observation ->
         Assert.Equal(OptimusXp, observation.Variant)
