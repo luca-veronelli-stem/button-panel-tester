@@ -72,7 +72,21 @@ master (`firmwares/stm32h7-optimus-xp-app/STEM/UserMain.c:1485–1497`) resets a
 > (`AutoAddressSlave.c:238–241`); `AA_Slave_SetAddressReceived()` (`:263–292`) never touches it. A
 > panel baptized without `reset=1` is **totally silent** on button-state. This makes
 > `CORRECTIONS.md` §C2 load-bearing for spec-005, not just spec-004. Tracked in #293 as a
-> follow-up, not fixed there.
+> follow-up, not fixed there (verified tool-side in #295).
+
+**Destination addressing — live-confirmed 2026-07-23 (#296).** The same `MotherBoardAddress` is
+also the heartbeat's **CAN arbitration ID**: `UserMain.c:997` sets `app.srid = MotherBoardAddress`,
+and the router arbitrates on the destination. So *where* the heartbeat arrives depends on **who
+baptized the panel**: a tool-baptized panel (tool senderId `8`) heartbeats on `0x00000008`; a
+machine-baptized panel heartbeats on that machine master's address (`0x000A0441` etc.). The June
+`first-gather` captures were machine-baptized panels, and a machine master shares the machineType
+byte with its keyboard — which is why the #270 variant-from-arbitration-ID rule worked on them by
+coincidence and failed on the first tool-baptized panel (`bench-logs/pcan/test1.trc`: heartbeat on
+`0x00000008`, payload senderId `0x000A0101`, post-boot ramp 12 × 186.9 ms then 12.38 s — also the
+live confirmation of the dual-rate model above). The panel's **own** address — and therefore the
+variant — is the reassembled packet's **senderId** (machineType at bits 23–16). The observer accept
+rule moves to the senderId at completed-packet level; see the wire-format contract §Destination
+addressing (#296).
 
 **Packetization** (vendored stack, per spec-003's
 [who-i-am-wire-format.md](../003-panel-discovery/contracts/who-i-am-wire-format.md)): transport

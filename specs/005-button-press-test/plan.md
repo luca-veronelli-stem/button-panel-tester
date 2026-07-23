@@ -298,3 +298,31 @@ release, a cold never-touched panel sits in the slow branch. Consequences for th
 
 Authority: spec.md §Clarifications (Session 2026-07-20), research.md R1 (dual-rate derivation),
 data-model.md §6a/§6b, tasks.md §Phase J (T050–T054). Tracked as corrective child **#293** (PR #294).
+
+### Amendment 2026-07-23 (fix #296) — heartbeat is destination-addressed: variant from the senderId
+
+The first live observation of a **tool-baptized** panel (`bench-logs/pcan/test1.trc`, taken as the
+#253 step-D sanity capture) showed every heartbeat frame on arbitration ID `0x00000008` — the
+tool's own SRID, which the #270 observer explicitly drops. Firmware: the arbitration ID is the
+**destination** (`UserMain.c:997` `app.srid = MotherBoardAddress`, written from the baptizing
+master's srid, `AutoAddressSlave.c:238-241`); the June ground-truth panels were machine-baptized,
+and a machine master coincidentally shares the machineType byte with its keyboard — the #270
+variant-from-arbitration-ID rule worked on those captures by coincidence. Consequences:
+
+1. **Observer accept rule** — moves to completed-packet level: cmd `0x0002` + recognised
+   button-state address + **senderId machineType (bits 23–16) decodes Marketing**. No
+   arbitration-ID pre-filter; reassembly stays per source arbitration ID (chunks carry no
+   senderId). WHO_I_AM drops on cmd; the `0x80FE` virgin sentinel drops on address; the tool never
+   receives its own TX.
+2. **Variant source** — `ButtonStateObservation.Variant` decodes from the senderId word. The T044
+   bits-23-16 extraction lemma is word-agnostic and carries over; new senderId-level theorems land
+   Lean-first (T055) before the F# re-key (T056), per Principle I.
+3. **Unchanged** — recency thresholds + arming (#293), auto-target, FSM, GUI, forensic log. FR-001
+   meaning intact; only frame acceptance moves. The 2026-06-24 amendment's "accept iff the CAN ID
+   decodes Marketing" clause is superseded.
+4. **Constitution Check** — still PASS: mandatory triple on the senderId wire fact, Lean-first
+   split, no new boundary, no new stopgap (the inline cmd/addr hardcode stays as inherited).
+
+Authority: spec.md §Clarifications (Session 2026-07-23), research.md R1 destination-addressing
+addendum, wire-format + observer-port contracts (#296 sections), tasks.md §Phase K (T055–T057).
+Tracked as corrective child **#296** (PR #297).
