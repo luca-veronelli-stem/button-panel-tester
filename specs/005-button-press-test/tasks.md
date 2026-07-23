@@ -836,7 +836,7 @@ them by design (the residual AC-5 surfaces are T056(a)'s Ports.fs doc and T057's
 observer + fake + FsCheck + observer tests; depends on K1). **K3** = {T057} (docs;
 orchestrator-owned). Strictly serial: K1 → K2 → K3.
 
-- [ ] T055 **[LEAN]** Extend `lean/Stem/ButtonPanelTester/Phase4/ButtonStateObservation.lean`
+- [x] T055 **[LEAN]** Extend `lean/Stem/ButtonPanelTester/Phase4/ButtonStateObservation.lean`
       (Lean-only commit): model the completed-packet accept rule over (cmd, addr, senderId) —
       `accept ↔ cmd = 0x0002 ∧ addr ∈ recognised ∧ (senderId >>> 16) &&& 0xFF decodes Marketing`.
       Theorems: `variant_from_sender_id` (the bits-23-16 extraction applied to the senderId word —
