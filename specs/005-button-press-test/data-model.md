@@ -46,16 +46,19 @@ type ButtonStateObservation =
 
 module ButtonStateObservation =
     let variantOfDirectedId : uint32 -> VariantIdentity   // VariantDecoder.decode on bits 23-16
-    // #296: the SAME bits-23-16 extraction, now applied to the packet senderId word instead of
-    // the arbitration id (the T044 Lean extraction lemma is word-agnostic and carries over).
+    let variantOfSenderId   : uint32 -> VariantIdentity   // #296: the SAME extraction, applied to
+    // the packet senderId word (T056; the T044 Lean extraction lemma is word-agnostic and carries
+    // over — variantOfDirectedId stays for the legacy call sites T056 retires).
 ```
 
 - Lean: `Phase4/ButtonStateObservation.lean` — `machine_type_at_bits_23_16` (machineType =
-  `(id >>> 16) &&& 0xFF`), `non_marketing_ids_rejected` (broadcast `0x1FFFFFFF` → Virgin, SRID
-  `0x00000008` → Unknown are non-marketing → rejected). FsCheck:
+  `(id >>> 16) &&& 0xFF`; word-agnostic, applies to the senderId), `non_marketing_ids_rejected`,
+  and the T055 accept-rule theorems (`variant_from_sender_id`, `who_i_am_rejected_on_cmd`,
+  `virgin_sentinel_rejected`, `arbitration_id_irrelevant`). FsCheck:
   `Property/Can/ButtonStateObservationProperties.fs`.
-- Accept rule: a frame is observed **iff** `variantOfDirectedId CanId` is `Marketing _`. Reassembly is
-  per source CAN ID.
+- Accept rule (#296): a **completed packet** is observed **iff** cmd `0x0002` ∧ recognised
+  button-state address ∧ `variantOfSenderId senderId` is `Marketing _`. The arbitration ID is not
+  filtered on. Reassembly is per source CAN ID.
 
 ## 2. Key-state press-edge detector (R2 — the polarity-bearing type)
 
@@ -260,8 +263,9 @@ type IButtonStateObserver =                  // Core/Can/Ports.fs (mirror IWhoIA
 ```
 
 Production adapter `ButtonStateReassemblyObserver` (`Infrastructure/Can`); virtual fake
-`InMemoryButtonStateObserver` (`Tests/Fakes/Can`). Accepts a frame iff its directed CAN ID decodes to
-a `Marketing` variant (§1a); reassembles per source CAN ID.
+`InMemoryButtonStateObserver` (`Tests/Fakes/Can`). Accepts a completed packet iff cmd `0x0002` ∧
+recognised address ∧ its **senderId** machineType decodes to a `Marketing` variant (§1a, #296);
+reassembles per source CAN ID, no arbitration-ID pre-filter.
 
 ## Entity → spec mapping
 

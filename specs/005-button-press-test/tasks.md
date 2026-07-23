@@ -583,7 +583,7 @@ implementing task and one test.)*
 
 | Requirement | Implementing task(s) | Test(s) |
 |---|---|---|
-| **FR-001** test offered only for a baptized, observable panel on a Connected link; else unavailable + reason | T021, T022, T034; T046, T047 (I); T050 (J) | T022 (`TestEnablementGuards`), T028, T035; T046/T047 reworked suites; T050 slow-cadence case |
+| **FR-001** test offered only for a baptized, observable panel on a Connected link; else unavailable + reason | T021, T022, T034; T046, T047 (I); T050 (J); T055, T056 (K) | T022 (`TestEnablementGuards`), T028, T035; T046/T047 reworked suites; T050 slow-cadence case; T056 destination-addressed stream cases |
 | **FR-002** start; present active buttons one at a time in canonical-filtered order | T018, T019, T023 | T020 (`TestVisitsActiveOnly`), T024 |
 | **FR-003** re-run end-to-end, clearing prior results | T019, T023, T034 | T028, T035 (SC-007) |
 | **FR-004** decal label primary; firmware name secondary | T011, T030 | T012, T031 (SC-006) |
@@ -606,7 +606,7 @@ implementing task and one test.)*
 | **SC-005** interruption never reports all-passed; link-loss fast, panel-loss ≤ ~20 s (#293) | T019, T023; T046 (I); T050 (J) | T027, T036; T050 |
 | **SC-006** OPTIMUS decals match the panel (Light/Suspension/Up/Down) | T011, T030 | T012, T031, T036 |
 | **SC-007** re-run clears all prior results | T019, T023, T034 | T028, T035 |
-| **SC-008** unavailable + reason when not baptized / link not Connected | T021, T022, T034; T046, T047 (I); T050 (J) | T022, T028, T035; T050 |
+| **SC-008** unavailable + reason when not baptized / link not Connected | T021, T022, T034; T046, T047 (I); T050 (J); T056 (K) | T022, T028, T035; T050; T056 |
 
 ---
 
@@ -679,8 +679,10 @@ press-edge polarity; the ~12 s in the original note was CAN id `0x00000008`, a d
 > against the heartbeat's post-boot fast ramp; the idle steady state of a cold panel is
 > `TEMPO_CAN_LENTO` ≈ 12.5 s, so the thresholds are recalibrated to 15 s / 20 s (firmware-derived,
 > T050). And the "~12 s was a different message" parenthetical is itself corrected: that figure
-> **was** the button-state slow branch, mis-attributed to the tool's SRID. The re-key design
-> (observer, auto-target, recency model) stands.
+> **was** the button-state slow branch, mis-attributed to the tool's SRID. And superseded in part
+> by **Phase K (#296)**: the observer's accept rule moves from the arbitration ID to the payload
+> **senderId** (the arbitration ID is the destination — the baptizing master's address). The
+> auto-target and recency model stand.
 
 **Commit grouping (bisect-safe)**: **I1** = {T044} (Lean-only). **I2** = {T045} (observation type +
 observer rework — one vertical commit: port + observer + fake + tests + minimal service adaptation).
@@ -826,6 +828,9 @@ every frame. The variant lives in the packet **senderId** (bits 23–16). See `s
 §Clarifications Session 2026-07-23, `research.md` R1 destination-addressing addendum, both #296
 contract sections, `plan.md` §Amendment 2026-07-23.
 
+Issue #296's AC-5 artifact corrections landed in this branch's amendment commits — no task backs
+them by design (the residual AC-5 surfaces are T056(a)'s Ports.fs doc and T057's sweep).
+
 **Commit grouping (bisect-safe)**: **K1** = {T055} (Lean-only, mirrors I1/J2 — always green).
 **K2** = {T056} (observer re-key — one vertical commit: Core envelope helper + Infrastructure
 observer + fake + FsCheck + observer tests; depends on K1). **K3** = {T057} (docs;
@@ -837,19 +842,29 @@ orchestrator-owned). Strictly serial: K1 → K2 → K3.
       Theorems: `variant_from_sender_id` (the bits-23-16 extraction applied to the senderId word —
       reuse/instantiate the T044 `machine_type_at_bits_23_16` lemma), `who_i_am_rejected_on_cmd`
       (cmd `0x0024` never accepted regardless of senderId), `virgin_sentinel_rejected` (`0x80FE`
-      never accepted), `arbitration_id_irrelevant` (acceptance is independent of the arbitration
-      id — the destination does not appear in the rule). Header doc: mechanises wire-format
-      §Destination addressing (#296). No `sorry`; axioms ⊆ the constitution set.
+      never accepted), `arbitration_id_irrelevant` (model the accept rule over a packet shape that INCLUDES the
+      arbitration id, so the theorem — acceptance and variant invariant under changing it — is
+      non-vacuous). The existing `accepted` def + `optimus_directed_id_accepted` docs claim to BE
+      the observer's accept predicate: re-document them as the machineType-word decode predicate
+      the new packet-level rule composes with (statements stay true; do not delete). Header doc:
+      mechanises wire-format §Destination addressing (#296). No `sorry`; axioms ⊆ the
+      constitution set.
       (FR-001; Constitution I)
 - [ ] T056 **[EXTEND]** Re-key the observer per T055: (a)
-      `src/ButtonPanelTester.Core/Can/ButtonStateObservation.fs` — add the senderId-based variant
-      helper (the same bits-23-16 extraction, applied to the senderId word); XML docs cite the T055
-      theorems + wire-format #296. (b)
+      `src/ButtonPanelTester.Core/Can/ButtonStateObservation.fs` — add `variantOfSenderId` (the same
+      bits-23-16 extraction, applied to the senderId word); XML docs cite the T055 theorems +
+      wire-format #296. Re-key the stale directed-id XML doc on `IButtonStateObserver` in
+      `src/ButtonPanelTester.Core/Can/Ports.fs` (doc-only) in the same slice. (b)
       `src/ButtonPanelTester.Infrastructure/Can/ButtonStateReassemblyObserver.fs` — remove the
       arbitration-ID variant gate; reassemble per source arbitration ID as today; on a completed
       packet accept iff cmd `0x0002` + recognised addr + senderId machineType decodes Marketing
-      (the senderId is already parsed by the packet decoder); emit the observation with the
-      senderId-derived variant. (c) `tests/.../Fakes/Can/InMemoryButtonStateObserver.fs` + the
+      (extract the senderId from the reassembled packet bytes 1-4, big-endian, mirroring
+      `PacketDecoder.ReadSenderIdBigEndian` — the observer hand-indexes the merged array and does
+      NOT use the dictionary-driven `PacketDecoder`; keep it that way); emit the observation with
+      the senderId-derived variant. Commit-body note: without the arbitration-ID pre-filter the
+      per-id `PacketReassembler` map allocates an entry per id seen on the bus — negligible on a
+      bench bus. (c) `tests/.../Fakes/Can/InMemoryButtonStateObserver.fs` (doc-comment re-key only — the fake's
+      surface is post-reassembly, no ids exist there) + the
       observer Windows tests: drive a destination-addressed stream — arb. ID `0x00000008`,
       senderId `0x000A0101` (the test1.trc shape) → accepted as OptimusXp; machine-destination
       stream (arb. `0x000A0441`, same senderId) → accepted; WHO_I_AM broadcast → rejected on cmd;
@@ -859,10 +874,16 @@ orchestrator-owned). Strictly serial: K1 → K2 → K3.
       asserts one OptimusXp observation — observed failing first. **GREEN**: the re-key + full
       observer suite + `./gate.ps1`. Folded into one commit, RED first. Depends on T055.
       (FR-001; SC-008)
-- [ ] T057 **[DOCS]** Orchestrator-owned docs sweep: CHANGELOG `[Unreleased]` entry (#296);
-      quickstart bench-walkthrough note (the heartbeat arrives on the tool SRID `0x00000008` —
-      what to expect in PCAN-View); hardware-suite doc comments mentioning the expected arrival id
-      (comment-only); memory + #253 body already updated orchestrator-side.
+- [ ] T057 **[DOCS]** Orchestrator-owned docs sweep: CHANGELOG `[Unreleased]` — add the #296
+      entry AND amend the still-unreleased #270 entry, which asserts dropping `0x00000008`, the
+      very id the tool now listens on; quickstart bench-walkthrough note (the heartbeat arrives on
+      the tool SRID `0x00000008` — what to expect in PCAN-View); hardware-suite directed-id
+      references — doc comments AND the three `Assert.Fail`/prompt diagnostic strings
+      (`ButtonPressTestHardwareTests.fs:282/333/394`; string-only, no assertion change); stale
+      directed-id comments in `App.fs` (:492/:667/:818) and the `observableWindow` XML doc
+      (`ButtonPressTest.fs:196-198`) (comment-only); research.md R5's pre-#270
+      `IObservable<ButtonStateFrame>` envelope drift; memory + #253 body already updated
+      orchestrator-side.
 
 **Checkpoint K**: a panel baptized by THIS tool is observed — the GUI enables off its heartbeat on
 `0x00000008` and the hardware suite's first-observation wait passes on the rig. Then re-run the
