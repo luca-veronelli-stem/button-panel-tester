@@ -850,7 +850,7 @@ orchestrator-owned). Strictly serial: K1 → K2 → K3.
       mechanises wire-format §Destination addressing (#296). No `sorry`; axioms ⊆ the
       constitution set.
       (FR-001; Constitution I)
-- [ ] T056 **[EXTEND]** Re-key the observer per T055: (a)
+- [x] T056 **[EXTEND]** Re-key the observer per T055: (a)
       `src/ButtonPanelTester.Core/Can/ButtonStateObservation.fs` — add `variantOfSenderId` (the same
       bits-23-16 extraction, applied to the senderId word); XML docs cite the T055 theorems +
       wire-format #296. Re-key the stale directed-id XML doc on `IButtonStateObserver` in
