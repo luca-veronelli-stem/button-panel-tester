@@ -26,31 +26,24 @@ wins on *order and scope*, the briefing + corrections win on *technical content*
 | [v0.2.0](../CHANGELOG.md) | [spec-002](../specs/002-can-link-lifecycle/spec.md) | CAN-link lifecycle: status row, four-family FSM, PEAK adapter realities |
 | [v0.3.0](../CHANGELOG.md) | [spec-003](../specs/003-panel-discovery/spec.md) | Passive panel discovery: Panels-on-bus list from `WHO_I_AM` broadcasts |
 | [v0.4.0](../CHANGELOG.md) | [spec-004](../specs/004-baptism-workflow/spec.md) | Baptism workflow: claim a virgin panel as a BoardVariant / reset to virgin via the auto-address master sequence, on the confirmed-adoption model |
+| [v0.5.0](../CHANGELOG.md) | [spec-005](../specs/005-button-press-test/spec.md) | Button-press test (input side): guided per-button session scored off the button-state heartbeat (Pass / Missed / Unexpected / Skipped), Lean-formalized FSM, senderId-keyed observability |
 
 > **v0.4.0 caveat — SC-004 firmware-limited.** spec-004 ships code-complete; the *rapid automated* four-variant re-baptize cycle (SC-004) is gated on a panel-firmware fix ([#237](https://github.com/luca-veronelli-stem/button-panel-tester/issues/237)), not a tool defect. Single claim / reset / operator-paced re-typing are bench-validated on silicon.
 
-## Next — v0.5.0: Button-press test, input side (spec-005)
+> **v0.5.0 caveat — OPTIMUS-XP validated, others provisional.** The bench gate
+> ([#253](https://github.com/luca-veronelli-stem/button-panel-tester/issues/253)) passed on a
+> tool-baptized OPTIMUS-XP; Eden-XP / R-3L / Eden-BS8 schemas stay provisional until their hardware
+> reaches the bench (FR-016). The **C5 protocol-metadata fetch migration** did not ride along — it is
+> tracked standalone in [#254](https://github.com/luca-veronelli-stem/button-panel-tester/issues/254).
 
-Briefing [§spec-004](./Context/bpt-rollout/03-roadmap.md#spec-004--button-press-test-input-side),
-corrected by **C3**: OPTIMUS-XP's active set is panel positions `{1, 2, 4, 5}` =
-`{DOWN, P1, P3, MEM}`, and the prompt UI needs a decal-name vs firmware-name clarify
-(an OPTIMUS-XP technician reads *Light / Suspension / All-Up / Stop*, not
-*DOWN / P1 / P3 / MEM*). The **C5 protocol-metadata fetch migration** first materially
-affects behaviour here; it is hosted in
-[#156](https://github.com/luca-veronelli-stem/button-panel-tester/issues/156) with a
-timing guard — pull it out standalone if the spec-001 supersede hasn't unparked by the
-time this spec starts.
+## Next — v0.6.0: LED and buzzer test, output side (spec-006)
 
-Baptism (spec-004, shipped in v0.4.0) is the prerequisite: a panel must be claimed before
-it emits the application traffic this spec reads. SC-004's rapid-cycle firmware limitation
-([#237](https://github.com/luca-veronelli-stem/button-panel-tester/issues/237)) does not
-block spec-005 — operator-paced baptism is validated.
+Briefing [§spec-005](./Context/bpt-rollout/03-roadmap.md#spec-005--led-and-buzzer-test-output-side).
+Open audit carried forward: OPTIMUS-XP `HasBuzzer` is still TBD (C3 note). First
+CAN-transmit test feature — the output side of the loop spec-005 closed on input.
 
 ## Then (provisional order)
 
-- **spec-006 — LED and buzzer test (output side)** — briefing
-  [§spec-005](./Context/bpt-rollout/03-roadmap.md#spec-005--led-and-buzzer-test-output-side).
-  Open audit carried forward: OPTIMUS-XP `HasBuzzer` is still TBD (C3 note).
 - **spec-007 — Session orchestration, verdict, persistence, report** — briefing
   [§spec-006](./Context/bpt-rollout/03-roadmap.md#spec-006--session-orchestration-verdict-persistence-report).
 - **spec-008 — Robustness, recovery, forensic logging** — briefing
@@ -77,6 +70,10 @@ reports): deliberately unplanned — decided after real bench use.
 
 ## Debt ledger (not release-bound)
 
+- [#254](https://github.com/luca-veronelli-stem/button-panel-tester/issues/254) — protocol-metadata
+  §C5 fetch migration (decoupled from #156), deferred out of spec-005.
+- [#298](https://github.com/luca-veronelli-stem/button-panel-tester/issues/298) — interactive
+  hardware-leg diagnosability (from the #253 bench experience).
 - [#111](https://github.com/luca-veronelli-stem/button-panel-tester/issues/111) — vendored
   protocol stack removal. Blocked on upstream `stem-device-manager` Phase 5 /
   `Stem.Communication` NuGet; the tester migrates only after the device manager does.
